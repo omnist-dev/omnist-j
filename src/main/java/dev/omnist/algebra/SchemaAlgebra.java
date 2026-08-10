@@ -6,7 +6,7 @@ import dev.omnist.schema.Record;
 import java.util.*;
 
 /**
- * Omnist Schema Algebra Operations (§6.4, §6.5).
+ * Omnist Schema Algebra Operations (§6.4, §6.5, §6.6, §6.7).
  */
 public class SchemaAlgebra {
 
@@ -89,6 +89,124 @@ public class SchemaAlgebra {
         return new Schema(schema.root(), newEnv);
     }
 
+    /**
+     * Checks if every Document accepted by Schema A is also accepted by Schema B (§6.6).
+     * Implements coinductive memoized subschema comparison.
+     */
+    public static boolean compatibleWith(Schema a, Schema b) {
+        Set<String> satA = satisfiableSet(a);
+        Map<DefPair, Boolean> memo = new HashMap<>();
+        return sub(a, new Type.Ref(a.root()), b, new Type.Ref(b.root()), satA, memo);
+    }
+
+    /**
+     * Checks if two Schemas accept the exact same set of Documents (§6.7).
+     * Evaluates compatibleWith(A, B) && compatibleWith(B, A).
+     */
+    public static boolean equivalent(Schema a, Schema b) {
+        return compatibleWith(a, b) && compatibleWith(b, a);
+    }
+
+    private static boolean sub(Schema sa, Type ta, Schema sb, Type tb, Set<String> satA, Map<DefPair, Boolean> memo) {
+        if (ta instanceof Type.Ref ref && !satA.contains(ref.name())) {
+            return true; // Vacuously compatible: A emits no documents at this branch (§6.6)
+        }
+
+        Object da = resolveDefinition(sa, ta);
+        Object db = resolveDefinition(sb, tb);
+
+        DefPair key = new DefPair(da, db);
+        if (memo.containsKey(key)) {
+            return memo.get(key); // Coinductive hypothesis return (§6.6)
+        }
+        memo.put(key, true); // Coinductive assumption (§6.6)
+
+        boolean result;
+        if (db instanceof Type.Any) {
+            result = true; // Any absorbs all inputs on RHS
+        } else if (da instanceof Type.Any) {
+            result = false; // Only Any on RHS can hold Any on LHS
+        } else if (da instanceof Type.Scalar scalarA && db instanceof Type.Scalar scalarB) {
+            result = scalarSub(scalarA, scalarB);
+        } else if (da instanceof Record recA && db instanceof Record recB) {
+            result = recordSub(sa, recA, sb, recB, satA, memo);
+        } else {
+            result = false; // Value vs object mismatch
+        }
+
+        memo.put(key, result);
+        return result;
+    }
+
+    private static Object resolveDefinition(Schema schema, Type type) {
+        if (type instanceof Type.Ref ref) {
+            return schema.records().get(ref.name());
+        }
+        return type;
+    }
+
+    private static boolean scalarSub(Type.Scalar a, Type.Scalar b) {
+        if (a.nullable() && !b.nullable()) {
+            return false;
+        }
+        if (a.kind() == b.kind()) {
+            return true;
+        }
+        // Subtyping §6.3: INTEGER is subtype of NUMBER
+        return a.kind() == ScalarKind.INTEGER && b.kind() == ScalarKind.NUMBER;
+    }
+
+    private static boolean recordSub(Schema sa, Record a, Schema sb, Record b, Set<String> satA, Map<DefPair, Boolean> memo) {
+        // 1. Every label A may emit must be allowed by B.
+        for (Field fa : a.fields()) {
+            if (fa.max() != null && fa.max() == 0) {
+                continue; // A never emits it (§6.6)
+            }
+            if (fa.min() == 0 && fa.type() instanceof Type.Ref ref && !satA.contains(ref.name())) {
+                continue; // A never emits it either (pre-filter §6.6)
+            }
+            Field fb = b.field(fa.label());
+            if (fb == null) {
+                return false; // B is closed (§6.6)
+            }
+            if (!cardinalitySub(fa.min(), fa.max(), fb.min(), fb.max())) {
+                return false;
+            }
+            if (!sub(sa, fa.type(), sb, fb.type(), satA, memo)) {
+                return false;
+            }
+        }
+
+        // 2. Every label B requires must be guaranteed by A.
+        for (Field fb : b.fields()) {
+            if (fb.min() >= 1) {
+                Field fa = a.field(fb.label());
+                if (fa == null || fa.min() < fb.min()) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static boolean cardinalitySub(int minA, Integer maxA, int minB, Integer maxB) {
+        if (minB > minA) {
+            return false;
+        }
+        return le(maxA, maxB);
+    }
+
+    private static boolean le(Integer x, Integer y) {
+        if (y == null) {
+            return true; // y is unbounded (+infinity)
+        }
+        if (x == null) {
+            return false; // x is unbounded, y is bounded
+        }
+        return x <= y;
+    }
+
     private static Record pruneRecord(Record rec, Set<String> sat) {
         List<Field> kept = new ArrayList<>();
         for (Field f : rec.fields()) {
@@ -132,4 +250,6 @@ public class SchemaAlgebra {
 
         return seen;
     }
+
+    private record DefPair(Object da, Object db) {}
 }

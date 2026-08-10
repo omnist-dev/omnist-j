@@ -175,4 +175,98 @@ class SchemaAlgebraTest {
         List<String> actualOrder = List.copyOf(pruned.records().keySet());
         assertEquals(expectedNames, actualOrder, "Large schema must strictly preserve 12-record declaration order");
     }
+
+    @Test
+    @DisplayName("compatibleWith worked example (§6.6): adding optional field makes B -> A compatible, A -> B incompatible")
+    void testCompatibleWithWorkedExample() {
+        Record userA = new Record("User", List.of(
+                new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+                new Field("name", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+                new Field("nick", new Type.Scalar(ScalarKind.STRING, false), 0, 1)
+        ));
+        Schema schemaA = new Schema("User", Map.of("User", userA));
+
+        Record userB = new Record("User", List.of(
+                new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+                new Field("name", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schemaB = new Schema("User", Map.of("User", userB));
+
+        assertFalse(SchemaAlgebra.compatibleWith(schemaA, schemaB), "A may emit nick, B is closed -> incompatible");
+        assertTrue(SchemaAlgebra.compatibleWith(schemaB, schemaA), "Everything B emits, A accepts -> compatible");
+    }
+
+    @Test
+    @DisplayName("compatibleWith pre-filters unsatisfiable optional Ref fields in A (§6.6)")
+    void testCompatibleWithUnsatisfiableRefPrefilter() {
+        Record badRec = new Record("BadRec", List.of(
+                new Field("loop", new Type.Ref("BadRec"), 1, 1)
+        ));
+        Record userA = new Record("User", List.of(
+                new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+                new Field("opt_bad", new Type.Ref("BadRec"), 0, 1)
+        ));
+        Map<String, Record> mapA = new LinkedHashMap<>();
+        mapA.put("User", userA);
+        mapA.put("BadRec", badRec);
+        Schema schemaA = new Schema("User", mapA);
+
+        Record userB = new Record("User", List.of(
+                new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schemaB = new Schema("User", Map.of("User", userB));
+
+        assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaB), "A can never emit opt_bad -> compatible with B");
+    }
+
+    @Test
+    @DisplayName("compatibleWith enforces scalar subtyping (§6.3): integer <: number")
+    void testCompatibleWithScalarSubtyping() {
+        Record rA = new Record("R", List.of(new Field("f", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1)));
+        Schema schemaA = new Schema("R", Map.of("R", rA));
+
+        Record rB = new Record("R", List.of(new Field("f", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1)));
+        Schema schemaB = new Schema("R", Map.of("R", rB));
+
+        assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaB), "INTEGER in A satisfies NUMBER in B");
+        assertFalse(SchemaAlgebra.compatibleWith(schemaB, schemaA), "NUMBER in A cannot satisfy INTEGER in B");
+    }
+
+    @Test
+    @DisplayName("compatibleWith handles self-referential coinductive cycles without stack overflow (§6.6)")
+    void testCompatibleWithCoinduction() {
+        Record nodeA = new Record("Node", List.of(new Field("child", new Type.Ref("Node"), 0, 1)));
+        Schema schemaA = new Schema("Node", Map.of("Node", nodeA));
+
+        Record nodeB = new Record("Node", List.of(new Field("child", new Type.Ref("Node"), 0, 1)));
+        Schema schemaB = new Schema("Node", Map.of("Node", nodeB));
+
+        assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaB));
+        assertTrue(SchemaAlgebra.equivalent(schemaA, schemaB));
+    }
+
+    @Test
+    @DisplayName("equivalent evaluates language equivalence regardless of record names (§6.7)")
+    void testEquivalentDifferentRecordNames() {
+        Record recA = new Record("UserA", List.of(new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1)));
+        Schema schemaA = new Schema("UserA", Map.of("UserA", recA));
+
+        Record recB = new Record("UserB", List.of(new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1)));
+        Schema schemaB = new Schema("UserB", Map.of("UserB", recB));
+
+        assertTrue(SchemaAlgebra.equivalent(schemaA, schemaB), "Differently named records with identical language are equivalent");
+    }
+
+    @Test
+    @DisplayName("compatibleWith Type.Any behavior (§6.6): RHS Any absorbs all, LHS Any requires RHS Any")
+    void testCompatibleWithAny() {
+        Record rA = new Record("R", List.of(new Field("f", new Type.Scalar(ScalarKind.STRING, false), 1, 1)));
+        Schema schemaA = new Schema("R", Map.of("R", rA));
+
+        Record rB = new Record("R", List.of(new Field("f", Type.Any.INSTANCE, 1, 1)));
+        Schema schemaB = new Schema("R", Map.of("R", rB));
+
+        assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaB), "RHS Any absorbs String");
+        assertFalse(SchemaAlgebra.compatibleWith(schemaB, schemaA), "LHS Any requires RHS Any");
+    }
 }
