@@ -15,6 +15,23 @@ import static org.junit.jupiter.api.Assertions.*;
 class DocumentModelTest {
 
     @Test
+    @DisplayName("Bare-scalar and bare-null construct and compare correctly as Document (omnist-spec §2.2)")
+    void testBareScalarAndNullDocument() {
+        Document bareStringDoc = new Scalar.StringScalar("hello");
+        Document bareIntDoc = new Scalar.IntegerScalar(BigInteger.valueOf(42));
+        Document bareNullDoc = Value.NULL;
+
+        assertInstanceOf(Document.class, bareStringDoc);
+        assertInstanceOf(Document.class, bareIntDoc);
+        assertInstanceOf(Document.class, bareNullDoc);
+
+        assertEquals(new Scalar.StringScalar("hello"), bareStringDoc);
+        assertEquals(new Scalar.IntegerScalar(BigInteger.valueOf(42)), bareIntDoc);
+        assertEquals(Value.NULL, bareNullDoc);
+        assertNotEquals(bareStringDoc, bareIntDoc);
+    }
+
+    @Test
     @DisplayName("Repeated labels (arrays) preserve edge insertion order exactly")
     void testRepeatedLabelsAndEdgeOrder() {
         Edge e1 = new Edge("item", new Scalar.StringScalar("pen"));
@@ -22,6 +39,7 @@ class DocumentModelTest {
         Edge e3 = new Edge("item", new Scalar.StringScalar("pad"));
 
         Node node = new Node(List.of(e1, e2, e3));
+        Document doc = node;
 
         assertEquals(3, node.edges().size());
         assertEquals("item", node.edges().get(0).label());
@@ -30,10 +48,11 @@ class DocumentModelTest {
         assertEquals(new Scalar.StringScalar("rush"), node.edges().get(1).target());
         assertEquals("item", node.edges().get(2).label());
         assertEquals(new Scalar.StringScalar("pad"), node.edges().get(2).target());
+        assertInstanceOf(Document.class, doc);
     }
 
     @Test
-    @DisplayName("All 7 Scalar variants and NullTarget round-trip values unchanged")
+    @DisplayName("All 7 Scalar variants and Value.NULL round-trip values unchanged")
     void testScalarVariantsRoundTrip() {
         // 1. String
         Scalar.StringScalar sStr = new Scalar.StringScalar("hello omnist");
@@ -86,13 +105,15 @@ class DocumentModelTest {
         assertEquals(offsetDateTimeVal, sDateTimeOffset.value());
         assertEquals(ZoneOffset.UTC, sDateTimeOffset.value().offset());
 
-        // NullTarget
-        Target nullTarget = Target.NULL;
-        assertInstanceOf(Target.NullTarget.class, nullTarget);
+        // NullValue
+        Target nullTarget = Value.NULL;
+        Document nullDoc = Value.NULL;
+        assertInstanceOf(Value.NullValue.class, nullTarget);
+        assertInstanceOf(Value.NullValue.class, nullDoc);
     }
 
     @Test
-    @DisplayName("Node equality is order-sensitive: identical order equals, different order not equal")
+    @DisplayName("Node equality is order-sensitive per invariant D-1")
     void testNodeEqualityOrderSensitivity() {
         Edge eA = new Edge("a", new Scalar.IntegerScalar(BigInteger.ONE));
         Edge eB = new Edge("b", new Scalar.IntegerScalar(BigInteger.TWO));
@@ -102,7 +123,7 @@ class DocumentModelTest {
         Node nodeReordered = new Node(List.of(eB, eA));
 
         assertEquals(node1, node2, "Nodes with identical edges in identical order MUST be equal");
-        assertNotEquals(node1, nodeReordered, "Nodes with same edges in different order MUST NOT be equal (D-1/D-3)");
+        assertNotEquals(node1, nodeReordered, "Nodes with same edges in different order MUST NOT be equal (invariant D-1)");
     }
 
     @Test

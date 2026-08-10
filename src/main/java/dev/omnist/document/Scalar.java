@@ -6,8 +6,11 @@ import java.util.Objects;
 
 /**
  * Represents a scalar value in the Omnist Document model (omnist-spec §2.2.1).
+ * <pre>
+ * scalar-value = string | integer | number | boolean | date | time | datetime
+ * </pre>
  */
-public sealed interface Scalar extends Target {
+public sealed interface Scalar extends Value {
 
     ScalarKind kind();
 
