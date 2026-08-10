@@ -5,6 +5,7 @@ import dev.omnist.schema.Record;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -145,5 +146,33 @@ class SchemaAlgebraTest {
 
         List<String> keyOrder = List.copyOf(pruned.records().keySet());
         assertEquals(List.of("A", "B", "C"), keyOrder, "Output map must preserve declaration order");
+    }
+
+    @Test
+    @DisplayName("prune retains declaration order across a large 12-record schema (regression check against Map.copyOf nondeterminism)")
+    void testPruneDeclarationOrderDeterminismLarge() {
+        Map<String, Record> records = new LinkedHashMap<>();
+        List<String> expectedNames = new ArrayList<>();
+
+        for (int i = 0; i < 12; i++) {
+            String name = "Rec_" + (char) ('A' + i); // Rec_A, Rec_B, ..., Rec_L
+            expectedNames.add(name);
+        }
+
+        for (int i = 0; i < 12; i++) {
+            String currentName = expectedNames.get(i);
+            List<Field> fields = new ArrayList<>();
+            fields.add(new Field("val", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1));
+            if (i + 1 < 12) {
+                fields.add(new Field("next", new Type.Ref(expectedNames.get(i + 1)), 1, 1));
+            }
+            records.put(currentName, new Record(currentName, fields));
+        }
+
+        Schema schema = new Schema("Rec_A", records);
+        Schema pruned = SchemaAlgebra.prune(schema);
+
+        List<String> actualOrder = List.copyOf(pruned.records().keySet());
+        assertEquals(expectedNames, actualOrder, "Large schema must strictly preserve 12-record declaration order");
     }
 }
