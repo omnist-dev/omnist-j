@@ -1,36 +1,31 @@
 package dev.omnist.oml;
 
 import dev.omnist.document.*;
+import dev.omnist.oml.OmlLexer.Token;
+import dev.omnist.oml.OmlLexer.TokenType;
 
 import java.math.BigInteger;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * OML (Omnist Markup Language) Core Reader (omnist-spec §4).
- * Reads OML-Core text format into a {@link Document}.
- *
- * OML-Extended syntax (raw strings `'...'` and multiline strings `"""..."""`) is explicitly deferred to a later step.
+ * Reads OML-Core text format into a {@link Document} using {@link OmlLexer}.
  */
 public class OmlReader {
 
-    private final String source;
+    private final List<Token> tokens;
     private final Limits limits;
-    private int pos = 0;
-    private int line = 1;
-    private int col = 1;
+    private int index = 0;
 
     private int currentDepth = 1;
     private int materializedNodeCount = 0;
 
     public OmlReader(String source, Limits limits) {
-        this.source = source != null ? source : "";
         this.limits = limits != null ? limits : Limits.DEFAULT;
+        OmlLexer lexer = new OmlLexer(source, this.limits);
+        this.tokens = lexer.tokenizeAll();
     }
 
     public static Document read(String source) {
@@ -42,97 +37,90 @@ public class OmlReader {
     }
 
     public Document parseDocument() {
-        skipHSpaceAndComments();
-        if (pos >= source.length()) {
+        skipSeparators();
+        if (peekType() == TokenType.EOF) {
             return createNode(List.of());
         }
 
         if (isEdgeListStart()) {
             Node rootNode = parseNodeEdges(false);
-            skipHSpaceAndComments();
-            if (pos < source.length()) {
-                throw error("Trailing content after top-level document");
+            skipSeparators();
+            if (peekType() != TokenType.EOF) {
+                Token extra = peekToken();
+                throw new OmlParseException(extra.line(), extra.col(), "Trailing content after top-level document");
             }
             return rootNode;
         } else {
             Value bareValue = parseScalarValue();
-            skipHSpaceAndComments();
-            if (pos < source.length()) {
-                throw error("Trailing content after bare scalar document");
+            skipSeparators();
+            if (peekType() != TokenType.EOF) {
+                Token extra = peekToken();
+                throw new OmlParseException(extra.line(), extra.col(), "Trailing content after bare scalar document");
             }
             return bareValue;
         }
     }
 
     private boolean isEdgeListStart() {
-        int savedPos = pos;
-        int savedLine = line;
-        int savedCol = col;
+        Token t1 = peekNonSeparatorToken(0);
+        if (t1 == null) return false;
 
-        try {
-            Token t = nextToken();
-            if (t.type == TokenType.STRING) {
-                Token colon = nextToken();
-                return colon.type == TokenType.COLON;
-            } else if (t.type == TokenType.IDENT) {
-                if ("null".equals(t.text) || "true".equals(t.text) || "false".equals(t.text)) {
-                    return false;
-                }
-                Token colon = nextToken();
-                return colon.type == TokenType.COLON;
+        if (t1.type() == TokenType.STRING) {
+            Token t2 = peekNonSeparatorToken(1);
+            return t2 != null && t2.type() == TokenType.COLON;
+        } else if (t1.type() == TokenType.IDENT) {
+            if ("null".equals(t1.text()) || "true".equals(t1.text()) || "false".equals(t1.text())) {
+                return false;
             }
-            return false;
-        } catch (OmlParseException e) {
-            return false;
-        } finally {
-            pos = savedPos;
-            line = savedLine;
-            col = savedCol;
+            Token t2 = peekNonSeparatorToken(1);
+            return t2 != null && t2.type() == TokenType.COLON;
         }
+        return false;
     }
 
     private Node parseNodeEdges(boolean insideBraces) {
         List<Edge> edges = new ArrayList<>();
-        skipHSpaceAndCommentsAndSep();
+        skipSeparators();
 
-        while (pos < source.length()) {
-            if (insideBraces && peekChar() == '}') {
+        while (peekType() != TokenType.EOF) {
+            if (insideBraces && peekType() == TokenType.RBRACE) {
                 break;
             }
 
-            int edgeLine = line;
-            int edgeCol = col;
-
             String label = parseLabel();
 
-            skipHSpaceAndComments();
-            if (pos >= source.length() || source.charAt(pos) != ':') {
-                throw new OmlParseException(edgeLine, edgeCol, "Expected ':' after edge label '" + label + "'");
+            if (peekType() != TokenType.COLON) {
+                Token cur = peekToken();
+                throw new OmlParseException(cur.line(), cur.col(), "Expected ':' after edge label '" + label + "'");
             }
-            consumeChar();
+            consumeToken(); // consume ':'
 
-            skipHSpaceAndComments();
+            skipSeparators();
 
-            if (pos >= source.length()) {
-                throw error("Expected value after ':'");
+            if (peekType() == TokenType.EOF) {
+                Token cur = peekToken();
+                throw new OmlParseException(cur.line(), cur.col(), "Expected value after ':'");
             }
 
-            char c = peekChar();
-            if (c == '[') {
-                consumeChar();
+            Token valueStart = peekToken();
+
+            if (valueStart.type() == TokenType.LBRACKET) {
+                consumeToken(); // consume '['
                 parseArrayElements(label, edges);
-            } else if (c == '{') {
-                consumeChar();
+            } else if (valueStart.type() == TokenType.LBRACE) {
+                consumeToken(); // consume '{'
                 currentDepth++;
                 if (currentDepth > limits.maxDepth()) {
-                    throw error("Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
+                    throw new OmlParseException(valueStart.line(), valueStart.col(),
+                            "Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
                 }
                 Node childNode = parseNodeEdges(true);
-                skipHSpaceAndCommentsAndSep();
-                if (pos >= source.length() || source.charAt(pos) != '}') {
-                    throw error("Expected '}' closing braced node");
+                skipSeparators();
+                if (peekType() != TokenType.RBRACE) {
+                    Token cur = peekToken();
+                    throw new OmlParseException(cur.line(), cur.col(), "Expected '}' closing braced node");
                 }
-                consumeChar();
+                consumeToken(); // consume '}'
                 currentDepth--;
                 edges.add(new Edge(label, childNode));
             } else {
@@ -140,13 +128,14 @@ public class OmlReader {
                 edges.add(new Edge(label, val));
             }
 
-            boolean HadSep = skipHSpaceAndCommentsAndSep();
-            if (pos < source.length()) {
-                if (insideBraces && peekChar() == '}') {
+            boolean HadSep = skipSeparators();
+            if (peekType() != TokenType.EOF) {
+                if (insideBraces && peekType() == TokenType.RBRACE) {
                     break;
                 }
                 if (!HadSep) {
-                    throw error("Edge separator (newline or ';') required between adjacent edges");
+                    Token cur = peekToken();
+                    throw new OmlParseException(cur.line(), cur.col(), "Edge separator (newline or ';') required between adjacent edges");
                 }
             }
         }
@@ -157,82 +146,75 @@ public class OmlReader {
     private Node createNode(List<Edge> edges) {
         materializedNodeCount++;
         if (materializedNodeCount > limits.maxNodeCount()) {
-            throw error("Node count (" + materializedNodeCount + ") exceeds maximum limit of " + limits.maxNodeCount());
+            Token cur = peekToken();
+            throw new OmlParseException(cur.line(), cur.col(),
+                    "Node count (" + materializedNodeCount + ") exceeds maximum limit of " + limits.maxNodeCount());
         }
         return new Node(edges);
     }
 
     private String parseLabel() {
-        skipHSpaceAndComments();
-        if (pos >= source.length()) {
-            throw error("Expected edge label");
-        }
-
-        char c = peekChar();
-        if (c == '\'') {
-            throw error("OML-Extended raw string `'...'` is deferred in this step");
-        }
-        if (c == '"') {
-            if (source.startsWith("\"\"\"", pos)) {
-                throw error("OML-Extended multiline string `\"\"\"...\"\"\"` is deferred in this step");
+        Token t = peekToken();
+        if (t.type() == TokenType.STRING) {
+            consumeToken();
+            return (String) t.value();
+        } else if (t.type() == TokenType.IDENT) {
+            if ("null".equals(t.text()) || "true".equals(t.text()) || "false".equals(t.text())) {
+                throw new OmlParseException(t.line(), t.col(), "Reserved word '" + t.text() + "' cannot be used as a bare label");
             }
-            return parseDQuoteString();
+            consumeToken();
+            return t.text();
+        } else {
+            throw new OmlParseException(t.line(), t.col(), "Expected edge label");
         }
-
-        int startLine = line;
-        int startCol = col;
-        String ident = parseIdent();
-        if ("null".equals(ident) || "true".equals(ident) || "false".equals(ident)) {
-            throw new OmlParseException(startLine, startCol, "Reserved word '" + ident + "' cannot be used as a bare label");
-        }
-        if ("nan".equals(ident) || "inf".equals(ident) || "-inf".equals(ident)) {
-            throw new OmlParseException(startLine, startCol, "Reserved float spelling '" + ident + "' cannot be used as a bare label");
-        }
-        return ident;
     }
 
     private void parseArrayElements(String label, List<Edge> edges) {
-        skipHSpaceAndCommentsAndSep();
-        if (pos < source.length() && source.charAt(pos) == ']') {
-            throw error("Empty array `[]` is an error");
+        skipSeparators();
+        if (peekType() == TokenType.RBRACKET) {
+            Token cur = peekToken();
+            throw new OmlParseException(cur.line(), cur.col(), "Empty array `[]` is an error");
         }
 
         boolean first = true;
-        while (pos < source.length()) {
-            skipHSpaceAndCommentsAndSep();
-            if (source.charAt(pos) == ']') {
-                consumeChar();
+        while (peekType() != TokenType.EOF) {
+            skipSeparators();
+            if (peekType() == TokenType.RBRACKET) {
+                consumeToken();
                 break;
             }
 
             if (!first) {
-                if (source.charAt(pos) == ',') {
-                    consumeChar();
-                    skipHSpaceAndCommentsAndSep();
-                    if (pos < source.length() && source.charAt(pos) == ']') {
-                        consumeChar();
+                if (peekType() == TokenType.COMMA) {
+                    consumeToken();
+                    skipSeparators();
+                    if (peekType() == TokenType.RBRACKET) {
+                        consumeToken();
                         break;
                     }
                 } else {
-                    throw error("Expected ',' between array elements");
+                    Token cur = peekToken();
+                    throw new OmlParseException(cur.line(), cur.col(), "Expected ',' between array elements");
                 }
             }
 
-            char c = peekChar();
-            if (c == '[') {
-                throw error("Arrays cannot be nested inside arrays");
-            } else if (c == '{') {
-                consumeChar();
+            Token valToken = peekToken();
+            if (valToken.type() == TokenType.LBRACKET) {
+                throw new OmlParseException(valToken.line(), valToken.col(), "Arrays cannot be nested inside arrays");
+            } else if (valToken.type() == TokenType.LBRACE) {
+                consumeToken(); // consume '{'
                 currentDepth++;
                 if (currentDepth > limits.maxDepth()) {
-                    throw error("Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
+                    throw new OmlParseException(valToken.line(), valToken.col(),
+                            "Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
                 }
                 Node childNode = parseNodeEdges(true);
-                skipHSpaceAndCommentsAndSep();
-                if (pos >= source.length() || source.charAt(pos) != '}') {
-                    throw error("Expected '}' closing braced node");
+                skipSeparators();
+                if (peekType() != TokenType.RBRACE) {
+                    Token cur = peekToken();
+                    throw new OmlParseException(cur.line(), cur.col(), "Expected '}' closing braced node");
                 }
-                consumeChar();
+                consumeToken();
                 currentDepth--;
                 edges.add(new Edge(label, childNode));
             } else {
@@ -245,299 +227,75 @@ public class OmlReader {
     }
 
     private Value parseScalarValue() {
-        skipHSpaceAndComments();
-        if (pos >= source.length()) {
-            throw error("Expected scalar value");
+        Token t = peekToken();
+        if (t.type() == TokenType.STRING) {
+            consumeToken();
+            return new Scalar.StringScalar((String) t.value());
+        } else if (t.type() == TokenType.DATETIME) {
+            consumeToken();
+            return new Scalar.DateTimeScalar((DateTimeValue) t.value());
+        } else if (t.type() == TokenType.DATE) {
+            consumeToken();
+            return new Scalar.DateScalar((LocalDate) t.value());
+        } else if (t.type() == TokenType.TIME) {
+            consumeToken();
+            return new Scalar.TimeScalar((TimeValue) t.value());
+        } else if (t.type() == TokenType.NUMBER) {
+            consumeToken();
+            return new Scalar.NumberScalar((Double) t.value());
+        } else if (t.type() == TokenType.INTEGER) {
+            consumeToken();
+            return new Scalar.IntegerScalar((BigInteger) t.value());
+        } else if (t.type() == TokenType.IDENT) {
+            consumeToken();
+            if ("null".equals(t.text())) return Value.NULL;
+            if ("true".equals(t.text())) return new Scalar.BooleanScalar(true);
+            if ("false".equals(t.text())) return new Scalar.BooleanScalar(false);
+            throw new OmlParseException(t.line(), t.col(), "Invalid scalar token: '" + t.text() + "'");
+        } else {
+            throw new OmlParseException(t.line(), t.col(), "Expected scalar value");
         }
-
-        char c = peekChar();
-        if (c == '\'') {
-            throw error("OML-Extended raw string `'...'` is deferred in this step");
-        }
-        if (c == '"') {
-            if (source.startsWith("\"\"\"", pos)) {
-                throw error("OML-Extended multiline string `\"\"\"...\"\"\"` is deferred in this step");
-            }
-            return new Scalar.StringScalar(parseDQuoteString());
-        }
-
-        String word = readTokenWord();
-
-        if ("null".equals(word)) return Value.NULL;
-        if ("true".equals(word)) return new Scalar.BooleanScalar(true);
-        if ("false".equals(word)) return new Scalar.BooleanScalar(false);
-
-        if ("nan".equals(word)) return new Scalar.NumberScalar(Double.NaN);
-        if ("inf".equals(word)) return new Scalar.NumberScalar(Double.POSITIVE_INFINITY);
-        if ("-inf".equals(word)) return new Scalar.NumberScalar(Double.NEGATIVE_INFINITY);
-
-        if (word.contains("T") && (word.contains("-") || word.contains(":"))) {
-            try {
-                return new Scalar.DateTimeScalar(parseDateTimeValue(word));
-            } catch (DateTimeParseException ignored) {}
-        }
-
-        if (isDate(word)) {
-            try {
-                return new Scalar.DateScalar(LocalDate.parse(word));
-            } catch (DateTimeParseException ignored) {}
-        }
-
-        if (isTime(word)) {
-            try {
-                return new Scalar.TimeScalar(parseTimeValue(word));
-            } catch (DateTimeParseException ignored) {}
-        }
-
-        if (word.contains(".") || word.contains("e") || word.contains("E")) {
-            try {
-                return new Scalar.NumberScalar(Double.parseDouble(word));
-            } catch (NumberFormatException ignored) {}
-        }
-
-        if (isIntegerDigits(word)) {
-            int digits = word.startsWith("-") ? word.length() - 1 : word.length();
-            if (digits > limits.maxIntegerDigits()) {
-                throw error("Integer literal digit count (" + digits + ") exceeds maximum limit of " + limits.maxIntegerDigits());
-            }
-            try {
-                return new Scalar.IntegerScalar(new BigInteger(word));
-            } catch (NumberFormatException e) {
-                throw error("Invalid integer literal: " + word);
-            }
-        }
-
-        throw error("Invalid scalar token: '" + word + "'");
     }
 
-    private static boolean isIntegerDigits(String s) {
-        if (s == null || s.isEmpty()) return false;
-        int start = 0;
-        if (s.charAt(0) == '-') {
-            if (s.length() == 1) return false;
-            start = 1;
-        }
-        for (int i = start; i < s.length(); i++) {
-            if (!Character.isDigit(s.charAt(i))) return false;
-        }
-        return true;
-    }
-
-    private static boolean isDate(String s) {
-        if (s == null || s.length() != 10) return false;
-        return s.charAt(4) == '-' && s.charAt(7) == '-'
-                && Character.isDigit(s.charAt(0)) && Character.isDigit(s.charAt(1))
-                && Character.isDigit(s.charAt(2)) && Character.isDigit(s.charAt(3))
-                && Character.isDigit(s.charAt(5)) && Character.isDigit(s.charAt(6))
-                && Character.isDigit(s.charAt(8)) && Character.isDigit(s.charAt(9));
-    }
-
-    private static boolean isTime(String s) {
-        if (s == null || !s.contains(":") || s.contains("T")) return false;
-        return Character.isDigit(s.charAt(0));
-    }
-
-    private DateTimeValue parseDateTimeValue(String text) {
-        if (text.endsWith("Z")) {
-            LocalDateTime dt = LocalDateTime.parse(text.substring(0, text.length() - 1));
-            return DateTimeValue.of(dt, ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        if (signPos > 10) {
-            LocalDateTime dt = LocalDateTime.parse(text.substring(0, signPos));
-            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
-            return DateTimeValue.of(dt, offset);
-        }
-        return DateTimeValue.of(LocalDateTime.parse(text));
-    }
-
-    private TimeValue parseTimeValue(String text) {
-        if (text.endsWith("Z")) {
-            LocalTime t = LocalTime.parse(text.substring(0, text.length() - 1));
-            return TimeValue.of(t, ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        if (signPos > 0 && text.indexOf(':') < signPos) {
-            LocalTime t = LocalTime.parse(text.substring(0, signPos));
-            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
-            return TimeValue.of(t, offset);
-        }
-        return TimeValue.of(LocalTime.parse(text));
-    }
-
-    private String parseDQuoteString() {
-        consumeChar();
-        StringBuilder sb = new StringBuilder();
-        while (pos < source.length()) {
-            char c = consumeChar();
-            if (c == '"') {
-                return sb.toString();
-            }
-            if (c < 0x20) {
-                throw error("Control characters below U+0020 are forbidden in strings");
-            }
-            if (c == '\\') {
-                if (pos >= source.length()) {
-                    throw error("Unterminated escape in string");
-                }
-                char esc = consumeChar();
-                switch (esc) {
-                    case '"' -> sb.append('"');
-                    case '\\' -> sb.append('\\');
-                    case '/' -> sb.append('/');
-                    case 'b' -> sb.append('\b');
-                    case 'f' -> sb.append('\f');
-                    case 'n' -> sb.append('\n');
-                    case 'r' -> sb.append('\r');
-                    case 't' -> sb.append('\t');
-                    case 'u' -> {
-                        if (pos + 4 > source.length()) {
-                            throw error("Unterminated \\uXXXX escape sequence");
-                        }
-                        String hex = source.substring(pos, pos + 4);
-                        pos += 4;
-                        col += 4;
-                        int codeUnit;
-                        try {
-                            codeUnit = Integer.parseInt(hex, 16);
-                        } catch (NumberFormatException e) {
-                            throw error("Invalid hex in \\uXXXX escape");
-                        }
-                        if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
-                            if (pos + 6 <= source.length() && source.startsWith("\\u", pos)) {
-                                pos += 2;
-                                col += 2;
-                                String hex2 = source.substring(pos, pos + 4);
-                                pos += 4;
-                                col += 4;
-                                int lowUnit = Integer.parseInt(hex2, 16);
-                                if (lowUnit >= 0xDC00 && lowUnit <= 0xDFFF) {
-                                    int codePoint = Character.toCodePoint((char) codeUnit, (char) lowUnit);
-                                    sb.appendCodePoint(codePoint);
-                                } else {
-                                    throw error("Invalid low surrogate in \\uXXXX pair");
-                                }
-                            } else {
-                                throw error("Unpaired high surrogate in \\uXXXX escape");
-                            }
-                        } else if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF) {
-                            throw error("Unpaired low surrogate in \\uXXXX escape");
-                        } else {
-                            sb.append((char) codeUnit);
-                        }
-                    }
-                    default -> throw error("Invalid escape sequence: \\" + esc);
-                }
-            } else {
-                sb.append(c);
-            }
-        }
-        throw error("Unterminated double-quoted string");
-    }
-
-    private String parseIdent() {
-        int start = pos;
-        while (pos < source.length()) {
-            char c = source.charAt(pos);
-            if (Character.isLetterOrDigit(c) || c == '_' || c == '-') {
-                consumeChar();
-            } else {
-                break;
-            }
-        }
-        return source.substring(start, pos);
-    }
-
-    private String readTokenWord() {
-        int start = pos;
-        while (pos < source.length()) {
-            char c = source.charAt(pos);
-            if (Character.isWhitespace(c) || c == ';' || c == ',' || c == '{' || c == '}' || c == '[' || c == ']') {
-                break;
-            }
-            consumeChar();
-        }
-        return source.substring(start, pos);
-    }
-
-    private boolean skipHSpaceAndCommentsAndSep() {
+    private boolean skipSeparators() {
         boolean hadSep = false;
-        while (pos < source.length()) {
-            char c = source.charAt(pos);
-            if (c == ' ' || c == '\t') {
-                consumeChar();
-            } else if (c == '#') {
-                while (pos < source.length() && source.charAt(pos) != '\n' && source.charAt(pos) != '\r') {
-                    consumeChar();
-                }
-            } else if (c == '\n' || c == '\r' || c == ';') {
-                hadSep = true;
-                consumeChar();
-            } else {
-                break;
-            }
+        while (index < tokens.size() && tokens.get(index).type() == TokenType.SEPARATOR) {
+            hadSep = true;
+            index++;
         }
         return hadSep;
     }
 
-    private void skipHSpaceAndComments() {
-        while (pos < source.length()) {
-            char c = source.charAt(pos);
-            if (c == ' ' || c == '\t') {
-                consumeChar();
-            } else if (c == '#') {
-                while (pos < source.length() && source.charAt(pos) != '\n' && source.charAt(pos) != '\r') {
-                    consumeChar();
+    private Token peekToken() {
+        if (index < tokens.size()) {
+            return tokens.get(index);
+        }
+        return new Token(TokenType.EOF, "", null, -1, -1);
+    }
+
+    private TokenType peekType() {
+        return peekToken().type();
+    }
+
+    private Token consumeToken() {
+        Token t = peekToken();
+        if (index < tokens.size()) {
+            index++;
+        }
+        return t;
+    }
+
+    private Token peekNonSeparatorToken(int offset) {
+        int count = 0;
+        for (int i = index; i < tokens.size(); i++) {
+            Token t = tokens.get(i);
+            if (t.type() != TokenType.SEPARATOR) {
+                if (count == offset) {
+                    return t;
                 }
-            } else {
-                break;
+                count++;
             }
         }
+        return null;
     }
-
-    private char peekChar() {
-        return source.charAt(pos);
-    }
-
-    private char consumeChar() {
-        char c = source.charAt(pos++);
-        if (c == '\n') {
-            line++;
-            col = 1;
-        } else {
-            col++;
-        }
-        return c;
-    }
-
-    private OmlParseException error(String message) {
-        return new OmlParseException(line, col, message);
-    }
-
-    private Token nextToken() {
-        skipHSpaceAndComments();
-        if (pos >= source.length()) {
-            return new Token(TokenType.EOF, "", line, col);
-        }
-        char c = peekChar();
-        if (c == ':') {
-            int l = line, cl = col;
-            consumeChar();
-            return new Token(TokenType.COLON, ":", l, cl);
-        }
-        if (c == '"') {
-            int l = line, cl = col;
-            String str = parseDQuoteString();
-            return new Token(TokenType.STRING, str, l, cl);
-        }
-        int l = line, cl = col;
-        String ident = parseIdent();
-        return new Token(TokenType.IDENT, ident, l, cl);
-    }
-
-    private enum TokenType {
-        STRING, IDENT, COLON, EOF
-    }
-
-    private record Token(TokenType type, String text, int line, int col) {}
 }

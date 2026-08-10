@@ -136,7 +136,7 @@ class OmlReaderTest {
     @DisplayName("Depth limit enforcement: nesting past maxDepth throws OmlParseException")
     void testDepthLimitEnforcement() {
         Limits customLimits = new Limits(2, 100, 100);
-        String validOml = "a: { b: 1 }"; // depth 2 (root node=1, a's node=2)
+        String validOml = "a: { b: 1 }"; // depth 2
         assertDoesNotThrow(() -> OmlReader.read(validOml, customLimits));
 
         String invalidOml = "a: { b: { c: 1 } }"; // depth 3 exceeds maxDepth 2
@@ -194,5 +194,54 @@ class OmlReaderTest {
         OmlParseException ex = assertThrows(OmlParseException.class, () -> OmlReader.read(badOml));
         assertTrue(ex.getLine() > 0, "Line should be positive");
         assertTrue(ex.getColumn() > 0, "Column should be positive");
+    }
+
+    @Test
+    @DisplayName("Characterization 1: §4.1 example '2024-01-01T99' bare or value must fail as trailing content")
+    void testCharacterization1_MalformedDateTimeTokenization() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> OmlReader.read("2024-01-01T99"));
+        assertTrue(ex.getMessage().contains("Trailing content"), "2024-01-01T99 should fail specifically as trailing content after DATE token 2024-01-01");
+    }
+
+    @Test
+    @DisplayName("Characterization 2: §4.1 contrast '2024-01-01T10:30' parses successfully as DateTimeScalar")
+    void testCharacterization2_ValidDateTimeTokenization() {
+        Document doc = assertDoesNotThrow(() -> OmlReader.read("2024-01-01T10:30"));
+        assertInstanceOf(Scalar.DateTimeScalar.class, doc);
+        Scalar.DateTimeScalar dt = (Scalar.DateTimeScalar) doc;
+        assertEquals(DateTimeValue.of(LocalDateTime.of(2024, 1, 1, 10, 30)), dt.value());
+    }
+
+    @Test
+    @DisplayName("Characterization 3: §4.6 exact pair 'null: 1' at top vs 'a: { null: 1 }' nested reserved label error")
+    void testCharacterization3_ReservedLabelTopVsNested() {
+        OmlParseException exTop = assertThrows(OmlParseException.class, () -> OmlReader.read("null: 1"));
+        assertTrue(exTop.getMessage().contains("Trailing content"), "top-level null: 1 should fail as trailing content after null scalar");
+
+        OmlParseException exNested = assertThrows(OmlParseException.class, () -> OmlReader.read("a: { null: 1 }"));
+        assertTrue(exNested.getMessage().contains("Reserved word"), "nested null: 1 should fail as specific reserved word label error");
+    }
+
+    @Test
+    @DisplayName("Characterization 4: Bare labels starting with reserved spellings ('nanoseconds: 1', 'information: 1') must succeed")
+    void testCharacterization4_LabelsStartingWithReservedPrefix() {
+        Document doc1 = assertDoesNotThrow(() -> OmlReader.read("nanoseconds: 1"));
+        assertInstanceOf(Node.class, doc1);
+        Node n1 = (Node) doc1;
+        assertEquals("nanoseconds", n1.edges().get(0).label());
+
+        Document doc2 = assertDoesNotThrow(() -> OmlReader.read("information: 1"));
+        assertInstanceOf(Node.class, doc2);
+        Node n2 = (Node) doc2;
+        assertEquals("information", n2.edges().get(0).label());
+    }
+
+    @Test
+    @DisplayName("Characterization 5: §4.3.1 trailing comma before ']' in array sugar is legal")
+    void testCharacterization5_ArrayTrailingComma() {
+        Document doc = assertDoesNotThrow(() -> OmlReader.read("b: [1, 2, 3,]"));
+        assertInstanceOf(Node.class, doc);
+        Node n = (Node) doc;
+        assertEquals(3, n.edges().size());
     }
 }
