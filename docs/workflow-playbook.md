@@ -88,10 +88,10 @@ public sealed interface Scalar {
     record DateScalar(LocalDate value) implements Scalar {
         public ScalarKind kind() { return ScalarKind.DATE; }
     }
-    record TimeScalar(LocalTime value) implements Scalar {
+    record TimeScalar(TimeValue value) implements Scalar {
         public ScalarKind kind() { return ScalarKind.TIME; }
     }
-    record DateTimeScalar(OffsetDateTime value) implements Scalar {
+    record DateTimeScalar(DateTimeValue value) implements Scalar {
         public ScalarKind kind() { return ScalarKind.DATE_TIME; }
     }
 }
