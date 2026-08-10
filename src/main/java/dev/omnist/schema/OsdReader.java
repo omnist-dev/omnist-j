@@ -1,0 +1,225 @@
+package dev.omnist.schema;
+
+import dev.omnist.schema.OsdLexer.Token;
+import dev.omnist.schema.OsdLexer.TokenType;
+
+import java.util.*;
+
+/**
+ * OSD (Omnist Schema Definition) Reader (omnist-spec §5).
+ * Parses OSD text into a {@link Schema}.
+ */
+public class OsdReader {
+
+    private final List<Token> tokens;
+    private int index = 0;
+
+    public OsdReader(String source) {
+        OsdLexer lexer = new OsdLexer(source);
+        this.tokens = lexer.tokenizeAll();
+    }
+
+    public static Schema read(String source) {
+        return new OsdReader(source).parseSchema();
+    }
+
+    public Schema parseSchema() {
+        String rootName = null;
+        Map<String, Record> records = new LinkedHashMap<>();
+
+        while (peekType() != TokenType.EOF) {
+            Token t = peekToken();
+            if (t.type() == TokenType.RECORD) {
+                consumeToken(); // consume 'record'
+                Record record = parseRecord();
+                if (records.containsKey(record.name())) {
+                    throw new OsdParseException(t.line(), t.col(), "Duplicate record definition: '" + record.name() + "'");
+                }
+                records.put(record.name(), record);
+            } else if (t.type() == TokenType.ROOT) {
+                consumeToken(); // consume 'root'
+                if (rootName != null) {
+                    throw new OsdParseException(t.line(), t.col(), "Duplicate root declaration");
+                }
+                Token nameTok = peekToken();
+                if (nameTok.type() != TokenType.IDENT) {
+                    throw new OsdParseException(nameTok.line(), nameTok.col(), "Expected root record name identifier");
+                }
+                consumeToken();
+                rootName = nameTok.text();
+            } else {
+                throw new OsdParseException(t.line(), t.col(), "Expected 'record' or 'root' declaration");
+            }
+        }
+
+        if (rootName == null) {
+            throw new OsdParseException(1, 1, "A schema must declare a root");
+        }
+
+        // Post-parse validation: check reference targets
+        for (Record record : records.values()) {
+            for (Field field : record.fields()) {
+                if (field.type() instanceof Type.Ref ref) {
+                    if (!records.containsKey(ref.name())) {
+                        throw new OsdParseException(1, 1, "Unknown type '" + ref.name() + "'");
+                    }
+                }
+            }
+        }
+
+        return new Schema(rootName, records);
+    }
+
+    private Record parseRecord() {
+        Token nameTok = peekToken();
+        if (nameTok.type() != TokenType.IDENT) {
+            throw new OsdParseException(nameTok.line(), nameTok.col(), "Expected record name identifier");
+        }
+
+        String recordName = nameTok.text();
+
+        // §5.7 Reserved record names: cannot be scalar keyword or 'any'
+        if (ScalarKind.fromKeyword(recordName) != null || "any".equals(recordName)) {
+            throw new OsdParseException(nameTok.line(), nameTok.col(), "Reserved type name '" + recordName + "' cannot be used as a record name");
+        }
+
+        consumeToken(); // consume record name
+
+        Token braceTok = peekToken();
+        if (braceTok.type() != TokenType.LBRACE) {
+            throw new OsdParseException(braceTok.line(), braceTok.col(), "Expected '{' after record name");
+        }
+        consumeToken(); // consume '{'
+
+        List<Field> fields = new ArrayList<>();
+        while (peekType() != TokenType.EOF && peekType() != TokenType.RBRACE) {
+            Token labelTok = peekToken();
+
+            if (labelTok.type() != TokenType.STRING) {
+                throw new OsdParseException(labelTok.line(), labelTok.col(), "Expected a quoted field name");
+            }
+            consumeToken(); // consume field label string
+            String label = labelTok.text();
+
+            int min = 1;
+            Integer max = 1;
+
+            if (peekType() == TokenType.CARDINALITY) {
+                Token cardTok = consumeToken();
+                CardBound cb = parseCardinality(cardTok);
+                min = cb.min;
+                max = cb.max;
+            }
+
+            Token colonTok = peekToken();
+            if (colonTok.type() != TokenType.COLON) {
+                throw new OsdParseException(colonTok.line(), colonTok.col(), "Expected ':' after field label");
+            }
+            consumeToken(); // consume ':'
+
+            Token typeTok = peekToken();
+            if (typeTok.type() == TokenType.STRING) {
+                throw new OsdParseException(typeTok.line(), typeTok.col(), "A quoted string cannot appear in type position");
+            }
+            if (typeTok.type() != TokenType.IDENT) {
+                throw new OsdParseException(typeTok.line(), typeTok.col(), "Expected type name identifier");
+            }
+            consumeToken();
+
+            String typeName = typeTok.text();
+            boolean nullable = false;
+
+            if (peekType() == TokenType.QUESTION) {
+                consumeToken(); // consume '?'
+                nullable = true;
+            }
+
+            Type fieldType;
+            ScalarKind scalarKind = ScalarKind.fromKeyword(typeName);
+            if (scalarKind != null) {
+                fieldType = new Type.Scalar(scalarKind, nullable);
+            } else if ("any".equals(typeName)) {
+                if (nullable) {
+                    throw new OsdParseException(typeTok.line(), typeTok.col(), "any already includes null");
+                }
+                fieldType = Type.Any.INSTANCE;
+            } else {
+                if (nullable) {
+                    throw new OsdParseException(typeTok.line(), typeTok.col(), "? cannot apply to a reference; use [0,1]");
+                }
+                fieldType = new Type.Ref(typeName);
+            }
+
+            fields.add(new Field(label, fieldType, min, max));
+
+            if (peekType() == TokenType.COMMA) {
+                consumeToken(); // consume optional trailing/separating comma
+            }
+        }
+
+        if (peekType() != TokenType.RBRACE) {
+            Token cur = peekToken();
+            throw new OsdParseException(cur.line(), cur.col(), "Expected '}' closing record definition");
+        }
+        consumeToken(); // consume '}'
+
+        return new Record(recordName, fields);
+    }
+
+    private record CardBound(int min, Integer max) {}
+
+    private CardBound parseCardinality(Token cardTok) {
+        String s = cardTok.text().trim();
+        if (s.isEmpty()) {
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "Empty cardinality '[]' is an error");
+        }
+        if (s.contains(".")) {
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "Cardinality bound must be a whole number");
+        }
+        if (s.contains("-")) {
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "Cardinality bound cannot be negative");
+        }
+
+        try {
+            if (!s.contains(",")) {
+                int exact = Integer.parseInt(s);
+                return new CardBound(exact, exact);
+            }
+            String[] parts = s.split(",", -1);
+            if (parts.length != 2) {
+                throw new OsdParseException(cardTok.line(), cardTok.col(), "Invalid cardinality format: [" + s + "]");
+            }
+            String minStr = parts[0].trim();
+            String maxStr = parts[1].trim();
+
+            int min = minStr.isEmpty() ? 0 : Integer.parseInt(minStr);
+            Integer max = maxStr.isEmpty() ? null : Integer.parseInt(maxStr);
+
+            if (max != null && max < min) {
+                throw new OsdParseException(cardTok.line(), cardTok.col(), "Invalid cardinality: max (" + max + ") < min (" + min + ")");
+            }
+            return new CardBound(min, max);
+        } catch (NumberFormatException e) {
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "Invalid integer in cardinality: [" + s + "]");
+        }
+    }
+
+    private Token peekToken() {
+        if (index < tokens.size()) {
+            return tokens.get(index);
+        }
+        return new Token(TokenType.EOF, "", -1, -1);
+    }
+
+    private TokenType peekType() {
+        return peekToken().type();
+    }
+
+    private Token consumeToken() {
+        Token t = peekToken();
+        if (index < tokens.size()) {
+            index++;
+        }
+        return t;
+    }
+}
