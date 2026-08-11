@@ -225,7 +225,7 @@ public final class YamlCodec {
             for (Edge edge : node.edges()) {
                 String label = edge.label();
                 if (label.contains("\u0085")) {
-                    rep.add(path, "string.line-break-char", "label contains U+0085 (NEL); written double-quoted to round-trip correctly", "warning");
+                    rep.add(path, "format.string-line-break-char", "label contains U+0085 (NEL); written double-quoted to round-trip correctly", "warning");
                 }
                 int i = counts.getOrDefault(label, 0);
                 counts.put(label, i + 1);
@@ -237,10 +237,10 @@ public final class YamlCodec {
             }
         } else if (doc instanceof Scalar s) {
             if (s instanceof TimeScalar) {
-                rep.add(path, "temporal.stringified", "time-of-day written as a string (YAML has no standalone time)", "warning");
+                rep.add(path, "format.temporal-stringified", "time-of-day written as a string (YAML has no standalone time)", "warning");
             } else if (s instanceof StringScalar str) {
                 if (str.value().contains("\u0085")) {
-                    rep.add(path, "string.line-break-char", "value contains U+0085 (NEL); written double-quoted to round-trip correctly", "warning");
+                    rep.add(path, "format.string-line-break-char", "value contains U+0085 (NEL); written double-quoted to round-trip correctly", "warning");
                 }
             }
         }

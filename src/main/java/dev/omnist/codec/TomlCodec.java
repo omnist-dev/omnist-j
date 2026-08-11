@@ -493,7 +493,7 @@ public final class TomlCodec {
                 }
                 Document child = (Document) edge.target();
                 if (child instanceof Value.NullValue) {
-                    rep.add(p, "null.omitted", "null value dropped (TOML has no null)", "warning");
+                    rep.add(p, "format.null-unrepresentable", "null value dropped (TOML has no null)", "warning");
                     continue;
                 }
                 edges.add(new Edge(label, (Target) stripNulls(child, p, rep, depth + 1)));

@@ -222,7 +222,7 @@ public final class Cli {
                         return 0;
                     } catch (IllegalArgumentException ex) {
                         if (json) {
-                            out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of())));
+                            out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError("$", "algebra.extract-invalidates-root", ex.getMessage())))));
                         } else {
                             err.println(ex.getMessage());
                         }
@@ -321,7 +321,8 @@ public final class Cli {
                     return 0;
                 } catch (Exception ex) {
                     if (json) {
-                        out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of())));
+                        String code = getInferErrorCode(ex.getMessage());
+                        out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError("$", code, ex.getMessage())))));
                     } else {
                         err.println(ex.getMessage());
                     }
@@ -418,5 +419,19 @@ public final class Cli {
             this.ok = ok;
             this.findings = findings;
         }
+    }
+
+    private static String getInferErrorCode(String msg) {
+        if (msg == null) msg = "";
+        if (msg.contains("root must be a node") || msg.contains("scalar root")) {
+            return "algebra.infer-scalar-root";
+        } else if (msg.contains("no samples") || msg.contains("empty samples") || msg.contains("at least one sample")) {
+            return "algebra.infer-no-samples";
+        } else if (msg.contains("mixes objects and values") || msg.contains("mixed shape") || msg.contains("mixes")) {
+            return "algebra.infer-mixed-shape";
+        } else if (msg.contains("conflicting") || msg.contains("conflicting types") || msg.contains("conflicting scalar")) {
+            return "algebra.infer-conflicting-scalars";
+        }
+        return "document.parse-error";
     }
 }

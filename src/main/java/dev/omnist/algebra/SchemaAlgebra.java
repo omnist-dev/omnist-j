@@ -284,7 +284,7 @@ public final class SchemaAlgebra {
         for (String name : reach) {
             if (!sat.contains(name)) {
                 findings.add(new LintFinding(
-                    "unsatisfiable-record", "warning", name,
+                    "lint.unsatisfiable-record", "warning", name,
                     "record '" + name + "' is reachable but unsatisfiable -- no finite document can match it (e.g. a mandatory ref cycle)"
                 ));
             }
@@ -293,7 +293,7 @@ public final class SchemaAlgebra {
         for (String name : schema.records().keySet()) {
             if (!reach.contains(name)) {
                 findings.add(new LintFinding(
-                    "unreachable-record", "warning", name,
+                    "lint.unreachable-record", "warning", name,
                     "record '" + name + "' is defined but never reachable from the root; drop it with `schema prune`"
                 ));
             }
@@ -314,7 +314,7 @@ public final class SchemaAlgebra {
                 String others = String.join(", ", otherQuotes);
                 
                 findings.add(new LintFinding(
-                    "duplicate-record", "warning", location,
+                    "lint.duplicate-record", "warning", location,
                     "records " + others + " are structurally identical to '" + keep + "'; merge them with `schema normalize`"
                 ));
             }
@@ -326,7 +326,7 @@ public final class SchemaAlgebra {
             for (Field f : rec.fields()) {
                 if (f.type() instanceof Type.Any) {
                     findings.add(new LintFinding(
-                        "any-field", "info", name + "." + f.label(),
+                        "lint.any-field", "info", name + "." + f.label(),
                         "field '" + f.label() + "' of record '" + name + "' is typed `any` (accepts any value unchecked)"
                     ));
                 }

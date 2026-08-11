@@ -81,20 +81,17 @@ public class YamlCodecTest {
         assertTrue(yaml.contains("time: '12:30'") || yaml.contains("time: \"12:30\"") || yaml.contains("time: 12:30"));
 
         assertEquals(1, report.adjustments().size());
-        assertEquals("temporal.stringified", report.adjustments().get(0).code());
+        assertEquals("format.temporal-stringified", report.adjustments().get(0).code());
     }
 
     @Test
-    @DisplayName("write flags NEL character in strings or labels")
     void testWriteNel() {
-        Node node = new Node(List.of(
-            new Edge("nel_\u0085", new StringScalar("val"))
+        Node doc = new Node(List.of(
+            new Edge("a\u0085b", new Scalar.StringScalar("x\u0085y"))
         ));
-
-        WriteReport report = new WriteReport();
-        YamlCodec.write(node, false, report);
-
-        assertEquals(1, report.adjustments().size());
-        assertEquals("string.line-break-char", report.adjustments().get(0).code());
+        WriteReport rep = new WriteReport();
+        String out = YamlCodec.write(doc, false, rep);
+        assertTrue(out.contains("\"a\\u0085b\""));
+        assertEquals("format.string-line-break-char", rep.adjustments().get(0).code());
     }
 }

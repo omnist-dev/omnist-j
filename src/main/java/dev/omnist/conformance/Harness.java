@@ -529,10 +529,14 @@ public final class Harness {
             if (msg.contains("Empty cardinality")) code = "schema.empty-cardinality";
             else if (msg.contains("cannot be negative") || msg.contains("Invalid cardinality") || msg.contains("must be a whole number")) code = "schema.invalid-cardinality";
             else if (msg.contains("Reserved type name")) code = "schema.reserved-record-name";
-            else if (msg.contains("Unknown type")) code = "schema.type-not-found";
+            else if (msg.contains("Unknown type")) code = "schema.unknown-type";
             else if (msg.contains("Duplicate record")) code = "schema.duplicate-record";
             else if (msg.contains("Duplicate root")) code = "schema.duplicate-root";
             else if (msg.contains("? cannot apply") || msg.contains("already includes null")) code = "schema.optional-any-ref";
+            else if (msg.contains("A schema must declare a root") || msg.contains("no root")) code = "schema.no-root";
+            else if (msg.contains("Expected a quoted field name") || msg.contains("unquoted") || msg.contains("quoted field name")) code = "schema.unquoted-label";
+            else if (msg.contains("quoted string cannot appear in type position")) code = "schema.quoted-type";
+            else if (msg.contains("Duplicate field")) code = "schema.duplicate-field";
 
             int line = 1;
             if (thrown instanceof OsdParseException ope) {
@@ -1094,6 +1098,18 @@ public final class Harness {
             code = "document.xml-mixed-content";
         } else if (msg.contains("maximum digit limit") || msg.contains("digit limit")) {
             code = "integer.digit-limit";
+        } else if (msg.contains("invalidates root") || msg.contains("deletes a mandatory field")) {
+            code = "algebra.extract-invalidates-root";
+        } else if (msg.contains("root must be a node") || msg.contains("scalar root")) {
+            code = "algebra.infer-scalar-root";
+        } else if (msg.contains("no samples") || msg.contains("empty samples") || msg.contains("at least one sample")) {
+            code = "algebra.infer-no-samples";
+        } else if (msg.contains("mixes objects and values") || msg.contains("mixed shape") || msg.contains("mixes")) {
+            code = "algebra.infer-mixed-shape";
+        } else if (msg.contains("conflicting") || msg.contains("conflicting types") || msg.contains("conflicting scalar")) {
+            code = "algebra.infer-conflicting-scalars";
+        } else if (msg.contains("Unexpected token") || msg.contains("unexpected token") || msg.contains("Bare word") || msg.contains("bare word")) {
+            code = "parse.unexpected-token";
         } else if (msg.contains("invalid JSON") || msg.contains("invalid TOML") || msg.contains("invalid XML")) {
             code = "document.parse-error";
         }

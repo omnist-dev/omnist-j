@@ -501,27 +501,27 @@ public class SchemaAlgebraTest {
         assertEquals(5, findings.size());
 
         LintFinding f1 = findings.get(0);
-        assertEquals("any-field", f1.code());
+        assertEquals("lint.any-field", f1.code());
         assertEquals("info", f1.severity());
         assertEquals("Root.anyField", f1.location());
 
         LintFinding f2 = findings.get(1);
-        assertEquals("duplicate-record", f2.code());
+        assertEquals("lint.duplicate-record", f2.code());
         assertEquals("warning", f2.severity());
         assertEquals("DupA, DupB", f2.location());
 
         LintFinding f3 = findings.get(2);
-        assertEquals("unreachable-record", f3.code());
+        assertEquals("lint.unreachable-record", f3.code());
         assertEquals("warning", f3.severity());
         assertEquals("Unused", f3.location());
 
         LintFinding f4 = findings.get(3);
-        assertEquals("unsatisfiable-record", f4.code());
+        assertEquals("lint.unsatisfiable-record", f4.code());
         assertEquals("warning", f4.severity());
         assertEquals("Cycle", f4.location());
 
         LintFinding f5 = findings.get(4);
-        assertEquals("unsatisfiable-record", f5.code());
+        assertEquals("lint.unsatisfiable-record", f5.code());
         assertEquals("warning", f5.severity());
         assertEquals("Root", f5.location());
     }

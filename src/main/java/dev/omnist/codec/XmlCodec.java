@@ -341,10 +341,10 @@ public final class XmlCodec {
                 scanXml((Document) edge.target(), p, rep, depth + 1);
             }
         } else if (doc instanceof Value.NullValue) {
-            rep.add(path, "null.omitted", "null written as an empty element", "warning");
+            rep.add(path, "format.null-unrepresentable", "null written as an empty element", "warning");
         } else if (doc instanceof Scalar s) {
             if (s instanceof DateScalar || s instanceof TimeScalar || s instanceof DateTimeScalar) {
-                rep.add(path, "temporal.stringified",
+                rep.add(path, "format.temporal-stringified",
                         "temporal value written as text (reads back as a string)", "warning");
             } else if (s instanceof BooleanScalar || s instanceof IntegerScalar || s instanceof NumberScalar) {
                 rep.add(path, "value.stringified",

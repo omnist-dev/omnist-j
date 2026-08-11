@@ -93,6 +93,6 @@ public class TomlCodecTest {
         assertFalse(toml.contains("nullable"));
 
         assertEquals(1, report.adjustments().size());
-        assertEquals("null.omitted", report.adjustments().get(0).code());
+        assertEquals("format.null-unrepresentable", report.adjustments().get(0).code());
     }
 }

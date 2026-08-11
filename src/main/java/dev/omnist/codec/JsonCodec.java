@@ -159,11 +159,11 @@ public final class JsonCodec {
             }
         } else if (doc instanceof Scalar s) {
             if (s instanceof DateScalar || s instanceof TimeScalar || s instanceof DateTimeScalar) {
-                rep.add(path, "temporal.stringified", "temporal value written as an ISO-8601 string", "warning");
+                rep.add(path, "format.temporal-stringified", "temporal value written as an ISO-8601 string", "warning");
             } else if (s instanceof NumberScalar num) {
                 double d = num.value();
                 if (Double.isNaN(d) || Double.isInfinite(d)) {
-                    rep.add(path, "float.special", d + " is not valid JSON; wrote null", "error");
+                    rep.add(path, "format.float-special", d + " is not valid JSON; wrote null", "error");
                 }
             }
         }

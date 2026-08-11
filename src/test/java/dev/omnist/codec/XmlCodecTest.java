@@ -141,7 +141,7 @@ public class XmlCodecTest {
         List<WriteAdjustment> adjs = report.adjustments();
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("shape.empty_ambiguous")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("key.sanitized")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("null.omitted")));
+        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.null-unrepresentable")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("value.stringified")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("string.cr_normalized")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("string.illegal_xml_char")));

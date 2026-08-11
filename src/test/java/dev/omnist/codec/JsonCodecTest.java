@@ -93,14 +93,14 @@ public class JsonCodecTest {
         assertEquals(2, report.adjustments().size());
         
         WriteAdjustment adj1 = report.adjustments().stream()
-            .filter(a -> a.code().equals("temporal.stringified"))
+            .filter(a -> a.code().equals("format.temporal-stringified"))
             .findFirst()
             .orElse(null);
         assertNotNull(adj1);
         assertEquals("warning", adj1.severity());
 
         WriteAdjustment adj2 = report.adjustments().stream()
-            .filter(a -> a.code().equals("float.special"))
+            .filter(a -> a.code().equals("format.float-special"))
             .findFirst()
             .orElse(null);
         assertNotNull(adj2);
