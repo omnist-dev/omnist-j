@@ -464,5 +464,66 @@ public class SchemaAlgebraTest {
         assertNotNull(extOrder);
         assertNull(extOrder.field("coupon"));
     }
+
+    @Test
+    @DisplayName("lint detects unsatisfiable, unreachable, duplicate records and any-fields (§6.11)")
+    void testLintDiagnostics() {
+        dev.omnist.schema.Record cycle = new dev.omnist.schema.Record("Cycle", List.of(
+            new Field("next", new Type.Ref("Cycle"), 1, 1)
+        ));
+        dev.omnist.schema.Record unused = new dev.omnist.schema.Record("Unused", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record dupA = new dev.omnist.schema.Record("DupA", List.of(
+            new Field("val", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record dupB = new dev.omnist.schema.Record("DupB", List.of(
+            new Field("val", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record root = new dev.omnist.schema.Record("Root", List.of(
+            new Field("anyField", Type.Any.INSTANCE, 0, 1),
+            new Field("toCycle", new Type.Ref("Cycle"), 1, 1),
+            new Field("toDupA", new Type.Ref("DupA"), 0, 1),
+            new Field("toDupB", new Type.Ref("DupB"), 0, 1)
+        ));
+
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Cycle", cycle);
+        records.put("Unused", unused);
+        records.put("DupA", dupA);
+        records.put("DupB", dupB);
+        records.put("Root", root);
+
+        Schema schema = new Schema("Root", records);
+
+        List<LintFinding> findings = SchemaAlgebra.lint(schema);
+        assertNotNull(findings);
+        assertEquals(5, findings.size());
+
+        LintFinding f1 = findings.get(0);
+        assertEquals("any-field", f1.code());
+        assertEquals("info", f1.severity());
+        assertEquals("Root.anyField", f1.location());
+
+        LintFinding f2 = findings.get(1);
+        assertEquals("duplicate-record", f2.code());
+        assertEquals("warning", f2.severity());
+        assertEquals("DupA, DupB", f2.location());
+
+        LintFinding f3 = findings.get(2);
+        assertEquals("unreachable-record", f3.code());
+        assertEquals("warning", f3.severity());
+        assertEquals("Unused", f3.location());
+
+        LintFinding f4 = findings.get(3);
+        assertEquals("unsatisfiable-record", f4.code());
+        assertEquals("warning", f4.severity());
+        assertEquals("Cycle", f4.location());
+
+        LintFinding f5 = findings.get(4);
+        assertEquals("unsatisfiable-record", f5.code());
+        assertEquals("warning", f5.severity());
+        assertEquals("Root", f5.location());
+    }
 }
 

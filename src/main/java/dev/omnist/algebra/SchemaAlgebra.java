@@ -267,6 +267,90 @@ public final class SchemaAlgebra {
         return normalize(prune(new Schema(schema.root(), newEnv)));
     }
 
+    /**
+     * lint(S) - diagnoses structural schema issues that compile fine but mean parts of the schema can never do anything (§6.11).
+     */
+    public static List<LintFinding> lint(Schema schema) {
+        List<LintFinding> findings = new ArrayList<>();
+        Set<String> reach = reachablePlain(schema);
+        Set<String> sat = satisfiableSet(schema);
+
+        for (String name : reach) {
+            if (!sat.contains(name)) {
+                findings.add(new LintFinding(
+                    "unsatisfiable-record", "warning", name,
+                    "record '" + name + "' is reachable but unsatisfiable -- no finite document can match it (e.g. a mandatory ref cycle)"
+                ));
+            }
+        }
+
+        for (String name : schema.records().keySet()) {
+            if (!reach.contains(name)) {
+                findings.add(new LintFinding(
+                    "unreachable-record", "warning", name,
+                    "record '" + name + "' is defined but never reachable from the root; drop it with `schema prune`"
+                ));
+            }
+        }
+
+        List<List<String>> blocks = equivalenceClasses(schema);
+        for (List<String> block : blocks) {
+            if (block.size() > 1) {
+                List<String> group = new ArrayList<>(block);
+                Collections.sort(group);
+                String location = String.join(", ", group);
+                String keep = group.get(0);
+                
+                List<String> otherQuotes = new ArrayList<>();
+                for (int i = 1; i < group.size(); i++) {
+                    otherQuotes.add("'" + group.get(i) + "'");
+                }
+                String others = String.join(", ", otherQuotes);
+                
+                findings.add(new LintFinding(
+                    "duplicate-record", "warning", location,
+                    "records " + others + " are structurally identical to '" + keep + "'; merge them with `schema normalize`"
+                ));
+            }
+        }
+
+        for (Map.Entry<String, Record> entry : schema.records().entrySet()) {
+            String name = entry.getKey();
+            Record rec = entry.getValue();
+            for (Field f : rec.fields()) {
+                if (f.type() instanceof Type.Any) {
+                    findings.add(new LintFinding(
+                        "any-field", "info", name + "." + f.label(),
+                        "field '" + f.label() + "' of record '" + name + "' is typed `any` (accepts any value unchecked)"
+                    ));
+                }
+            }
+        }
+
+        Collections.sort(findings);
+        return findings;
+    }
+
+    private static Set<String> reachablePlain(Schema schema) {
+        Set<String> seen = new HashSet<>();
+        Deque<String> stack = new ArrayDeque<>();
+        stack.push(schema.root());
+        while (!stack.isEmpty()) {
+            String name = stack.pop();
+            if (seen.contains(name) || !schema.records().containsKey(name)) {
+                continue;
+            }
+            seen.add(name);
+            Record rec = schema.records().get(name);
+            for (Field f : rec.fields()) {
+                if (f.type() instanceof Type.Ref ref) {
+                    stack.push(ref.name());
+                }
+            }
+        }
+        return seen;
+    }
+
     private static Record remap(Record record, Map<String, String> rep) {
         List<Field> newFields = new ArrayList<>();
         for (Field f : record.fields()) {
