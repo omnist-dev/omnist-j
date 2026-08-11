@@ -2,6 +2,12 @@ package dev.omnist.algebra;
 
 import dev.omnist.schema.*;
 import dev.omnist.schema.Record;
+import dev.omnist.document.Document;
+import dev.omnist.document.Node;
+import dev.omnist.document.Edge;
+import dev.omnist.document.Value;
+import dev.omnist.document.Scalar;
+import dev.omnist.document.Target;
 
 import java.util.*;
 
@@ -362,6 +368,216 @@ public final class SchemaAlgebra {
         }
         return new Record(record.name(), newFields);
     }
+
+    public static Schema infer(List<Document> samples) {
+        return infer(samples, "Root", false);
+    }
+
+    public static Schema infer(List<Document> samples, String rootName, boolean allowAny) {
+        return inferWithReport(samples, rootName, allowAny).schema();
+    }
+
+    public static InferResult inferWithReport(List<Document> samples, String rootName, boolean allowAny) {
+        if (samples.isEmpty()) {
+            throw new IllegalArgumentException("cannot infer a schema from zero samples");
+        }
+        List<Node> nodes = new ArrayList<>();
+        for (Document d : samples) {
+            if (!(d instanceof Node n)) {
+                throw new IllegalArgumentException("infer expects object (record) samples at the root");
+            }
+            nodes.add(n);
+        }
+
+        Map<String, Record> env = new LinkedHashMap<>();
+        Set<String> used = new LinkedHashSet<>();
+        List<AnyFallback> fallbacks = new ArrayList<>();
+
+        inferRecord(nodes, rootName, env, used, allowAny, fallbacks, 0);
+
+        return new InferResult(new Schema(rootName, env), List.copyOf(fallbacks));
+    }
+
+    private static void inferRecord(List<Node> nodes, String name, Map<String, Record> env,
+                                    Set<String> used, boolean allowAny, List<AnyFallback> fallbacks, int depth) {
+        if (depth > 100) {
+            throw new IllegalArgumentException("nesting exceeds the maximum depth (100)");
+        }
+        used.add(name);
+
+        List<String> order = new ArrayList<>();
+        Set<String> seenLabels = new HashSet<>();
+        for (Node node : nodes) {
+            for (Edge edge : node.edges()) {
+                String label = edge.label();
+                if (!seenLabels.contains(label)) {
+                    seenLabels.add(label);
+                    order.add(label);
+                }
+            }
+        }
+
+        Map<String, List<Target>> children = new LinkedHashMap<>();
+        Map<String, List<Integer>> perSampleCounts = new LinkedHashMap<>();
+        for (String label : order) {
+            children.put(label, new ArrayList<>());
+            perSampleCounts.put(label, new ArrayList<>());
+        }
+
+        for (Node node : nodes) {
+            Map<String, Integer> countsHere = new HashMap<>();
+            for (Edge edge : node.edges()) {
+                children.get(edge.label()).add(edge.target());
+                countsHere.put(edge.label(), countsHere.getOrDefault(edge.label(), 0) + 1);
+            }
+            for (String label : order) {
+                perSampleCounts.get(label).add(countsHere.getOrDefault(label, 0));
+            }
+        }
+
+        List<Field> fields = new ArrayList<>();
+        for (String label : order) {
+            List<Integer> counts = perSampleCounts.get(label);
+            int maxVal = Collections.max(counts);
+            int minVal = Collections.min(counts);
+            int cmin;
+            Integer cmax;
+            if (maxVal > 1) {
+                cmin = 0;
+                cmax = null;
+            } else {
+                cmin = minVal;
+                cmax = 1;
+            }
+
+            Type typ = inferType(children.get(label), label, name, env, used, allowAny, fallbacks, depth);
+            fields.add(new Field(label, typ, cmin, cmax));
+        }
+
+        env.put(name, new Record(name, fields));
+    }
+
+    private static Type inferType(List<Target> childValues, String label, String recordName,
+                                  Map<String, Record> env, Set<String> used, boolean allowAny,
+                                  List<AnyFallback> fallbacks, int depth) {
+        boolean allNodes = true;
+        boolean someNodes = false;
+        for (Target v : childValues) {
+            if (v instanceof Node) {
+                someNodes = true;
+            } else {
+                allNodes = false;
+            }
+        }
+
+        if (allNodes) {
+            List<Node> childNodes = new ArrayList<>();
+            for (Target v : childValues) {
+                childNodes.add((Node) v);
+            }
+            String recName = unique(label, used);
+            inferRecord(childNodes, recName, env, used, allowAny, fallbacks, depth + 1);
+            return new Type.Ref(recName);
+        }
+
+        if (someNodes) {
+            if (allowAny) {
+                fallbacks.add(new AnyFallback(recordName + "." + label, "mixes objects and values"));
+                return Type.Any.INSTANCE;
+            }
+            throw new IllegalArgumentException("label " + label + " mixes objects and values; cannot infer one type");
+        }
+
+        Set<ScalarKind> kinds = new LinkedHashSet<>();
+        boolean nullSeen = false;
+        for (Target t : childValues) {
+            Value v = (Value) t;
+            if (v instanceof Value.NullValue) {
+                nullSeen = true;
+            } else if (v instanceof Scalar s) {
+                kinds.add(mapScalarKind(s.kind()));
+            }
+        }
+
+        if (kinds.contains(ScalarKind.NUMBER)) {
+            kinds.remove(ScalarKind.INTEGER);
+        }
+
+        if (kinds.isEmpty()) {
+            return new Type.Scalar(ScalarKind.STRING, nullSeen);
+        }
+
+        if (kinds.size() > 1) {
+            List<String> sortedNames = kinds.stream()
+                .map(ScalarKind::keyword)
+                .sorted()
+                .toList();
+            String joined = String.join(", ", sortedNames);
+            if (allowAny) {
+                fallbacks.add(new AnyFallback(recordName + "." + label, "values of more than one scalar kind (" + joined + ")"));
+                return Type.Any.INSTANCE;
+            }
+            throw new IllegalArgumentException("label " + label + " has values of more than one scalar kind (" + joined + ")");
+        }
+
+        return new Type.Scalar(kinds.iterator().next(), nullSeen);
+    }
+
+    private static ScalarKind mapScalarKind(dev.omnist.document.ScalarKind k) {
+        return switch (k) {
+            case STRING -> ScalarKind.STRING;
+            case INTEGER -> ScalarKind.INTEGER;
+            case NUMBER -> ScalarKind.NUMBER;
+            case BOOLEAN -> ScalarKind.BOOLEAN;
+            case DATE -> ScalarKind.DATE;
+            case TIME -> ScalarKind.TIME;
+            case DATE_TIME -> ScalarKind.DATETIME;
+        };
+    }
+
+    private static String unique(String base, Set<String> used) {
+        String name = identifier(base);
+        if (name.isEmpty()) {
+            name = "Rec";
+        }
+        name = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        String cand = name;
+        int i = 2;
+        while (used.contains(cand)) {
+            cand = name + i;
+            i++;
+        }
+        used.add(cand);
+        return cand;
+    }
+
+    private static String identifier(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (Character.isLetterOrDigit(c) || c == '_') {
+                sb.append(c);
+            } else {
+                sb.append('_');
+            }
+        }
+        String out = sb.toString();
+        int start = 0;
+        while (start < out.length()) {
+            char c = out.charAt(start);
+            if ((c >= '0' && c <= '9') || c == '_') {
+                start++;
+            } else {
+                break;
+            }
+        }
+        if (start == out.length()) {
+            return out;
+        }
+        return out.substring(start);
+    }
+
+
 
     private record FieldSigKey(String label, int min, Integer max, Object shapeKey) {}
 

@@ -525,5 +525,112 @@ public class SchemaAlgebraTest {
         assertEquals("warning", f5.severity());
         assertEquals("Root", f5.location());
     }
+
+    @Test
+    @DisplayName("infer validation check: zero samples and scalar root (§6.10)")
+    void testInferValidation() {
+        IllegalArgumentException ex1 = assertThrows(IllegalArgumentException.class, () -> {
+            SchemaAlgebra.infer(List.of());
+        });
+        assertEquals("cannot infer a schema from zero samples", ex1.getMessage());
+
+        List<dev.omnist.document.Document> samples = List.of(
+            new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.valueOf(42))
+        );
+        IllegalArgumentException ex2 = assertThrows(IllegalArgumentException.class, () -> {
+            SchemaAlgebra.infer(samples);
+        });
+        assertEquals("infer expects object (record) samples at the root", ex2.getMessage());
+    }
+
+    @Test
+    @DisplayName("infer happy path: cardinalities, arrays, and subtyping (§6.10)")
+    void testInferHappyPath() {
+        dev.omnist.document.Node sample1 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("tag", new dev.omnist.document.Scalar.StringScalar("a")),
+            new dev.omnist.document.Edge("tag", new dev.omnist.document.Scalar.StringScalar("b")),
+            new dev.omnist.document.Edge("n", new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.valueOf(1)))
+        ));
+
+        dev.omnist.document.Node sample2 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("tag", new dev.omnist.document.Scalar.StringScalar("c")),
+            new dev.omnist.document.Edge("n", new dev.omnist.document.Scalar.NumberScalar(2.5)),
+            new dev.omnist.document.Edge("opt", new dev.omnist.document.Scalar.StringScalar("x"))
+        ));
+
+        List<dev.omnist.document.Document> samples = List.of(sample1, sample2);
+        Schema schema = SchemaAlgebra.infer(samples);
+
+        assertNotNull(schema);
+        assertEquals("Root", schema.root());
+
+        dev.omnist.schema.Record root = schema.records().get("Root");
+        assertNotNull(root);
+
+        Field tag = root.field("tag");
+        assertNotNull(tag);
+        assertEquals(0, tag.min());
+        assertNull(tag.max());
+        assertEquals(ScalarKind.STRING, ((Type.Scalar) tag.type()).kind());
+
+        Field n = root.field("n");
+        assertNotNull(n);
+        assertEquals(1, n.min());
+        assertEquals(1, n.max());
+        assertEquals(ScalarKind.NUMBER, ((Type.Scalar) n.type()).kind());
+
+        Field opt = root.field("opt");
+        assertNotNull(opt);
+        assertEquals(0, opt.min());
+        assertEquals(1, opt.max());
+        assertEquals(ScalarKind.STRING, ((Type.Scalar) opt.type()).kind());
+    }
+
+    @Test
+    @DisplayName("infer type conflicts fail by default but open to any with allowAny=true (§6.10)")
+    void testInferConflicts() {
+        dev.omnist.document.Node sample1 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("id", new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.valueOf(7)))
+        ));
+        dev.omnist.document.Node sample2 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("id", new dev.omnist.document.Scalar.StringScalar("seven"))
+        ));
+        List<dev.omnist.document.Document> samples = List.of(sample1, sample2);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> {
+            SchemaAlgebra.infer(samples);
+        });
+        assertTrue(ex.getMessage().contains("has values of more than one scalar kind") 
+            || ex.getMessage().contains("has values of more than one scalar"));
+
+        InferResult result = SchemaAlgebra.inferWithReport(samples, "Root", true);
+        assertNotNull(result.schema());
+        assertEquals(Type.Any.INSTANCE, result.schema().records().get("Root").field("id").type());
+        assertEquals(1, result.fallbacks().size());
+        AnyFallback fb = result.fallbacks().get(0);
+        assertEquals("Root.id", fb.location());
+        assertTrue(fb.reason().contains("values of more than one scalar kind"));
+    }
+
+    @Test
+    @DisplayName("infer does not normalize output (§6.10)")
+    void testInferDoesNotNormalize() {
+        dev.omnist.document.Node sample = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("a", new dev.omnist.document.Node(List.of(
+                new dev.omnist.document.Edge("x", new dev.omnist.document.Scalar.StringScalar("val"))
+            ))),
+            new dev.omnist.document.Edge("b", new dev.omnist.document.Node(List.of(
+                new dev.omnist.document.Edge("x", new dev.omnist.document.Scalar.StringScalar("val"))
+            )))
+        ));
+
+        Schema schema = SchemaAlgebra.infer(List.of(sample));
+        assertNotNull(schema);
+
+        assertEquals(3, schema.records().size());
+        assertTrue(schema.records().containsKey("Root"));
+        assertTrue(schema.records().containsKey("A"));
+        assertTrue(schema.records().containsKey("B"));
+    }
 }
 
