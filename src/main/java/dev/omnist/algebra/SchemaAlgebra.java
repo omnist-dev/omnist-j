@@ -6,16 +6,17 @@ import dev.omnist.schema.Record;
 import java.util.*;
 
 /**
- * Omnist Schema Algebra Operations (§6.4, §6.5, §6.6, §6.7).
+ * Normative Schema Algebra operations (§6 of 06-schema-algebra.md).
  */
-public class SchemaAlgebra {
+public final class SchemaAlgebra {
+    private SchemaAlgebra() {}
 
     /**
-     * Computes the set of record names that admit at least one finite Document (§6.4).
-     * Implements a least fixpoint over the record environment.
+     * Computes the set of record names in schema S that admit at least one finite document (§6.4).
+     * Implements a least fixpoint computation.
      */
     public static Set<String> satisfiableSet(Schema schema) {
-        Set<String> sat = new LinkedHashSet<>();
+        Set<String> sat = new HashSet<>();
         boolean changed = true;
 
         while (changed) {
@@ -105,6 +106,148 @@ public class SchemaAlgebra {
      */
     public static boolean equivalent(Schema a, Schema b) {
         return compatibleWith(a, b) && compatibleWith(b, a);
+    }
+
+    /**
+     * Group record names of schema into structural equivalence classes using partition refinement (§6.8).
+     * Operates directly on S.records().
+     */
+    public static List<List<String>> equivalenceClasses(Schema schema) {
+        List<String> names = new ArrayList<>(schema.records().keySet());
+        Collections.sort(names);
+
+        // Initial partition by target-blind local_signature
+        Map<LocalSigKey, List<String>> initialMap = new LinkedHashMap<>();
+        for (String name : names) {
+            Record rec = schema.records().get(name);
+            LocalSigKey sig = localSignature(rec);
+            initialMap.computeIfAbsent(sig, k -> new ArrayList<>()).add(name);
+        }
+
+        List<List<String>> blocks = new ArrayList<>(initialMap.values());
+
+        // Map name to block index
+        Map<String, Integer> blockOf = new HashMap<>();
+        for (int i = 0; i < blocks.size(); i++) {
+            for (String n : blocks.get(i)) {
+                blockOf.put(n, i);
+            }
+        }
+
+        // Refinement loop
+        while (true) {
+            List<List<String>> newBlocks = new ArrayList<>();
+            for (List<String> block : blocks) {
+                Map<RefineKey, List<String>> subMap = new LinkedHashMap<>();
+                for (String name : block) {
+                    Record rec = schema.records().get(name);
+                    RefineKey key = refineKey(rec, blockOf);
+                    subMap.computeIfAbsent(key, k -> new ArrayList<>()).add(name);
+                }
+                newBlocks.addAll(subMap.values());
+            }
+
+            if (newBlocks.size() == blocks.size()) {
+                break;
+            }
+
+            blocks = newBlocks;
+            blockOf.clear();
+            for (int i = 0; i < blocks.size(); i++) {
+                for (String n : blocks.get(i)) {
+                    blockOf.put(n, i);
+                }
+            }
+        }
+
+        return blocks;
+    }
+
+    /**
+     * normalize(S) - canonical minimal schema equivalent to S (§6.8).
+     */
+    public static Schema normalize(Schema schema) {
+        Schema pruned = prune(schema);
+        if (isEmpty(pruned)) {
+            return pruned;
+        }
+
+        List<List<String>> blocks = equivalenceClasses(pruned);
+
+        Map<String, String> rep = new HashMap<>();
+        for (List<String> block : blocks) {
+            String keep = Collections.min(block);
+            for (String n : block) {
+                rep.put(n, keep);
+            }
+        }
+
+        List<String> sortedNames = new ArrayList<>(pruned.records().keySet());
+        Collections.sort(sortedNames);
+
+        Map<String, Record> newEnv = new LinkedHashMap<>();
+        for (String name : sortedNames) {
+            if (rep.get(name).equals(name)) {
+                Record rec = pruned.records().get(name);
+                newEnv.put(name, remap(rec, rep));
+            }
+        }
+
+        String newRoot = rep.get(pruned.root());
+        return new Schema(newRoot, newEnv);
+    }
+
+    private static Record remap(Record record, Map<String, String> rep) {
+        List<Field> newFields = new ArrayList<>();
+        for (Field f : record.fields()) {
+            Type newType = f.type();
+            if (f.type() instanceof Type.Ref ref) {
+                newType = new Type.Ref(rep.get(ref.name()));
+            }
+            newFields.add(new Field(f.label(), newType, f.min(), f.max()));
+        }
+        return new Record(record.name(), newFields);
+    }
+
+    private record FieldSigKey(String label, int min, Integer max, Object shapeKey) {}
+
+    private record LocalSigKey(List<FieldSigKey> fields) {}
+
+    private static LocalSigKey localSignature(Record rec) {
+        List<FieldSigKey> fields = new ArrayList<>();
+        for (Field f : rec.fields()) {
+            Object shapeKey;
+            if (f.type() instanceof Type.Any) {
+                shapeKey = "any";
+            } else if (f.type() instanceof Type.Ref) {
+                shapeKey = "ref";
+            } else if (f.type() instanceof Type.Scalar sc) {
+                shapeKey = List.of("scalar", sc.kind().keyword(), sc.nullable());
+            } else {
+                shapeKey = f.type().toString();
+            }
+            fields.add(new FieldSigKey(f.label(), f.min(), f.max(), shapeKey));
+        }
+        fields.sort(Comparator.comparing(FieldSigKey::label));
+        return new LocalSigKey(fields);
+    }
+
+    private record RefineKey(LocalSigKey localSig, List<Object> refBlockIndices) {}
+
+    private static RefineKey refineKey(Record rec, Map<String, Integer> blockOf) {
+        LocalSigKey localSig = localSignature(rec);
+        List<Field> sortedFields = new ArrayList<>(rec.fields());
+        sortedFields.sort(Comparator.comparing(Field::label));
+
+        List<Object> refBlockIndices = new ArrayList<>();
+        for (Field f : sortedFields) {
+            if (f.type() instanceof Type.Ref ref) {
+                refBlockIndices.add(blockOf.get(ref.name()));
+            } else {
+                refBlockIndices.add(null);
+            }
+        }
+        return new RefineKey(localSig, refBlockIndices);
     }
 
     private static boolean sub(Schema sa, Type ta, Schema sb, Type tb, Set<String> satA, Map<DefPair, Boolean> memo) {
