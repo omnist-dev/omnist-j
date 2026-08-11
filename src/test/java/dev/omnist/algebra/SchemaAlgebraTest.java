@@ -307,4 +307,162 @@ public class SchemaAlgebraTest {
         Schema norm = SchemaAlgebra.normalize(schema);
         assertEquals(schema, norm);
     }
+
+    @Test
+    @DisplayName("extract worked example 1: optional coupon field drops successfully (§6.9)")
+    void testExtractWorkedExample1() {
+        dev.omnist.schema.Record address = new dev.omnist.schema.Record("Address", List.of(
+            new Field("street", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("city", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record lineItem = new dev.omnist.schema.Record("LineItem", List.of(
+            new Field("sku", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("qty", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1),
+            new Field("price", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1)
+        ));
+        dev.omnist.schema.Record order = new dev.omnist.schema.Record("Order", List.of(
+            new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("status", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("total", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1),
+            new Field("address", new Type.Ref("Address"), 1, 1),
+            new Field("items", new Type.Ref("LineItem"), 1, null),
+            new Field("coupon", new Type.Scalar(ScalarKind.STRING, false), 0, 1)
+        ));
+        dev.omnist.schema.Record root = new dev.omnist.schema.Record("Root", List.of(
+            new Field("order", new Type.Ref("Order"), 1, 1)
+        ));
+
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Address", address);
+        records.put("LineItem", lineItem);
+        records.put("Order", order);
+        records.put("Root", root);
+
+        Schema schema = new Schema("Root", records);
+
+        Set<String> keep = Set.of("order", "id", "status", "total", "address", "street", "city", "items", "sku", "qty", "price");
+        Schema extracted = SchemaAlgebra.extract(schema, keep);
+
+        assertNotNull(extracted);
+        dev.omnist.schema.Record extOrder = extracted.records().get("Order");
+        assertNotNull(extOrder);
+        assertNull(extOrder.field("coupon"));
+    }
+
+    @Test
+    @DisplayName("extract worked example 2: removing mandatory fields causes failure and reports first_bad (§6.9)")
+    void testExtractWorkedExample2() {
+        dev.omnist.schema.Record address = new dev.omnist.schema.Record("Address", List.of(
+            new Field("street", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("city", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record lineItem = new dev.omnist.schema.Record("LineItem", List.of(
+            new Field("sku", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("qty", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1),
+            new Field("price", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1)
+        ));
+        dev.omnist.schema.Record order = new dev.omnist.schema.Record("Order", List.of(
+            new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("status", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("total", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1),
+            new Field("address", new Type.Ref("Address"), 1, 1),
+            new Field("items", new Type.Ref("LineItem"), 1, null),
+            new Field("coupon", new Type.Scalar(ScalarKind.STRING, false), 0, 1)
+        ));
+        dev.omnist.schema.Record root = new dev.omnist.schema.Record("Root", List.of(
+            new Field("order", new Type.Ref("Order"), 1, 1)
+        ));
+
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Address", address);
+        records.put("LineItem", lineItem);
+        records.put("Order", order);
+        records.put("Root", root);
+
+        Schema schema = new Schema("Root", records);
+
+        Set<String> keep = Set.of("order", "id", "status", "street", "city", "sku", "qty", "price");
+        
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> {
+            SchemaAlgebra.extract(schema, keep);
+        });
+        assertEquals("removing label total deletes a mandatory field of Order", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("extract worked example 3: first_bad is declaration order based over the whole env (§6.9)")
+    void testExtractWorkedExample3() {
+        dev.omnist.schema.Record address = new dev.omnist.schema.Record("Address", List.of(
+            new Field("street", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("city", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record lineItem = new dev.omnist.schema.Record("LineItem", List.of(
+            new Field("sku", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("qty", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1),
+            new Field("price", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1)
+        ));
+        dev.omnist.schema.Record order = new dev.omnist.schema.Record("Order", List.of(
+            new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("status", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("total", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1),
+            new Field("address", new Type.Ref("Address"), 1, 1),
+            new Field("items", new Type.Ref("LineItem"), 1, null),
+            new Field("coupon", new Type.Scalar(ScalarKind.STRING, false), 0, 1)
+        ));
+        dev.omnist.schema.Record root = new dev.omnist.schema.Record("Root", List.of(
+            new Field("order", new Type.Ref("Order"), 1, 1)
+        ));
+
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Address", address);
+        records.put("LineItem", lineItem);
+        records.put("Order", order);
+        records.put("Root", root);
+
+        Schema schema = new Schema("Root", records);
+
+        Set<String> keep = Set.of("order");
+        
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> {
+            SchemaAlgebra.extract(schema, keep);
+        });
+        assertEquals("removing label street deletes a mandatory field of Address", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("extract drops reference fields pointing to invalidated records (§6.9)")
+    void testExtractDropReferenceToInvalidated() {
+        dev.omnist.schema.Record coupon = new dev.omnist.schema.Record("Coupon", List.of(
+            new Field("code", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("discount", new Type.Scalar(ScalarKind.NUMBER, false), 0, 1)
+        ));
+        dev.omnist.schema.Record order = new dev.omnist.schema.Record("Order", List.of(
+            new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            // optional reference to Coupon
+            new Field("coupon", new Type.Ref("Coupon"), 0, 1)
+        ));
+        dev.omnist.schema.Record root = new dev.omnist.schema.Record("Root", List.of(
+            new Field("order", new Type.Ref("Order"), 1, 1)
+        ));
+
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Coupon", coupon);
+        records.put("Order", order);
+        records.put("Root", root);
+
+        Schema schema = new Schema("Root", records);
+
+        // Keep order, id, coupon, discount (drops code, invalidating Coupon)
+        Set<String> keep = Set.of("order", "id", "coupon", "discount");
+        Schema extracted = SchemaAlgebra.extract(schema, keep);
+
+        assertNotNull(extracted);
+        // Coupon should be completely gone since it was invalidated
+        assertFalse(extracted.records().containsKey("Coupon"));
+        // Order should still exist but the coupon field (referencing Coupon) must be dropped
+        dev.omnist.schema.Record extOrder = extracted.records().get("Order");
+        assertNotNull(extOrder);
+        assertNull(extOrder.field("coupon"));
+    }
 }
+

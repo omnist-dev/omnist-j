@@ -197,6 +197,76 @@ public final class SchemaAlgebra {
         return new Schema(newRoot, newEnv);
     }
 
+    /**
+     * extract(S, keep) - returns the minimal subschema that recognizes only Documents built from keep labels (§6.9).
+     */
+    public static Schema extract(Schema schema, Set<String> keep) {
+        Map<String, Record> trimmed = new LinkedHashMap<>();
+        Set<String> invalidated = new LinkedHashSet<>();
+        String firstBadLabel = null;
+        String firstBadRecord = null;
+
+        for (Map.Entry<String, Record> entry : schema.records().entrySet()) {
+            String name = entry.getKey();
+            Record rec = entry.getValue();
+            List<Field> kept = new ArrayList<>();
+            for (Field f : rec.fields()) {
+                if (keep.contains(f.label())) {
+                    kept.add(f);
+                } else if (f.min() >= 1) {
+                    if (firstBadLabel == null) {
+                        firstBadLabel = f.label();
+                        firstBadRecord = name;
+                    }
+                    invalidated.add(name);
+                }
+            }
+            trimmed.put(name, new Record(name, kept));
+        }
+
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (Map.Entry<String, Record> entry : trimmed.entrySet()) {
+                String name = entry.getKey();
+                if (invalidated.contains(name)) {
+                    continue;
+                }
+                Record rec = entry.getValue();
+                for (Field f : rec.fields()) {
+                    if (f.min() >= 1 && f.type() instanceof Type.Ref ref && invalidated.contains(ref.name())) {
+                        invalidated.add(name);
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (invalidated.contains(schema.root())) {
+            throw new IllegalArgumentException("removing label " + firstBadLabel + " deletes a mandatory field of " + firstBadRecord);
+        }
+
+        Map<String, Record> newEnv = new LinkedHashMap<>();
+        for (Map.Entry<String, Record> entry : trimmed.entrySet()) {
+            String name = entry.getKey();
+            if (invalidated.contains(name)) {
+                continue;
+            }
+            Record rec = entry.getValue();
+            List<Field> fields = new ArrayList<>();
+            for (Field f : rec.fields()) {
+                if (f.type() instanceof Type.Ref ref && invalidated.contains(ref.name())) {
+                    continue;
+                }
+                fields.add(f);
+            }
+            newEnv.put(name, new Record(name, fields));
+        }
+
+        return normalize(prune(new Schema(schema.root(), newEnv)));
+    }
+
     private static Record remap(Record record, Map<String, String> rep) {
         List<Field> newFields = new ArrayList<>();
         for (Field f : record.fields()) {
