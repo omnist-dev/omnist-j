@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# run the conformance harness
+exec mvn compile exec:java -Dexec.mainClass="dev.omnist.conformance.Harness"
