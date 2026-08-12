@@ -139,11 +139,11 @@ public class XmlCodecTest {
         assertTrue(xml.contains("char \uFFFD"));
 
         List<WriteAdjustment> adjs = report.adjustments();
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("shape.empty_ambiguous")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("key.sanitized")));
+        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.shape-empty-ambiguous")));
+        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.key-sanitized")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.null-unrepresentable")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("value.stringified")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("string.cr_normalized")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("string.illegal_xml_char")));
+        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.value-stringified")));
+        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.string-cr-normalized")));
+        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.string-illegal-char")));
     }
 }

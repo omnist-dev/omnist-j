@@ -319,7 +319,7 @@ public final class XmlCodec {
         }
         if (doc instanceof Node node) {
             if (node.edges().isEmpty()) {
-                rep.add(path, "shape.empty_ambiguous",
+                rep.add(path, "format.shape-empty-ambiguous",
                         "empty internal node (no edges) written as <tag /> and reads back as the empty-string leaf '', not []",
                         "warning");
                 return;
@@ -334,7 +334,7 @@ public final class XmlCodec {
                     p = p + "[" + i + "]";
                 }
                 if (!XML_NAME.matcher(label).matches()) {
-                    rep.add(p, "key.sanitized",
+                    rep.add(p, "format.key-sanitized",
                             "label '" + label + "' isn't a valid XML name; written sanitized",
                             "warning");
                 }
@@ -347,20 +347,20 @@ public final class XmlCodec {
                 rep.add(path, "format.temporal-stringified",
                         "temporal value written as text (reads back as a string)", "warning");
             } else if (s instanceof BooleanScalar || s instanceof IntegerScalar || s instanceof NumberScalar) {
-                rep.add(path, "value.stringified",
+                rep.add(path, "format.value-stringified",
                         "non-string scalar written as text (reads back as a string)", "warning");
             }
             
             String strVal = xmlText(doc);
             if (XML_ILLEGAL_CHAR.matcher(strVal).find()) {
-                rep.add(path, "string.illegal_xml_char",
+                rep.add(path, "format.string-illegal-char",
                         "string contains a character XML 1.0 cannot represent " +
                         "(e.g. a C0 control other than tab/LF/CR); it is replaced " +
                         "with U+FFFD on write so the output stays well-formed",
                         "error");
             }
             if (strVal.contains("\r")) {
-                rep.add(path, "string.cr_normalized",
+                rep.add(path, "format.string-cr-normalized",
                         "string contains a carriage return ('\\r'); XML mandates " +
                         "line-ending normalization on parse, so '\\r' (and '\\r\\n') " +
                         "read back as '\\n'",
