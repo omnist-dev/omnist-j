@@ -244,4 +244,25 @@ class OmlReaderTest {
         Node n = (Node) doc;
         assertEquals(3, n.edges().size());
     }
+
+    @Test
+    @DisplayName("OML-Extended raw string '...' parses literally without escape processing")
+    void testRawString() {
+        Document doc = OmlReader.read("a: 'C:\\no\\escapes'");
+        assertInstanceOf(Node.class, doc);
+        Node n = (Node) doc;
+        assertEquals("C:\\no\\escapes", ((Scalar.StringScalar) n.edges().get(0).target()).value());
+    }
+
+    @Test
+    @DisplayName("OML-Extended multiline string \"\"\"...\"\"\" strips optional leading newline and handles quotes")
+    void testMultilineString() {
+        Document doc1 = OmlReader.read("a: \"\"\"\nhello\nworld\"\"\"");
+        assertInstanceOf(Node.class, doc1);
+        assertEquals("hello\nworld", ((Scalar.StringScalar) ((Node) doc1).edges().get(0).target()).value());
+
+        Document doc2 = OmlReader.read("a: \"\"\"\nsays \"\"hi\"\" there\"\"\"");
+        assertInstanceOf(Node.class, doc2);
+        assertEquals("says \"\"hi\"\" there", ((Scalar.StringScalar) ((Node) doc2).edges().get(0).target()).value());
+    }
 }

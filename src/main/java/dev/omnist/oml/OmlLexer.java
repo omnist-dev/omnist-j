@@ -108,11 +108,13 @@ public class OmlLexer {
 
         // Rule 1: STRING family (leading " or ')
         if (c == '\'') {
-            throw error("OML-Extended raw string `'...'` is deferred in this step", startLine, startCol);
+            String strVal = parseRawString(startLine, startCol);
+            return new Token(TokenType.STRING, strVal, strVal, startLine, startCol);
         }
         if (c == '"') {
             if (source.startsWith("\"\"\"", pos)) {
-                throw error("OML-Extended multiline string `\"\"\"...\"\"\"` is deferred in this step", startLine, startCol);
+                String strVal = parseMultilineString(startLine, startCol);
+                return new Token(TokenType.STRING, strVal, strVal, startLine, startCol);
             }
             String strVal = parseDQuoteString(startLine, startCol);
             return new Token(TokenType.STRING, strVal, strVal, startLine, startCol);
@@ -250,6 +252,43 @@ public class OmlLexer {
                 break;
             }
         }
+    }
+
+    private String parseRawString(int startLine, int startCol) {
+        consumeChar(); // consume opening '\''
+        StringBuilder sb = new StringBuilder();
+        while (pos < source.length()) {
+            char c = consumeChar();
+            if (c == '\'') {
+                return sb.toString();
+            }
+            sb.append(c);
+        }
+        throw error("parse.unterminated-string", "Unterminated raw string", startLine, startCol);
+    }
+
+    private String parseMultilineString(int startLine, int startCol) {
+        advance(3); // consume opening """
+        if (pos < source.length() && source.charAt(pos) == '\r' && pos + 1 < source.length() && source.charAt(pos + 1) == '\n') {
+            consumeChar();
+            consumeChar();
+        } else if (pos < source.length() && source.charAt(pos) == '\n') {
+            consumeChar();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        while (pos < source.length()) {
+            if (source.startsWith("\"\"\"", pos)) {
+                advance(3); // consume ONLY the first 3 quotes
+                return sb.toString();
+            }
+            char c = source.charAt(pos);
+            if (c < 0x0020 && c != '\t' && c != '\n' && c != '\r') {
+                throw error("parse.control-character", "Unescaped control character in string", startLine, startCol);
+            }
+            sb.append(consumeChar());
+        }
+        throw error("parse.unterminated-string", "Unterminated multiline string", startLine, startCol);
     }
 
     private String parseDQuoteString(int startLine, int startCol) {
