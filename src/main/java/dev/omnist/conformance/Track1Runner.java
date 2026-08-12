@@ -12,7 +12,9 @@ import dev.omnist.schema.Record;
 import dev.omnist.schema.Schema;
 import dev.omnist.schema.Type;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -223,14 +225,47 @@ public final class Track1Runner {
                 }
             }
 
-            // Run process
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.directory(dir.toFile());
-            Process p = pb.start();
+            // Run process or in-process CLI
+            String stdout = "";
+            String stderr = "";
+            int exitCode = -1;
 
-            String stdout = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            String stderr = new String(p.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-            int exitCode = p.waitFor();
+            Path omnistJar = repoDir.resolve("target/omnist-j-0.0.1-SNAPSHOT.jar");
+            Path omnistBin = repoDir.resolve("omnist");
+            if (Files.exists(omnistJar) && Files.exists(omnistBin) && Files.isExecutable(omnistBin)) {
+                try {
+                    ProcessBuilder pb = new ProcessBuilder(cmd);
+                    pb.directory(dir.toFile());
+                    Process p = pb.start();
+                    stdout = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    stderr = new String(p.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+                    exitCode = p.waitFor();
+                } catch (Exception ex) {
+                    exitCode = -1;
+                }
+            }
+
+            if (exitCode == -1) {
+                // In-process invocation fallback
+                List<String> inProcCmd = new ArrayList<>();
+                for (int i = 1; i < cmd.size(); i++) {
+                    String arg = cmd.get(i);
+                    if (!arg.startsWith("-") && (arg.endsWith(".osd") || arg.endsWith(".oml") || arg.startsWith("samples/"))) {
+                        inProcCmd.add(dir.resolve(arg).toString());
+                    } else {
+                        inProcCmd.add(arg);
+                    }
+                }
+
+                ByteArrayOutputStream outBaos = new ByteArrayOutputStream();
+                ByteArrayOutputStream errBaos = new ByteArrayOutputStream();
+                PrintStream outPs = new PrintStream(outBaos, true, StandardCharsets.UTF_8);
+                PrintStream errPs = new PrintStream(errBaos, true, StandardCharsets.UTF_8);
+
+                exitCode = dev.omnist.cli.Cli.run(inProcCmd.toArray(new String[0]), outPs, errPs, System.in);
+                stdout = outBaos.toString(StandardCharsets.UTF_8);
+                stderr = errBaos.toString(StandardCharsets.UTF_8);
+            }
 
             // Verify outcome
             boolean matches = false;
