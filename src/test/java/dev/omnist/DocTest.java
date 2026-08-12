@@ -43,6 +43,37 @@ public class DocTest {
         """;
 
     @Test
+    void testQuickstartGuideExample() {
+        String oml = """
+            name: "Alice"
+            created: "2024-01-01"
+            role: "Admin"
+            """;
+        Document doc = OmlReader.read(oml);
+
+        String osd = """
+            record User {
+                "name": string,
+                "created": date,
+                "role" [0,1]: string,
+            }
+            root User
+            """;
+        Schema schema = OsdReader.read(osd);
+
+        // 3. Materialize String to Typed Date
+        Document materialized = Materializer.materialize(doc, schema);
+        assertNotNull(materialized);
+
+        // 4. Validate Materialized Document against Schema
+        ValidationResult valResult = Validator.validate(materialized, schema);
+        assertTrue(valResult.isValid());
+
+        String json = JsonCodec.write(materialized);
+        assertTrue(json.contains("\"Alice\""));
+    }
+
+    @Test
     void testOmlReaderExample() {
         String oml = "name: \"Alice\"\nage: 30\n";
         Document doc = OmlReader.read(oml);

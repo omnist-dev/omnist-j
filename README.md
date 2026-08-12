@@ -18,6 +18,7 @@ For workflow details and engineering constraints, see [`docs/workflow-playbook.m
 
 ## Documentation
 
+- [`docs/00-guide.md`](docs/00-guide.md): Mental Model & Quickstart Guide.
 - [`docs/01-api-reference.md`](docs/01-api-reference.md): Complete Java API Reference.
 - [`docs/02-cli-reference.md`](docs/02-cli-reference.md): CLI Command Reference.
 - [`workflow-playbook.md`](workflow-playbook.md): Development & Documentation Workflow.

@@ -1,38 +1,60 @@
 # omnist-j API Reference
 
-Comprehensive API reference for `omnist-j`, the Java implementation of the Omnist data-interchange specification.
+Comprehensive API reference for `omnist-j`, verified directly against the underlying Java source declarations.
 
 ---
 
-## Overview & Package Architecture
+## Package Index
 
-`omnist-j` is organized into the following public packages:
-
-- [`dev.omnist.oml`](#oml-reader--writer): OML parsing and serialization.
-- [`dev.omnist.schema`](#osd-reader--writer): OSD schema parsing and serialization.
-- [`dev.omnist.document`](#document-model): Document tree model (`Document`, `Node`, `Edge`, `Value`, `Target`, `Scalar`, `Limits`).
-- [`dev.omnist.validation`](#validation--materialization): Schema validation (`Validator`) and value materialization (`Materializer`).
-- [`dev.omnist.algebra`](#schema-algebra): Schema algebra operations (`SchemaAlgebra`).
-- [`dev.omnist.codec`](#format-codecs): Third-party format codecs (`JsonCodec`, `YamlCodec`, `TomlCodec`, `XmlCodec`).
+- [`dev.omnist.document`](#document-model): Document graph types (`Document`, `Target`, `Node`, `Edge`, `Value`, `Scalar`, `Limits`).
+- [`dev.omnist.oml`](#oml-reader--writer): Native OML reader and writer (`OmlReader`, `OmlWriter`, `OmlParseException`).
+- [`dev.omnist.schema`](#osd-reader--writer): OSD schema definition types (`Schema`, `Record`, `Field`, `Cardinality`, `TargetType`, `OsdReader`, `OsdWriter`, `OsdParseException`).
+- [`dev.omnist.validation`](#validation--materialization): Validation engine (`Validator`, `ValidationResult`, `ValidationDiagnostic`, `Materializer`).
+- [`dev.omnist.algebra`](#schema-algebra): Formal schema algebra operations (`SchemaAlgebra`, `InferResult`, `AnyFallback`, `LintFinding`).
+- [`dev.omnist.codec`](#format-codecs): External format codecs (`JsonCodec`, `YamlCodec`, `TomlCodec`, `XmlCodec`).
 
 ---
 
-## Document Model
+## Document Model (`dev.omnist.document`)
 
 ### `Document`
-Root sealed interface representing an Omnist Document (`Node` or `Value`).
+`public sealed interface Document permits Node, Value`
+
+Root interface representing an Omnist Document (omnist-spec §2.2). A Document is either a `Node` or a `Value`.
+
+### `Target`
+`public sealed interface Target permits Node, Value`
+
+Target of a labeled `Edge`.
 
 ### `Node`
-Record representing an ordered map of edges: `public record Node(List<Edge> edges) implements Document`
+`public record Node(List<Edge> edges) implements Target, Document`
+
+Represents a node containing an ordered list of labeled edges.
 
 ### `Edge`
-Record representing a labeled edge: `public record Edge(String label, Target target)`
+`public record Edge(String label, Target target)`
+
+Represents a labeled edge connecting a `Node` to a `Target` (`Node` or `Value`).
 
 ### `Value`
-Record representing a scalar value: `public record Value(Scalar scalar) implements Document, Target`
+`public sealed interface Value extends Target, Document permits Scalar, Value.NullValue`
+
+Sealed interface representing a value in the Document model (`Scalar` or `Value.NullValue`).
+- `Value.NULL`: `public static final NullValue NULL = NullValue.INSTANCE;`
+- `Value.NullValue`: `public record NullValue() implements Value`
 
 ### `Scalar`
-Scalar values (`StringScalar`, `IntScalar`, `FloatScalar`, `BoolScalar`, `NullScalar`, `DateValue`, `TimeValue`, `DateTimeValue`).
+`public sealed interface Scalar extends Value`
+
+Sealed interface representing scalar values (omnist-spec §2.2.1). Permitted record variants:
+1. `Scalar.StringScalar(String value)` — `kind() = ScalarKind.STRING`
+2. `Scalar.IntegerScalar(BigInteger value)` — `kind() = ScalarKind.INTEGER`
+3. `Scalar.NumberScalar(Double value)` — `kind() = ScalarKind.NUMBER`
+4. `Scalar.BooleanScalar(Boolean value)` — `kind() = ScalarKind.BOOLEAN`
+5. `Scalar.DateScalar(LocalDate value)` — `kind() = ScalarKind.DATE`
+6. `Scalar.TimeScalar(LocalTime value)` — `kind() = ScalarKind.TIME`
+7. `Scalar.DateTimeScalar(LocalDateTime value)` — `kind() = ScalarKind.DATETIME`
 
 <!-- test-backed: dev.omnist.DocTest#testDocumentConstructionExample -->
 ```java
@@ -43,9 +65,9 @@ assertEquals("title", node.edges().get(0).label());
 ```
 
 ### `Limits`
-Guards for parser recursion depth, node count, and integer digit limits.
+`public record Limits(int maxDepth, int maxNodeCount, int maxIntegerDigits)`
 
-#### `new Limits(int maxDepth, int maxNodeCount, int maxIntegerDigits)`
+Guard parameters for parser recursion depth, node count, and integer digit limits. Default limits: `maxDepth = 200`, `maxNodeCount = 1_000_000`, `maxIntegerDigits = 4300`.
 
 <!-- test-backed: dev.omnist.DocTest#testLimitsExample -->
 ```java
@@ -57,13 +79,13 @@ assertEquals(100, limits.maxIntegerDigits());
 
 ---
 
-## OML Reader & Writer
+## OML Reader & Writer (`dev.omnist.oml`)
 
 ### `OmlReader`
-Parses Omnist Markup Language (OML) text into a `Document`.
+- `public static Document read(String text)`
+- `public static Document read(String text, Limits limits)`
 
-#### `OmlReader.read(String text)`
-#### `OmlReader.read(String text, Limits limits)`
+Parses OML text into a `Document` tree. Throws `OmlParseException` on invalid syntax or limit violations.
 
 <!-- test-backed: dev.omnist.DocTest#testOmlReaderExample -->
 ```java
@@ -75,9 +97,9 @@ assertEquals("name", root.edges().get(0).label());
 ```
 
 ### `OmlWriter`
-Serializes a `Document` to canonical OML string.
+- `public static String write(Document doc)`
 
-#### `OmlWriter.write(Document doc)`
+Serializes a `Document` tree into canonical OML text format.
 
 <!-- test-backed: dev.omnist.DocTest#testOmlWriterExample -->
 ```java
@@ -88,28 +110,37 @@ assertTrue(oml.contains("name: \"Alice\""));
 
 ---
 
-## OSD Reader & Writer
+## OSD Reader & Writer (`dev.omnist.schema`)
+
+### `Schema`
+`public record Schema(String root, Map<String, Record> records)`
+
+### `Record`
+`public record Record(String name, List<Field> fields)`
+
+### `Field`
+`public record Field(String label, Cardinality cardinality, TargetType targetType)`
 
 ### `OsdReader`
-Parses Omnist Schema Definition (OSD) text into a `Schema`.
+- `public static Schema read(String text)`
 
-#### `OsdReader.read(String text)`
+Parses OSD schema text into a `Schema`. Throws `OsdParseException` on syntax errors.
 
 <!-- test-backed: dev.omnist.DocTest#testOsdReaderExample -->
 ```java
-String schemaText = "schema = record Person { name: string, age: int }\n";
+String schemaText = "record Person {\n  \"name\": string,\n  \"age\": integer,\n}\nroot Person\n";
 Schema schema = OsdReader.read(schemaText);
 assertEquals("Person", schema.root());
 ```
 
 ### `OsdWriter`
-Serializes a `Schema` to canonical OSD text.
+- `public static String write(Schema schema)`
 
-#### `OsdWriter.write(Schema schema)`
+Serializes a `Schema` to canonical OSD text syntax.
 
 <!-- test-backed: dev.omnist.DocTest#testOsdWriterExample -->
 ```java
-String schemaText = "schema = record Person { name: string, age: int }\n";
+String schemaText = "record Person {\n  \"name\": string,\n  \"age\": integer,\n}\nroot Person\n";
 Schema schema = OsdReader.read(schemaText);
 String written = OsdWriter.write(schema);
 assertTrue(written.contains("record Person"));
@@ -117,16 +148,22 @@ assertTrue(written.contains("record Person"));
 
 ---
 
-## Validation & Materialization
+## Validation & Materialization (`dev.omnist.validation`)
+
+### `ValidationResult`
+`public record ValidationResult(boolean isValid, List<ValidationDiagnostic> diagnostics)`
+
+### `ValidationDiagnostic`
+`public record ValidationDiagnostic(String path, String code, String message)`
 
 ### `Validator`
-Validates an Omnist `Document` against an OSD `Schema`.
+- `public static ValidationResult validate(Document doc, Schema schema)`
 
-#### `Validator.validate(Document doc, Schema schema)`
+Validates a `Document` against an OSD `Schema`.
 
 <!-- test-backed: dev.omnist.DocTest#testValidatorExample -->
 ```java
-Schema schema = OsdReader.read("schema = record Person { name: string, age: int }\n");
+Schema schema = OsdReader.read("record Person {\n  \"name\": string,\n  \"age\": integer,\n}\nroot Person\n");
 Document validDoc = OmlReader.read("name: \"Bob\"\nage: 25\n");
 ValidationResult res = Validator.validate(validDoc, schema);
 assertTrue(res.isValid());
@@ -134,13 +171,13 @@ assertTrue(res.diagnostics().isEmpty());
 ```
 
 ### `Materializer`
-Upgrades scalar types (e.g. string to date/datetime) according to schema target types.
+- `public static Document materialize(Document doc, Schema schema)`
 
-#### `Materializer.materialize(Document doc, Schema schema)`
+Upgrades scalar values (e.g. ISO-8601 strings to `DateScalar` / `DateTimeScalar`) per schema target types.
 
 <!-- test-backed: dev.omnist.DocTest#testMaterializerExample -->
 ```java
-Schema schema = OsdReader.read("schema = record Item { created: date }\n");
+Schema schema = OsdReader.read("record Item {\n  \"created\": date,\n}\nroot Item\n");
 Document doc = OmlReader.read("created: \"2024-01-01\"\n");
 Document materialized = Materializer.materialize(doc, schema);
 assertNotNull(materialized);
@@ -148,83 +185,87 @@ assertNotNull(materialized);
 
 ---
 
-## Schema Algebra
+## Schema Algebra (`dev.omnist.algebra`)
 
-`dev.omnist.algebra.SchemaAlgebra` provides formal schema set-theoretic and algebraic operations.
+### `SchemaAlgebra`
 
-### `satisfiableSet(Schema schema)`
+#### `satisfiableSet(Schema schema)` -> `Set<String>`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraSatisfiableSet -->
 ```java
-Schema schema = OsdReader.read("schema = record Root { id: int }\n");
+Schema schema = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
 Set<String> set = SchemaAlgebra.satisfiableSet(schema);
 assertTrue(set.contains("Root"));
 ```
 
-### `isEmpty(Schema schema)`
+#### `isEmpty(Schema schema)` -> `boolean`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraIsEmpty -->
 ```java
-Schema schema = OsdReader.read("schema = record Root { id: int }\n");
+Schema schema = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
 assertFalse(SchemaAlgebra.isEmpty(schema));
 ```
 
-### `prune(Schema schema)`
+#### `prune(Schema schema)` -> `Schema`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraPrune -->
 ```java
-Schema schema = OsdReader.read("schema = record Root { id: int }\nrecord Unused { x: string }\n");
+Schema schema = OsdReader.read("record Root {\n  \"id\": integer,\n}\nrecord Dead {\n  \"x\": string,\n}\nroot Root\n");
 Schema pruned = SchemaAlgebra.prune(schema);
-assertFalse(pruned.records().containsKey("Unused"));
+assertFalse(pruned.records().containsKey("Dead"));
 ```
 
-### `compatibleWith(Schema s1, Schema s2)`
+#### `compatibleWith(Schema s1, Schema s2)` -> `boolean`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraCompatibleWith -->
 ```java
-Schema s1 = OsdReader.read("schema = record Root { id: int }\n");
-Schema s2 = OsdReader.read("schema = record Root { id: int, name?: string }\n");
+Schema s1 = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
+Schema s2 = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
 assertTrue(SchemaAlgebra.compatibleWith(s1, s2));
 ```
 
-### `equivalent(Schema s1, Schema s2)`
+#### `equivalent(Schema s1, Schema s2)` -> `boolean`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraEquivalent -->
 ```java
-Schema s1 = OsdReader.read("schema = record Root { id: int }\n");
-Schema s2 = OsdReader.read("schema = record Root { id: int }\n");
+Schema s1 = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
+Schema s2 = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
 assertTrue(SchemaAlgebra.equivalent(s1, s2));
 ```
 
-### `normalize(Schema schema)`
+#### `normalize(Schema schema)` -> `Schema`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraNormalize -->
 ```java
-Schema schema = OsdReader.read("schema = record Root { id: int }\n");
+Schema schema = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
 Schema norm = SchemaAlgebra.normalize(schema);
 assertNotNull(norm);
 ```
 
-### `equivalenceClasses(Schema schema)`
+#### `equivalenceClasses(Schema schema)` -> `List<List<String>>`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraEquivalenceClasses -->
 ```java
-Schema schema = OsdReader.read("schema = record Root { id: int }\n");
+Schema schema = OsdReader.read("record Root {\n  \"id\": integer,\n}\nroot Root\n");
 List<List<String>> classes = SchemaAlgebra.equivalenceClasses(schema);
 assertFalse(classes.isEmpty());
 ```
 
-### `extract(Schema schema, Set<String> fieldPaths)`
+#### `extract(Schema schema, Set<String> fieldPaths)` -> `Schema`
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraExtract -->
 ```java
-Schema schema = OsdReader.read("schema = record Root { id: int, secret?: string }\n");
+Schema schema = OsdReader.read("record Root {\n  \"id\": integer,\n  \"secret\" [0,1]: string,\n}\nroot Root\n");
 Schema extracted = SchemaAlgebra.extract(schema, Set.of("id"));
 assertNotNull(extracted);
 ```
 
-### `lint(Schema schema)`
+#### `lint(Schema schema)` -> `List<LintFinding>`
+`public record LintFinding(String code, String severity, String location, String message)`
+
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraLint -->
 ```java
-Schema schema = OsdReader.read("schema = record Root { id: int }\nrecord Dead { x: string }\n");
+Schema schema = OsdReader.read("record Root {\n  \"id\": integer,\n}\nrecord Dead {\n  \"x\": string,\n}\nroot Root\n");
 List<LintFinding> findings = SchemaAlgebra.lint(schema);
 assertEquals("lint.unreachable-record", findings.get(0).code());
 ```
 
-### `infer(List<Document> samples)`
-### `inferWithReport(List<Document> samples, String rootName, boolean allowAny)`
+#### `infer(List<Document> samples)` -> `Schema`
+#### `inferWithReport(List<Document> samples, String rootName, boolean allowAny)` -> `InferResult`
+`public record InferResult(Schema schema, List<AnyFallback> fallbacks)`
+
 <!-- test-backed: dev.omnist.DocTest#testSchemaAlgebraInfer -->
 ```java
 Document doc1 = OmlReader.read("id: 1\nname: \"A\"\n");
@@ -238,48 +279,20 @@ assertNotNull(res.schema());
 
 ---
 
-## Format Codecs
+## Format Codecs (`dev.omnist.codec`)
 
 ### `JsonCodec`
-Read and write JSON documents.
-
-<!-- test-backed: dev.omnist.DocTest#testJsonCodecExample -->
-```java
-String json = "{\"name\":\"Alice\",\"age\":30}";
-Document doc = JsonCodec.read(json);
-assertTrue(doc instanceof Node);
-String jsonOut = JsonCodec.write(doc);
-```
+- `public static Document read(String text)`
+- `public static String write(Document doc)`
 
 ### `YamlCodec`
-Read and write YAML documents (bounded by 2MB input size cap).
-
-<!-- test-backed: dev.omnist.DocTest#testYamlCodecExample -->
-```java
-String yaml = "name: Alice\nage: 30\n";
-Document doc = YamlCodec.read(yaml);
-assertTrue(doc instanceof Node);
-String yamlOut = YamlCodec.write(doc);
-```
+- `public static Document read(String text)` (bounded by 2MB `MAX_INPUT_LENGTH` cap)
+- `public static String write(Document doc)`
 
 ### `TomlCodec`
-Read and write TOML documents (bounded by 2MB input size cap).
-
-<!-- test-backed: dev.omnist.DocTest#testTomlCodecExample -->
-```java
-String toml = "name = \"Alice\"\nage = 30\n";
-Document doc = TomlCodec.read(toml);
-assertTrue(doc instanceof Node);
-String tomlOut = TomlCodec.write(doc);
-```
+- `public static Document read(String text)` (bounded by 2MB `MAX_INPUT_LENGTH` cap)
+- `public static String write(Document doc)`
 
 ### `XmlCodec`
-Read and write XML documents (secure configuration blocking XXE/DTD and bounded by 2MB input size cap).
-
-<!-- test-backed: dev.omnist.DocTest#testXmlCodecExample -->
-```java
-String xml = "<Person><name>Alice</name><age>30</age></Person>";
-Document doc = XmlCodec.read(xml);
-assertNotNull(doc);
-String xmlOut = XmlCodec.write(doc);
-```
+- `public static Document read(String text)` (secure XXE/DTD protection, bounded by 2MB `MAX_INPUT_LENGTH` cap)
+- `public static String write(Document doc)`
