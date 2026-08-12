@@ -91,7 +91,12 @@ public class YamlCodecTest {
         ));
         WriteReport rep = new WriteReport();
         String out = YamlCodec.write(doc, false, rep);
-        assertTrue(out.contains("\"a\\u0085b\""));
+        assertTrue(out.contains("\"a\\Nb\"") || out.contains("\"a\\u0085b\""));
+        assertTrue(out.contains("\"x\\Ny\"") || out.contains("\"x\\u0085b\""));
         assertEquals("format.string-line-break-char", rep.adjustments().get(0).code());
+
+        // Verify round-trip parse reads back original U+0085 characters
+        Document readBack = YamlCodec.read(out);
+        assertEquals(doc, readBack);
     }
 }
