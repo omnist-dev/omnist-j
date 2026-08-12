@@ -50,11 +50,11 @@ Sealed interface representing a value in the Document model (`Scalar` or `Value.
 Sealed interface representing scalar values (omnist-spec §2.2.1). Permitted record variants:
 1. `Scalar.StringScalar(String value)` — `kind() = ScalarKind.STRING`
 2. `Scalar.IntegerScalar(BigInteger value)` — `kind() = ScalarKind.INTEGER`
-3. `Scalar.NumberScalar(Double value)` — `kind() = ScalarKind.NUMBER`
-4. `Scalar.BooleanScalar(Boolean value)` — `kind() = ScalarKind.BOOLEAN`
+3. `Scalar.NumberScalar(double value)` — `kind() = ScalarKind.NUMBER`
+4. `Scalar.BooleanScalar(boolean value)` — `kind() = ScalarKind.BOOLEAN`
 5. `Scalar.DateScalar(LocalDate value)` — `kind() = ScalarKind.DATE`
-6. `Scalar.TimeScalar(LocalTime value)` — `kind() = ScalarKind.TIME`
-7. `Scalar.DateTimeScalar(LocalDateTime value)` — `kind() = ScalarKind.DATETIME`
+6. `Scalar.TimeScalar(TimeValue value)` — `kind() = ScalarKind.TIME` (`TimeValue(LocalTime time, ZoneOffset offset)`)
+7. `Scalar.DateTimeScalar(DateTimeValue value)` — `kind() = ScalarKind.DATE_TIME` (`DateTimeValue(LocalDateTime dateTime, ZoneOffset offset)`)
 
 <!-- test-backed: dev.omnist.DocTest#testDocumentConstructionExample -->
 ```java
