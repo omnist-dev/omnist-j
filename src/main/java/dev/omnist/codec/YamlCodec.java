@@ -282,7 +282,7 @@ public final class YamlCodec {
             } else if (s instanceof DateTimeScalar dt) {
                 return dt.value();
             } else if (s instanceof TimeScalar time) {
-                return formatTimeValue(time.value());
+                return time.value().format();
             }
         }
         return null;
@@ -317,32 +317,6 @@ public final class YamlCodec {
         return out;
     }
 
-    private static String formatTimeValue(TimeValue tv) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(tv.time().toString());
-        if (tv.offset() != null) {
-            if (ZoneOffset.UTC.equals(tv.offset())) {
-                sb.append("Z");
-            } else {
-                sb.append(tv.offset().getId());
-            }
-        }
-        return sb.toString();
-    }
-
-    private static String formatDateTimeValue(DateTimeValue dtv) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(dtv.dateTime().toString());
-        if (dtv.offset() != null) {
-            if (ZoneOffset.UTC.equals(dtv.offset())) {
-                sb.append("Z");
-            } else {
-                sb.append(dtv.offset().getId());
-            }
-        }
-        return sb.toString();
-    }
-
     private static class CustomRepresenter extends Representer {
         public CustomRepresenter(DumperOptions options) {
             super(options);
@@ -363,7 +337,7 @@ public final class YamlCodec {
             @Override
             public Node representData(Object data) {
                 DateTimeValue dtv = (DateTimeValue) data;
-                return representScalar(Tag.TIMESTAMP, formatDateTimeValue(dtv));
+                return representScalar(Tag.TIMESTAMP, dtv.format());
             }
         }
 

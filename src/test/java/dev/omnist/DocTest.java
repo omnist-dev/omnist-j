@@ -262,6 +262,15 @@ public class DocTest {
     }
 
     @Test
+    void testTemporalValueFormattingExample() {
+        TimeValue tv = TimeValue.of(java.time.LocalTime.of(12, 30, 0), java.time.ZoneOffset.UTC);
+        assertEquals("12:30Z", tv.format());
+
+        DateTimeValue dtv = DateTimeValue.of(java.time.LocalDateTime.of(2024, 1, 1, 12, 30, 0), java.time.ZoneOffset.UTC);
+        assertEquals("2024-01-01T12:30Z", dtv.format());
+    }
+
+    @Test
     void testReflectionSafeguardDocReferences() throws Exception {
         File docFile = new File("docs/01-api-reference.md");
         assertTrue(docFile.exists(), "docs/01-api-reference.md must exist");
@@ -271,6 +280,7 @@ public class DocTest {
             OmlReader.class, OmlWriter.class,
             OsdReader.class, OsdWriter.class,
             Document.class, Node.class, Edge.class, Value.class, Scalar.class, Limits.class,
+            TimeValue.class, DateTimeValue.class,
             Validator.class, Materializer.class,
             SchemaAlgebra.class,
             JsonCodec.class, YamlCodec.class, TomlCodec.class, XmlCodec.class

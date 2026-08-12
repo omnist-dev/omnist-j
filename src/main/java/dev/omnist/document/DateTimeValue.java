@@ -22,4 +22,17 @@ public record DateTimeValue(LocalDateTime dateTime, ZoneOffset offset) {
     public static DateTimeValue of(LocalDateTime dateTime, ZoneOffset offset) {
         return new DateTimeValue(dateTime, offset);
     }
+
+    public String format() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(dateTime.toString());
+        if (offset != null) {
+            if (ZoneOffset.UTC.equals(offset)) {
+                sb.append("Z");
+            } else {
+                sb.append(offset.getId());
+            }
+        }
+        return sb.toString();
+    }
 }

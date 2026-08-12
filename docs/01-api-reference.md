@@ -64,6 +64,27 @@ Node node = new Node(List.of(
 assertEquals("title", node.edges().get(0).label());
 ```
 
+### `TimeValue`
+`public record TimeValue(LocalTime time, ZoneOffset offset)`
+
+Represents a time of day with an optional UTC offset (omnist-spec §2.2.1).
+- `public String format()` — Formats the time as a canonical ISO-8601 string (e.g. `12:30:00Z` or `12:30:00+02:00`).
+
+### `DateTimeValue`
+`public record DateTimeValue(LocalDateTime dateTime, ZoneOffset offset)`
+
+Represents a combined date and time with an optional UTC offset (omnist-spec §2.2.1).
+- `public String format()` — Formats the date-time as a canonical ISO-8601 string (e.g. `2024-01-01T12:30:00Z`).
+
+<!-- test-backed: dev.omnist.DocTest#testTemporalValueFormattingExample -->
+```java
+TimeValue tv = TimeValue.of(java.time.LocalTime.of(12, 30, 0), java.time.ZoneOffset.UTC);
+assertEquals("12:30Z", tv.format());
+
+DateTimeValue dtv = DateTimeValue.of(java.time.LocalDateTime.of(2024, 1, 1, 12, 30, 0), java.time.ZoneOffset.UTC);
+assertEquals("2024-01-01T12:30Z", dtv.format());
+```
+
 ### `Limits`
 `public record Limits(int maxDepth, int maxNodeCount, int maxIntegerDigits)`
 
