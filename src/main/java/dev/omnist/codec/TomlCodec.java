@@ -85,24 +85,29 @@ public final class TomlCodec {
                 }
             } else {
                 char c = text.charAt(i);
-                if (Character.isDigit(c) || c == '+' || c == '-') {
+                if ((c >= '0' && c <= '9') || c == '+' || c == '-') {
                     int start = i;
                     while (i < n && isTokenChar(text.charAt(i))) {
                         i++;
                     }
-                    String token = text.substring(start, i);
-                    if (isHex(token) || isOctal(token) || isBinary(token) || isDecimal(token)) {
-                        int digitCount = countDigits(token);
-                        if (digitCount > 4300) {
-                            throw new RuntimeException("Integer exceeds maximum digit limit of 4300");
-                        }
-                        if (digitCount > 18) {
-                            sb.append("\"__omnist_int__").append(token).append("\"");
+                    if (i == start) {
+                        sb.append(c);
+                        i++;
+                    } else {
+                        String token = text.substring(start, i);
+                        if (isHex(token) || isOctal(token) || isBinary(token) || isDecimal(token)) {
+                            int digitCount = countDigits(token);
+                            if (digitCount > 4300) {
+                                throw new RuntimeException("Integer exceeds maximum digit limit of 4300");
+                            }
+                            if (digitCount > 18) {
+                                sb.append("\"__omnist_int__").append(token).append("\"");
+                            } else {
+                                sb.append(token);
+                            }
                         } else {
                             sb.append(token);
                         }
-                    } else {
-                        sb.append(token);
                     }
                 } else {
                     sb.append(c);
@@ -195,18 +200,27 @@ public final class TomlCodec {
         if (start >= token.length()) return false;
         for (int i = start; i < token.length(); i++) {
             char c = token.charAt(i);
-            if (c != '_' && !Character.isDigit(c)) {
+            if (c != '_' && !(c >= '0' && c <= '9')) {
                 return false;
             }
         }
         return true;
     }
 
+    public static final int MAX_INPUT_LENGTH = 2_000_000;
+
     public static Document read(String text) {
         return read(text, null);
     }
 
     public static Document read(String text, Schema schema) {
+        if (text == null) {
+            throw new IllegalArgumentException("input text cannot be null");
+        }
+        if (text.length() > MAX_INPUT_LENGTH) {
+            throw new RuntimeException("invalid TOML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+        }
+
         String preprocessed;
         try {
             preprocessed = preprocessToml(text);
@@ -224,13 +238,8 @@ public final class TomlCodec {
             throw new RuntimeException("invalid TOML: no document found");
         }
 
-        // Top level must be a table (if empty text was provided or parsed result was empty table, result.toMap() is empty map)
-        // Wait, does tomlj allow bare scalars at top level?
-        // No, the TOML parser natively rejects bare scalars, result.hasErrors() will be true.
-
         int[] budget = new int[]{0};
-        Document doc = buildNode(raw, "$", 0, budget);
-        return doc;
+        return buildNode(raw, "$", 0, budget);
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {

@@ -24,17 +24,26 @@ public final class XmlCodec {
 
     private XmlCodec() {}
 
+    public static final int MAX_INPUT_LENGTH = 2_000_000;
+
     public static Document read(String text) {
         return read(text, null);
     }
 
     public static Document read(String text, Schema schema) {
+        if (text == null) {
+            throw new IllegalArgumentException("input text cannot be null");
+        }
+        if (text.length() > MAX_INPUT_LENGTH) {
+            throw new RuntimeException("invalid XML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+        }
+
         org.w3c.dom.Element rootElem;
         try {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
             dbf.setNamespaceAware(true);
             dbf.setCoalescing(true);
-            
+
             // Secure configuration to block XXE / DTD expansion
             dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);

@@ -236,7 +236,7 @@ public class OmlLexer {
         int len = target.length();
         if (remaining.length() == len) return true;
         char next = remaining.charAt(len);
-        return !Character.isLetterOrDigit(next) && next != '_' && next != '-';
+        return !(next >= 'a' && next <= 'z') && !(next >= 'A' && next <= 'Z') && !(next >= '0' && next <= '9') && next != '_' && next != '-';
     }
 
     private void skipHSpaceAndComments() {

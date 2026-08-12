@@ -77,11 +77,20 @@ public final class YamlCodec {
         return DateTimeValue.of(LocalDateTime.parse(text));
     }
 
+    public static final int MAX_INPUT_LENGTH = 2_000_000;
+
     public static Document read(String text) {
         return read(text, null);
     }
 
     public static Document read(String text, Schema schema) {
+        if (text == null) {
+            throw new IllegalArgumentException("input text cannot be null");
+        }
+        if (text.length() > MAX_INPUT_LENGTH) {
+            throw new RuntimeException("invalid YAML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+        }
+
         LoaderOptions loaderOptions = new LoaderOptions();
         CustomConstructor constructor = new CustomConstructor(loaderOptions);
         CustomResolver resolver = new CustomResolver();
@@ -99,8 +108,7 @@ public final class YamlCodec {
         }
 
         int[] budget = new int[]{0};
-        Document doc = buildNode(raw, "$", 0, budget);
-        return doc;
+        return buildNode(raw, "$", 0, budget);
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
