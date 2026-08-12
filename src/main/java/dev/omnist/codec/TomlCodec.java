@@ -241,6 +241,12 @@ public final class TomlCodec {
         if (depth > 200) {
             throw new RuntimeException(path + ": nesting exceeds the maximum depth (200)");
         }
+        if (val instanceof org.tomlj.TomlTable tt) {
+            val = tt.toMap();
+        }
+        if (val instanceof org.tomlj.TomlArray ta) {
+            val = ta.toList();
+        }
         if (val instanceof Map<?, ?> map) {
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -248,10 +254,19 @@ public final class TomlCodec {
                     throw new RuntimeException(path + ": object key " + entry.getKey() + " is not a string");
                 }
                 Object v = entry.getValue();
+                if (v instanceof org.tomlj.TomlArray ta) {
+                    v = ta.toList();
+                }
+                if (v instanceof org.tomlj.TomlTable tt) {
+                    v = tt.toMap();
+                }
                 String kp = path.equals("$") ? "$." + k : path + "." + k;
                 if (v instanceof List<?> list) {
                     for (int i = 0; i < list.size(); i++) {
                         Object item = list.get(i);
+                        if (item instanceof org.tomlj.TomlArray ta2) {
+                            item = ta2.toList();
+                        }
                         if (item instanceof List<?>) {
                             throw new RuntimeException(kp + "[" + i + "]: an array of arrays has no labeled-edge form");
                         }

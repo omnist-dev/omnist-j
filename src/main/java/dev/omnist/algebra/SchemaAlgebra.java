@@ -485,7 +485,7 @@ public final class SchemaAlgebra {
                 fallbacks.add(new AnyFallback(recordName + "." + label, "mixes objects and values"));
                 return Type.Any.INSTANCE;
             }
-            throw new IllegalArgumentException("label " + label + " mixes objects and values; cannot infer one type");
+            throw new IllegalArgumentException(recordName + "." + label + ": mixes objects and values; cannot infer one type");
         }
 
         Set<ScalarKind> kinds = new LinkedHashSet<>();
@@ -517,7 +517,7 @@ public final class SchemaAlgebra {
                 fallbacks.add(new AnyFallback(recordName + "." + label, "values of more than one scalar kind (" + joined + ")"));
                 return Type.Any.INSTANCE;
             }
-            throw new IllegalArgumentException("label " + label + " has values of more than one scalar kind (" + joined + ")");
+            throw new IllegalArgumentException(recordName + "." + label + ": has values of more than one scalar kind (" + joined + ")");
         }
 
         return new Type.Scalar(kinds.iterator().next(), nullSeen);

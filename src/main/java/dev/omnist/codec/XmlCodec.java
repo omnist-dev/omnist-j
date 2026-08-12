@@ -216,13 +216,12 @@ public final class XmlCodec {
     }
 
     public static String write(Document node, boolean strict, WriteReport report) {
-        if (!(node instanceof Node root) || root.edges().size() != 1) {
-            throw new WriteException("XML needs exactly one document element; the root node must have a single top-level edge (a single-rooted Document)");
-        }
-
         WriteReport rep = check(node);
         if (report != null) {
             report.addAll(rep.adjustments());
+        }
+        if (!(node instanceof Node root) || root.edges().size() != 1) {
+            throw new WriteException("XML needs exactly one document element; the root node must have a single top-level edge (a single-rooted Document)", rep);
         }
         if (strict && !rep.adjustments().isEmpty()) {
             throw new WriteException(rep.toString(), rep);
@@ -316,6 +315,12 @@ public final class XmlCodec {
     private static void scanXml(Document doc, String path, WriteReport rep, int depth) {
         if (depth > 200) {
             throw new WriteException("nesting exceeds the maximum depth (200)");
+        }
+        if (depth == 0 && doc instanceof Node root && root.edges().size() != 1) {
+            rep.add("$", "format.multiple-roots",
+                    "XML requires exactly one root element; document has " + root.edges().size() + " top-level edges",
+                    "error");
+            return;
         }
         if (doc instanceof Node node) {
             if (node.edges().isEmpty()) {

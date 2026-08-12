@@ -207,14 +207,14 @@ public class OmlLexer {
             String text = intMatcher.group();
             int digits = text.startsWith("-") ? text.length() - 1 : text.length();
             if (digits > limits.maxIntegerDigits()) {
-                throw error("Integer literal digit count (" + digits + ") exceeds maximum limit of " + limits.maxIntegerDigits(), startLine, startCol);
+                throw error("document.limit.int-digits", "Integer literal digit count (" + digits + ") exceeds maximum limit of " + limits.maxIntegerDigits(), startLine, startCol);
             }
             try {
                 BigInteger bi = new BigInteger(text);
                 advance(text.length());
                 return new Token(TokenType.INTEGER, text, bi, startLine, startCol);
             } catch (NumberFormatException e) {
-                throw error("Invalid integer literal: " + text, startLine, startCol);
+                throw error("parse.unexpected-token", "Invalid integer literal: " + text, startLine, startCol);
             }
         }
 
@@ -226,7 +226,7 @@ public class OmlLexer {
             return new Token(TokenType.IDENT, text, text, startLine, startCol);
         }
 
-        throw error("Unexpected character: '" + c + "'", startLine, startCol);
+        throw error("parse.unexpected-token", "Unexpected character: '" + c + "'", startLine, startCol);
     }
 
     private boolean isReservedFloatWord(String target, String remaining) {
@@ -261,11 +261,11 @@ public class OmlLexer {
                 return sb.toString();
             }
             if (c < 0x20) {
-                throw error("Control characters below U+0020 are forbidden in strings", line, col);
+                throw error("parse.control-character", "Control characters below U+0020 are forbidden in strings", startLine, startCol);
             }
             if (c == '\\') {
                 if (pos >= source.length()) {
-                    throw error("Unterminated escape in string", line, col);
+                    throw error("parse.unterminated-string", "Unterminated escape in string", startLine, startCol);
                 }
                 char esc = consumeChar();
                 switch (esc) {
@@ -279,7 +279,7 @@ public class OmlLexer {
                     case 't' -> sb.append('\t');
                     case 'u' -> {
                         if (pos + 4 > source.length()) {
-                            throw error("Unterminated \\uXXXX escape sequence", line, col);
+                            throw error("parse.unterminated-string", "Unterminated \\uXXXX escape sequence", startLine, startCol);
                         }
                         String hex = source.substring(pos, pos + 4);
                         advance(4);
@@ -287,7 +287,7 @@ public class OmlLexer {
                         try {
                             codeUnit = Integer.parseInt(hex, 16);
                         } catch (NumberFormatException e) {
-                            throw error("Invalid hex in \\uXXXX escape", line, col);
+                            throw error("parse.invalid-escape", "Invalid hex in \\uXXXX escape", startLine, startCol);
                         }
                         if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
                             if (pos + 6 <= source.length() && source.startsWith("\\u", pos)) {
@@ -299,24 +299,24 @@ public class OmlLexer {
                                     int codePoint = Character.toCodePoint((char) codeUnit, (char) lowUnit);
                                     sb.appendCodePoint(codePoint);
                                 } else {
-                                    throw error("Invalid low surrogate in \\uXXXX pair", line, col);
+                                    throw error("parse.unpaired-surrogate", "Invalid low surrogate in \\uXXXX pair", startLine, startCol);
                                 }
                             } else {
-                                throw error("Unpaired high surrogate in \\uXXXX escape", line, col);
+                                throw error("parse.unpaired-surrogate", "Unpaired high surrogate in \\uXXXX escape", startLine, startCol);
                             }
                         } else if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF) {
-                            throw error("Unpaired low surrogate in \\uXXXX escape", line, col);
+                            throw error("parse.unpaired-surrogate", "Unpaired low surrogate in \\uXXXX escape", startLine, startCol);
                         } else {
                             sb.append((char) codeUnit);
                         }
                     }
-                    default -> throw error("Invalid escape sequence: \\" + esc, line, col);
+                    default -> throw error("parse.invalid-escape", "Invalid escape sequence: \\" + esc, startLine, startCol);
                 }
             } else {
                 sb.append(c);
             }
         }
-        throw error("Unterminated double-quoted string", startLine, startCol);
+        throw error("parse.unterminated-string", "Unterminated double-quoted string", startLine, startCol);
     }
 
     private DateTimeValue parseDateTimeValue(String text) {
@@ -364,7 +364,11 @@ public class OmlLexer {
         }
     }
 
+    private OmlParseException error(String code, String message, int errLine, int errCol) {
+        return new OmlParseException(errLine, errCol, code, message);
+    }
+
     private OmlParseException error(String message, int errLine, int errCol) {
-        return new OmlParseException(errLine, errCol, message);
+        return new OmlParseException(errLine, errCol, "parse.unexpected-token", message);
     }
 }

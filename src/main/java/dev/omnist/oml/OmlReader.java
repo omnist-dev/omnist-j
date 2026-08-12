@@ -47,7 +47,7 @@ public class OmlReader {
             skipSeparators();
             if (peekType() != TokenType.EOF) {
                 Token extra = peekToken();
-                throw new OmlParseException(extra.line(), extra.col(), "Trailing content after top-level document");
+                throw new OmlParseException(extra.line(), extra.col(), "parse.trailing-content", "Trailing content after top-level document");
             }
             return rootNode;
         } else {
@@ -55,7 +55,7 @@ public class OmlReader {
             skipSeparators();
             if (peekType() != TokenType.EOF) {
                 Token extra = peekToken();
-                throw new OmlParseException(extra.line(), extra.col(), "Trailing content after bare scalar document");
+                throw new OmlParseException(extra.line(), extra.col(), "parse.trailing-content", "Trailing content after bare scalar document");
             }
             return bareValue;
         }
@@ -65,17 +65,12 @@ public class OmlReader {
         Token t1 = peekNonSeparatorToken(0);
         if (t1 == null) return false;
 
-        if (t1.type() == TokenType.STRING) {
-            Token t2 = peekNonSeparatorToken(1);
-            return t2 != null && t2.type() == TokenType.COLON;
-        } else if (t1.type() == TokenType.IDENT) {
-            if ("null".equals(t1.text()) || "true".equals(t1.text()) || "false".equals(t1.text())) {
-                return false;
-            }
-            Token t2 = peekNonSeparatorToken(1);
-            return t2 != null && t2.type() == TokenType.COLON;
+        if (t1.type() == TokenType.IDENT && ("null".equals(t1.text()) || "true".equals(t1.text()) || "false".equals(t1.text()))) {
+            return false;
         }
-        return false;
+
+        Token t2 = peekNonSeparatorToken(1);
+        return t2 != null && t2.type() == TokenType.COLON;
     }
 
     private Node parseNodeEdges(boolean insideBraces) {
@@ -91,7 +86,7 @@ public class OmlReader {
 
             if (peekType() != TokenType.COLON) {
                 Token cur = peekToken();
-                throw new OmlParseException(cur.line(), cur.col(), "Expected ':' after edge label '" + label + "'");
+                throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected ':' after edge label '" + label + "'");
             }
             consumeToken(); // consume ':'
 
@@ -99,26 +94,26 @@ public class OmlReader {
 
             if (peekType() == TokenType.EOF) {
                 Token cur = peekToken();
-                throw new OmlParseException(cur.line(), cur.col(), "Expected value after ':'");
+                throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected value after ':'");
             }
 
             Token valueStart = peekToken();
 
             if (valueStart.type() == TokenType.LBRACKET) {
                 consumeToken(); // consume '['
-                parseArrayElements(label, edges);
+                parseArrayElements(label, edges, valueStart.line(), valueStart.col());
             } else if (valueStart.type() == TokenType.LBRACE) {
                 consumeToken(); // consume '{'
                 currentDepth++;
                 if (currentDepth > limits.maxDepth()) {
-                    throw new OmlParseException(valueStart.line(), valueStart.col(),
+                    throw new OmlParseException(valueStart.line(), valueStart.col(), "document.limit.depth",
                             "Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
                 }
                 Node childNode = parseNodeEdges(true);
                 skipSeparators();
                 if (peekType() != TokenType.RBRACE) {
                     Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "Expected '}' closing braced node");
+                    throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected '}' closing braced node");
                 }
                 consumeToken(); // consume '}'
                 currentDepth--;
@@ -135,7 +130,7 @@ public class OmlReader {
                 }
                 if (!HadSep) {
                     Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "Edge separator (newline or ';') required between adjacent edges");
+                    throw new OmlParseException(cur.line(), cur.col(), "parse.trailing-content", "Edge separator (newline or ';') required between adjacent edges");
                 }
             }
         }
@@ -147,7 +142,7 @@ public class OmlReader {
         materializedNodeCount++;
         if (materializedNodeCount > limits.maxNodeCount()) {
             Token cur = peekToken();
-            throw new OmlParseException(cur.line(), cur.col(),
+            throw new OmlParseException(cur.line(), cur.col(), "document.limit.nodes",
                     "Node count (" + materializedNodeCount + ") exceeds maximum limit of " + limits.maxNodeCount());
         }
         return new Node(edges);
@@ -160,25 +155,27 @@ public class OmlReader {
             return (String) t.value();
         } else if (t.type() == TokenType.IDENT) {
             if ("null".equals(t.text()) || "true".equals(t.text()) || "false".equals(t.text())) {
-                throw new OmlParseException(t.line(), t.col(), "Reserved word '" + t.text() + "' cannot be used as a bare label");
+                throw new OmlParseException(t.line(), t.col(), "parse.reserved-word-label", "Reserved word '" + t.text() + "' cannot be used as a bare label");
             }
             consumeToken();
             return t.text();
         } else {
-            throw new OmlParseException(t.line(), t.col(), "Expected edge label");
+            throw new OmlParseException(t.line(), t.col(), "parse.unexpected-token", "Expected edge label");
         }
     }
 
-    private void parseArrayElements(String label, List<Edge> edges) {
+    private void parseArrayElements(String label, List<Edge> edges, int bracketLine, int bracketCol) {
         skipSeparators();
         if (peekType() == TokenType.RBRACKET) {
-            Token cur = peekToken();
-            throw new OmlParseException(cur.line(), cur.col(), "Empty array `[]` is an error");
+            throw new OmlParseException(bracketLine, bracketCol, "parse.empty-array", "Empty array `[]` is an error");
         }
 
         boolean first = true;
         while (peekType() != TokenType.EOF) {
-            skipSeparators();
+            if (peekType() == TokenType.SEPARATOR) {
+                Token sep = peekToken();
+                throw new OmlParseException(sep.line(), sep.col(), "parse.separator-in-array", "Newlines and separators are forbidden inside array brackets");
+            }
             if (peekType() == TokenType.RBRACKET) {
                 consumeToken();
                 break;
@@ -187,32 +184,35 @@ public class OmlReader {
             if (!first) {
                 if (peekType() == TokenType.COMMA) {
                     consumeToken();
-                    skipSeparators();
+                    if (peekType() == TokenType.SEPARATOR) {
+                        Token sep = peekToken();
+                        throw new OmlParseException(sep.line(), sep.col(), "parse.separator-in-array", "Newlines and separators are forbidden inside array brackets");
+                    }
                     if (peekType() == TokenType.RBRACKET) {
                         consumeToken();
                         break;
                     }
                 } else {
                     Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "Expected ',' between array elements");
+                    throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected ',' between array elements");
                 }
             }
 
             Token valToken = peekToken();
             if (valToken.type() == TokenType.LBRACKET) {
-                throw new OmlParseException(valToken.line(), valToken.col(), "Arrays cannot be nested inside arrays");
+                throw new OmlParseException(valToken.line(), valToken.col(), "parse.nested-array", "Arrays cannot be nested inside arrays");
             } else if (valToken.type() == TokenType.LBRACE) {
                 consumeToken(); // consume '{'
                 currentDepth++;
                 if (currentDepth > limits.maxDepth()) {
-                    throw new OmlParseException(valToken.line(), valToken.col(),
+                    throw new OmlParseException(valToken.line(), valToken.col(), "document.limit.depth",
                             "Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
                 }
                 Node childNode = parseNodeEdges(true);
                 skipSeparators();
                 if (peekType() != TokenType.RBRACE) {
                     Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "Expected '}' closing braced node");
+                    throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected '}' closing braced node");
                 }
                 consumeToken();
                 currentDepth--;
@@ -251,9 +251,9 @@ public class OmlReader {
             if ("null".equals(t.text())) return Value.NULL;
             if ("true".equals(t.text())) return new Scalar.BooleanScalar(true);
             if ("false".equals(t.text())) return new Scalar.BooleanScalar(false);
-            throw new OmlParseException(t.line(), t.col(), "Invalid scalar token: '" + t.text() + "'");
+            throw new OmlParseException(t.line(), t.col(), "parse.bare-word", "Invalid scalar token: '" + t.text() + "'");
         } else {
-            throw new OmlParseException(t.line(), t.col(), "Expected scalar value");
+            throw new OmlParseException(t.line(), t.col(), "parse.unexpected-token", "Expected scalar value");
         }
     }
 

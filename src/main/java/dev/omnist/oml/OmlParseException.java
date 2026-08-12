@@ -6,11 +6,17 @@ package dev.omnist.oml;
 public class OmlParseException extends RuntimeException {
     private final int line;
     private final int column;
+    private final String code;
 
-    public OmlParseException(int line, int column, String message) {
-        super("Parse error at line " + line + ", column " + column + ": " + message);
+    public OmlParseException(int line, int column, String code, String message) {
+        super(line + ":" + column + ": [" + code + "] " + message);
         this.line = line;
         this.column = column;
+        this.code = code;
+    }
+
+    public OmlParseException(int line, int column, String message) {
+        this(line, column, "parse.unexpected-token", message);
     }
 
     public int getLine() {
@@ -19,5 +25,13 @@ public class OmlParseException extends RuntimeException {
 
     public int getColumn() {
         return column;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public String getPath() {
+        return line + ":" + column;
     }
 }

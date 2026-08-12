@@ -33,27 +33,31 @@ public class OsdReader {
                 consumeToken(); // consume 'record'
                 Record record = parseRecord();
                 if (records.containsKey(record.name())) {
-                    throw new OsdParseException(t.line(), t.col(), "Duplicate record definition: '" + record.name() + "'");
+                    throw new OsdParseException(t.line(), t.col(), "schema.duplicate-record", record.name(), "Duplicate record definition: '" + record.name() + "'");
                 }
                 records.put(record.name(), record);
             } else if (t.type() == TokenType.ROOT) {
                 consumeToken(); // consume 'root'
                 if (rootName != null) {
-                    throw new OsdParseException(t.line(), t.col(), "Duplicate root declaration");
+                    throw new OsdParseException(t.line(), t.col(), "schema.no-root", "$", "Duplicate root declaration");
                 }
                 Token nameTok = peekToken();
                 if (nameTok.type() != TokenType.IDENT) {
-                    throw new OsdParseException(nameTok.line(), nameTok.col(), "Expected root record name identifier");
+                    throw new OsdParseException(nameTok.line(), nameTok.col(), "schema.no-root", "$", "Expected root record name identifier");
                 }
                 consumeToken();
                 rootName = nameTok.text();
             } else {
-                throw new OsdParseException(t.line(), t.col(), "Expected 'record' or 'root' declaration");
+                throw new OsdParseException(t.line(), t.col(), "schema.no-root", "$", "Expected 'record' or 'root' declaration");
             }
         }
 
         if (rootName == null) {
-            throw new OsdParseException(1, 1, "A schema must declare a root");
+            throw new OsdParseException(1, 1, "schema.no-root", "$", "A schema must declare a root");
+        }
+
+        if (!records.containsKey(rootName)) {
+            throw new OsdParseException(1, 1, "schema.unknown-type", "$", "Root record '" + rootName + "' is not defined in schema");
         }
 
         // Post-parse validation: check reference targets
@@ -61,7 +65,7 @@ public class OsdReader {
             for (Field field : record.fields()) {
                 if (field.type() instanceof Type.Ref ref) {
                     if (!records.containsKey(ref.name())) {
-                        throw new OsdParseException(1, 1, "Unknown type '" + ref.name() + "'");
+                        throw new OsdParseException(1, 1, "schema.unknown-type", record.name() + "." + field.label(), "Unknown type '" + ref.name() + "'");
                     }
                 }
             }
@@ -73,21 +77,21 @@ public class OsdReader {
     private Record parseRecord() {
         Token nameTok = peekToken();
         if (nameTok.type() != TokenType.IDENT) {
-            throw new OsdParseException(nameTok.line(), nameTok.col(), "Expected record name identifier");
+            throw new OsdParseException(nameTok.line(), nameTok.col(), "schema.parse-error", "$", "Expected record name identifier");
         }
 
         String recordName = nameTok.text();
 
         // §5.7 Reserved record names: cannot be scalar keyword or 'any'
         if (ScalarKind.fromKeyword(recordName) != null || "any".equals(recordName)) {
-            throw new OsdParseException(nameTok.line(), nameTok.col(), "Reserved type name '" + recordName + "' cannot be used as a record name");
+            throw new OsdParseException(nameTok.line(), nameTok.col(), "schema.reserved-name", recordName, "Reserved type name '" + recordName + "' cannot be used as a record name");
         }
 
         consumeToken(); // consume record name
 
         Token braceTok = peekToken();
         if (braceTok.type() != TokenType.LBRACE) {
-            throw new OsdParseException(braceTok.line(), braceTok.col(), "Expected '{' after record name");
+            throw new OsdParseException(braceTok.line(), braceTok.col(), "schema.parse-error", recordName, "Expected '{' after record name");
         }
         consumeToken(); // consume '{'
 
@@ -96,33 +100,37 @@ public class OsdReader {
             Token labelTok = peekToken();
 
             if (labelTok.type() != TokenType.STRING) {
-                throw new OsdParseException(labelTok.line(), labelTok.col(), "Expected a quoted field name");
+                throw new OsdParseException(labelTok.line(), labelTok.col(), "schema.unquoted-label", recordName, "Expected a quoted field name");
             }
             consumeToken(); // consume field label string
             String label = labelTok.text();
+
+            if (fields.stream().anyMatch(f -> f.label().equals(label))) {
+                throw new OsdParseException(labelTok.line(), labelTok.col(), "schema.duplicate-field", recordName, "Duplicate field label '" + label + "' in record '" + recordName + "'");
+            }
 
             int min = 1;
             Integer max = 1;
 
             if (peekType() == TokenType.CARDINALITY) {
                 Token cardTok = consumeToken();
-                CardBound cb = parseCardinality(cardTok);
+                CardBound cb = parseCardinality(cardTok, recordName + "." + label);
                 min = cb.min;
                 max = cb.max;
             }
 
             Token colonTok = peekToken();
             if (colonTok.type() != TokenType.COLON) {
-                throw new OsdParseException(colonTok.line(), colonTok.col(), "Expected ':' after field label");
+                throw new OsdParseException(colonTok.line(), colonTok.col(), "schema.parse-error", recordName + "." + label, "Expected ':' after field label");
             }
             consumeToken(); // consume ':'
 
             Token typeTok = peekToken();
             if (typeTok.type() == TokenType.STRING) {
-                throw new OsdParseException(typeTok.line(), typeTok.col(), "A quoted string cannot appear in type position");
+                throw new OsdParseException(typeTok.line(), typeTok.col(), "schema.quoted-type", recordName, "A quoted string cannot appear in type position");
             }
             if (typeTok.type() != TokenType.IDENT) {
-                throw new OsdParseException(typeTok.line(), typeTok.col(), "Expected type name identifier");
+                throw new OsdParseException(typeTok.line(), typeTok.col(), "schema.parse-error", recordName + "." + label, "Expected type name identifier");
             }
             consumeToken();
 
@@ -140,12 +148,12 @@ public class OsdReader {
                 fieldType = new Type.Scalar(scalarKind, nullable);
             } else if ("any".equals(typeName)) {
                 if (nullable) {
-                    throw new OsdParseException(typeTok.line(), typeTok.col(), "any already includes null");
+                    throw new OsdParseException(typeTok.line(), typeTok.col(), "schema.nullable-any", recordName + "." + label, "any already includes null");
                 }
                 fieldType = Type.Any.INSTANCE;
             } else {
                 if (nullable) {
-                    throw new OsdParseException(typeTok.line(), typeTok.col(), "? cannot apply to a reference; use [0,1]");
+                    throw new OsdParseException(typeTok.line(), typeTok.col(), "schema.nullable-ref", recordName + "." + label, "? cannot apply to a reference; use [0,1]");
                 }
                 fieldType = new Type.Ref(typeName);
             }
@@ -159,7 +167,7 @@ public class OsdReader {
 
         if (peekType() != TokenType.RBRACE) {
             Token cur = peekToken();
-            throw new OsdParseException(cur.line(), cur.col(), "Expected '}' closing record definition");
+            throw new OsdParseException(cur.line(), cur.col(), "schema.parse-error", recordName, "Expected '}' closing record definition");
         }
         consumeToken(); // consume '}'
 
@@ -168,16 +176,16 @@ public class OsdReader {
 
     private record CardBound(int min, Integer max) {}
 
-    private CardBound parseCardinality(Token cardTok) {
+    private CardBound parseCardinality(Token cardTok, String fieldPath) {
         String s = cardTok.text().trim();
         if (s.isEmpty()) {
-            throw new OsdParseException(cardTok.line(), cardTok.col(), "Empty cardinality '[]' is an error");
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.empty-cardinality", fieldPath, "Empty cardinality '[]' is an error");
         }
         if (s.contains(".")) {
-            throw new OsdParseException(cardTok.line(), cardTok.col(), "Cardinality bound must be a whole number");
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.non-integer-cardinality", fieldPath, "Cardinality bound must be a whole number");
         }
         if (s.contains("-")) {
-            throw new OsdParseException(cardTok.line(), cardTok.col(), "Cardinality bound cannot be negative");
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.invalid-cardinality", fieldPath, "Cardinality bound cannot be negative");
         }
 
         try {
@@ -187,7 +195,7 @@ public class OsdReader {
             }
             String[] parts = s.split(",", -1);
             if (parts.length != 2) {
-                throw new OsdParseException(cardTok.line(), cardTok.col(), "Invalid cardinality format: [" + s + "]");
+                throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.invalid-cardinality", fieldPath, "Invalid cardinality format: [" + s + "]");
             }
             String minStr = parts[0].trim();
             String maxStr = parts[1].trim();
@@ -196,11 +204,11 @@ public class OsdReader {
             Integer max = maxStr.isEmpty() ? null : Integer.parseInt(maxStr);
 
             if (max != null && max < min) {
-                throw new OsdParseException(cardTok.line(), cardTok.col(), "Invalid cardinality: max (" + max + ") < min (" + min + ")");
+                throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.invalid-cardinality", fieldPath, "Invalid cardinality: max (" + max + ") < min (" + min + ")");
             }
             return new CardBound(min, max);
         } catch (NumberFormatException e) {
-            throw new OsdParseException(cardTok.line(), cardTok.col(), "Invalid integer in cardinality: [" + s + "]");
+            throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.invalid-cardinality", fieldPath, "Invalid integer in cardinality: [" + s + "]");
         }
     }
 

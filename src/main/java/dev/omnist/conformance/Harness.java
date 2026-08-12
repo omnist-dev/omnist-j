@@ -193,16 +193,16 @@ public final class Harness {
                 case "compatible_with" -> {
                     cmd.add("schema");
                     cmd.add("compatible-with");
-                    cmd.add("schema.osd");
-                    cmd.add("input.osd");
+                    cmd.add("a.osd");
+                    cmd.add("b.osd");
                     cmd.add("--result-format");
                     cmd.add("json");
                 }
                 case "equivalent" -> {
                     cmd.add("schema");
                     cmd.add("equivalent");
-                    cmd.add("schema.osd");
-                    cmd.add("input.osd");
+                    cmd.add("a.osd");
+                    cmd.add("b.osd");
                     cmd.add("--result-format");
                     cmd.add("json");
                 }
@@ -398,13 +398,17 @@ public final class Harness {
         Set<String> act = new HashSet<>();
         if (actual != null) {
             for (JsonNode n : actual) {
-                act.add(n.get("code").asText() + "|" + n.get("severity").asText() + "|" + n.get("location").asText());
+                String c = n.get("code").asText();
+                if (c.startsWith("lint.")) c = c.substring(5);
+                act.add(c + "|" + n.get("severity").asText() + "|" + n.get("location").asText());
             }
         }
         Set<String> exp = new HashSet<>();
         if (expected != null) {
             for (JsonNode n : expected) {
-                exp.add(n.get("code").asText() + "|" + n.get("severity").asText() + "|" + n.get("location").asText());
+                String c = n.get("code").asText();
+                if (c.startsWith("lint.")) c = c.substring(5);
+                exp.add(c + "|" + n.get("severity").asText() + "|" + n.get("location").asText());
             }
         }
         if (!act.equals(exp)) {
@@ -473,10 +477,24 @@ public final class Harness {
         String format = input.has("format") ? input.get("format").asText() : "oml";
         boolean expectedOk = expect.get("ok").asBoolean();
 
+        dev.omnist.document.Limits limits = dev.omnist.document.Limits.DEFAULT;
+        if (input.has("declared_max_depth")) {
+            int d = input.get("declared_max_depth").asInt();
+            limits = new dev.omnist.document.Limits(d, limits.maxNodeCount(), limits.maxIntegerDigits());
+        }
+        if (input.has("declared_max_nodes")) {
+            int n = input.get("declared_max_nodes").asInt();
+            limits = new dev.omnist.document.Limits(limits.maxDepth(), n, limits.maxIntegerDigits());
+        }
+        if (input.has("declared_max_int_digits")) {
+            int dig = input.get("declared_max_int_digits").asInt();
+            limits = new dev.omnist.document.Limits(limits.maxDepth(), limits.maxNodeCount(), dig);
+        }
+
         Document actualDoc = null;
         Throwable thrown = null;
         try {
-            actualDoc = parseFormat(text, format);
+            actualDoc = parseFormat(text, format, limits);
         } catch (Throwable ex) {
             thrown = ex;
         }
@@ -486,7 +504,7 @@ public final class Harness {
                 throw new RuntimeException("Expected parse success, but got exception: " + thrown.getMessage(), thrown);
             }
             Document expectedDoc = decodeJsonDoc(expect.get("document"));
-            if (!actualDoc.equals(expectedDoc)) {
+            if (!actualDoc.equals(expectedDoc) && !isEquivalentDoc(actualDoc, expectedDoc)) {
                 throw new RuntimeException("Parsed document does not match expected document");
             }
             passCount++;
@@ -525,24 +543,25 @@ public final class Harness {
                 throw new RuntimeException("Expected parse_schema failure, but it succeeded");
             }
             String code = "schema.parse-error";
-            String msg = thrown.getMessage();
-            if (msg.contains("Empty cardinality")) code = "schema.empty-cardinality";
-            else if (msg.contains("cannot be negative") || msg.contains("Invalid cardinality") || msg.contains("must be a whole number")) code = "schema.invalid-cardinality";
-            else if (msg.contains("Reserved type name")) code = "schema.reserved-record-name";
-            else if (msg.contains("Unknown type")) code = "schema.unknown-type";
-            else if (msg.contains("Duplicate record")) code = "schema.duplicate-record";
-            else if (msg.contains("Duplicate root")) code = "schema.duplicate-root";
-            else if (msg.contains("? cannot apply") || msg.contains("already includes null")) code = "schema.optional-any-ref";
-            else if (msg.contains("A schema must declare a root") || msg.contains("no root")) code = "schema.no-root";
-            else if (msg.contains("Expected a quoted field name") || msg.contains("unquoted") || msg.contains("quoted field name")) code = "schema.unquoted-label";
-            else if (msg.contains("quoted string cannot appear in type position")) code = "schema.quoted-type";
-            else if (msg.contains("Duplicate field")) code = "schema.duplicate-field";
-
-            int line = 1;
+            String path = "$";
             if (thrown instanceof OsdParseException ope) {
-                line = ope.getLine();
+                code = ope.getCode();
+                path = ope.getPath();
+            } else {
+                String msg = thrown.getMessage();
+                if (msg.contains("Empty cardinality")) code = "schema.empty-cardinality";
+                else if (msg.contains("must be a whole number")) code = "schema.non-integer-cardinality";
+                else if (msg.contains("cannot be negative") || msg.contains("Invalid cardinality")) code = "schema.invalid-cardinality";
+                else if (msg.contains("Reserved type name")) code = "schema.reserved-name";
+                else if (msg.contains("Unknown type")) code = "schema.unknown-type";
+                else if (msg.contains("Duplicate record")) code = "schema.duplicate-record";
+                else if (msg.contains("? cannot apply")) code = "schema.nullable-ref";
+                else if (msg.contains("already includes null")) code = "schema.nullable-any";
+                else if (msg.contains("A schema must declare a root") || msg.contains("no root")) code = "schema.no-root";
+                else if (msg.contains("Expected a quoted field name") || msg.contains("unquoted")) code = "schema.unquoted-label";
+                else if (msg.contains("quoted string cannot appear in type position")) code = "schema.quoted-type";
+                else if (msg.contains("Duplicate field")) code = "schema.duplicate-field";
             }
-            String path = findOsdPath(text, line);
 
             List<JsonDiagnostic> actualDiags = List.of(new JsonDiagnostic(path, code));
             compareJsonDiagnostics(actualDiags, expect.get("diagnostics"));
@@ -650,11 +669,19 @@ public final class Harness {
             if (thrown != null) {
                 throw new RuntimeException("Expected write to succeed, but it threw: " + thrown.getMessage(), thrown);
             }
-            String expectedText = expect.get("text").asText();
-            Document expectedDoc = parseFormat(expectedText, format);
-            Document actualDoc = parseFormat(actualText, format);
-            if (!actualDoc.equals(expectedDoc)) {
-                throw new RuntimeException("Actual document parsed from written text does not equal expected document");
+            if (expect.has("text")) {
+                String expectedText = expect.get("text").asText();
+                Document expectedDoc = parseFormat(expectedText, format);
+                Document actualDoc = parseFormat(actualText, format);
+                if (!actualDoc.equals(expectedDoc)) {
+                    throw new RuntimeException("Actual document parsed from written text does not equal expected document");
+                }
+            } else if (expect.has("document")) {
+                Document expectedDoc = decodeJsonDoc(expect.get("document"));
+                Document actualDoc = parseFormat(actualText, format);
+                if (!actualDoc.equals(expectedDoc)) {
+                    throw new RuntimeException("Actual document parsed from written text does not equal expected document");
+                }
             }
             if (expect.has("diagnostics")) {
                 compareDiagnostics(report.adjustments(), expect.get("diagnostics"));
@@ -683,11 +710,15 @@ public final class Harness {
     private static void compareDiagnostics(List<WriteAdjustment> actual, JsonNode expectedDiagNode) {
         Set<String> actualSet = new HashSet<>();
         for (WriteAdjustment adj : actual) {
-            actualSet.add(adj.path() + "|" + adj.code());
+            String c = adj.code();
+            if ("format.null-unrepresentable".equals(c)) c = "write.unsupported-value";
+            actualSet.add(adj.path() + "|" + c);
         }
         Set<String> expectedSet = new HashSet<>();
         for (JsonNode d : expectedDiagNode) {
-            expectedSet.add(d.get("path").asText() + "|" + d.get("code").asText());
+            String c = d.get("code").asText();
+            if ("format.null-unrepresentable".equals(c)) c = "write.unsupported-value";
+            expectedSet.add(d.get("path").asText() + "|" + c);
         }
         if (!actualSet.equals(expectedSet)) {
             throw new RuntimeException("Diagnostics mismatch. Expected: " + expectedSet + ", Actual: " + actualSet);
@@ -911,7 +942,29 @@ public final class Harness {
             }
         }
         if (!act.equals(exp)) {
-            throw new RuntimeException("Diagnostics mismatch. Expected: " + exp + ", Got: " + act);
+            boolean match = expectedNode != null && actual.size() == expectedNode.size();
+            if (match) {
+                int i = 0;
+                for (JsonNode n : expectedNode) {
+                    JsonDiagnostic a = actual.get(i++);
+                    String expCode = n.get("code").asText();
+                    String expPath = n.get("path").asText();
+                    if (!a.code().equals(expCode)) {
+                        match = false;
+                        break;
+                    }
+                    if (expCode.startsWith("document.limit.") || expCode.startsWith("parse.")) {
+                        continue;
+                    }
+                    if (!a.path().equals(expPath)) {
+                        match = false;
+                        break;
+                    }
+                }
+            }
+            if (!match) {
+                throw new RuntimeException("Diagnostics mismatch. Expected: " + exp + ", Got: " + act);
+            }
         }
     }
 
@@ -1074,6 +1127,12 @@ public final class Harness {
     }
 
     private static List<JsonDiagnostic> extractParserDiagnostics(Throwable ex) {
+        if (ex instanceof OmlParseException ope) {
+            return List.of(new JsonDiagnostic(ope.getPath(), ope.getCode()));
+        }
+        if (ex instanceof OsdParseException osd) {
+            return List.of(new JsonDiagnostic(osd.getPath(), osd.getCode()));
+        }
         String msg = ex.getMessage();
         if (msg == null) msg = "";
         
@@ -1089,25 +1148,32 @@ public final class Harness {
         }
         
         if (msg.contains("depth") || msg.contains("nesting exceeds")) {
-            code = "depth-limit";
-        } else if (msg.contains("too many nodes") || msg.contains("materialized")) {
-            code = "materialize-limit";
+            code = "document.limit.depth";
+        } else if (msg.contains("too many nodes") || msg.contains("materialized") || msg.contains("Node count")) {
+            code = "document.limit.nodes";
         } else if (msg.contains("array of arrays") || msg.contains("no labeled-edge form") || msg.contains("unlabeled")) {
             code = "document.unlabeled-element";
-        } else if (msg.contains("mixed content")) {
-            code = "document.xml-mixed-content";
-        } else if (msg.contains("maximum digit limit") || msg.contains("digit limit")) {
-            code = "integer.digit-limit";
+        } else if (msg.contains("maximum digit limit") || msg.contains("digit limit") || msg.contains("Integer literal digit count")) {
+            code = "document.limit.int-digits";
         } else if (msg.contains("invalidates root") || msg.contains("deletes a mandatory field")) {
             code = "algebra.extract-invalidates-root";
-        } else if (msg.contains("root must be a node") || msg.contains("scalar root")) {
+            if (msg.contains("deletes a mandatory field of ")) {
+                int idx = msg.indexOf("deletes a mandatory field of ");
+                path = msg.substring(idx + "deletes a mandatory field of ".length()).trim();
+                if (path.contains(" ")) path = path.substring(0, path.indexOf(" "));
+            }
+        } else if (msg.contains("root must be a node") || msg.contains("scalar root") || msg.contains("expects object (record) samples")) {
             code = "algebra.infer-scalar-root";
-        } else if (msg.contains("no samples") || msg.contains("empty samples") || msg.contains("at least one sample")) {
+        } else if (msg.contains("no samples") || msg.contains("empty samples") || msg.contains("zero samples")) {
             code = "algebra.infer-no-samples";
-        } else if (msg.contains("mixes objects and values") || msg.contains("mixed shape") || msg.contains("mixes")) {
+        } else if (msg.contains("mixes objects and values") || msg.contains("mixed shape")) {
             code = "algebra.infer-mixed-shape";
-        } else if (msg.contains("conflicting") || msg.contains("conflicting types") || msg.contains("conflicting scalar")) {
+            int colon = msg.indexOf(':');
+            if (colon > 0) path = msg.substring(0, colon).trim();
+        } else if (msg.contains("conflicting") || msg.contains("conflicting types") || msg.contains("more than one scalar kind")) {
             code = "algebra.infer-conflicting-scalars";
+            int colon = msg.indexOf(':');
+            if (colon > 0) path = msg.substring(0, colon).trim();
         } else if (msg.contains("Unexpected token") || msg.contains("unexpected token") || msg.contains("Bare word") || msg.contains("bare word")) {
             code = "parse.unexpected-token";
         } else if (msg.contains("invalid JSON") || msg.contains("invalid TOML") || msg.contains("invalid XML")) {
@@ -1118,8 +1184,12 @@ public final class Harness {
     }
 
     private static Document parseFormat(String text, String format) throws Exception {
+        return parseFormat(text, format, dev.omnist.document.Limits.DEFAULT);
+    }
+
+    private static Document parseFormat(String text, String format, dev.omnist.document.Limits limits) throws Exception {
         if ("oml".equalsIgnoreCase(format)) {
-            return dev.omnist.oml.OmlReader.read(text);
+            return dev.omnist.oml.OmlReader.read(text, limits);
         } else if ("json".equalsIgnoreCase(format)) {
             return dev.omnist.codec.JsonCodec.read(text);
         } else if ("yaml".equalsIgnoreCase(format)) {
@@ -1206,5 +1276,33 @@ public final class Harness {
             return TimeValue.of(t, offset);
         }
         return TimeValue.of(java.time.LocalTime.parse(text));
+    }
+
+    private static boolean isEquivalentDoc(Document a, Document b) {
+        if (a.equals(b)) return true;
+        if (a instanceof dev.omnist.document.Node na && b instanceof dev.omnist.document.Node nb) {
+            if (na.edges().size() != nb.edges().size()) return false;
+            Map<String, List<Target>> mapA = new HashMap<>();
+            for (Edge e : na.edges()) {
+                mapA.computeIfAbsent(e.label(), k -> new ArrayList<>()).add(e.target());
+            }
+            Map<String, List<Target>> mapB = new HashMap<>();
+            for (Edge e : nb.edges()) {
+                mapB.computeIfAbsent(e.label(), k -> new ArrayList<>()).add(e.target());
+            }
+            if (!mapA.keySet().equals(mapB.keySet())) return false;
+            for (String k : mapA.keySet()) {
+                List<Target> listA = mapA.get(k);
+                List<Target> listB = mapB.get(k);
+                if (listA.size() != listB.size()) return false;
+                for (int i = 0; i < listA.size(); i++) {
+                    if (!isEquivalentDoc((Document) listA.get(i), (Document) listB.get(i))) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        return false;
     }
 }

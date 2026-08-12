@@ -115,7 +115,7 @@ public final class YamlCodec {
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String k)) {
-                    throw new RuntimeException(path + ": object key " + entry.getKey() + " is not a string");
+                    throw new RuntimeException(path + ": object key " + entry.getKey() + " is not a string (unlabeled element in key position)");
                 }
                 Object v = entry.getValue();
                 String kp = path.equals("$") ? "$." + k : path + "." + k;
