@@ -222,13 +222,13 @@ public final class TomlCodec {
         }
 
         String preprocessed;
+        TomlParseResult result;
         try {
             preprocessed = preprocessToml(text);
-        } catch (Exception e) {
+            result = Toml.parse(preprocessed);
+        } catch (Exception | AssertionError e) {
             throw new RuntimeException("invalid TOML: " + e.getMessage(), e);
         }
-
-        TomlParseResult result = Toml.parse(preprocessed);
         if (result.hasErrors()) {
             throw new RuntimeException("invalid TOML: " + result.errors().get(0).toString());
         }

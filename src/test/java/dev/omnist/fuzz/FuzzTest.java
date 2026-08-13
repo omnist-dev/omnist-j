@@ -16,7 +16,7 @@ public class FuzzTest {
                 doc.toString();
             }
         } catch (OmlParseException ignored) {
-        } catch (RuntimeException e) {
+        } catch (Exception | AssertionError e) {
             assertNoUnhandledCrash(e);
         }
     }
@@ -27,7 +27,7 @@ public class FuzzTest {
             Limits limits = new Limits(depth, 50, 100);
             OmlReader.read(input, limits);
         } catch (OmlParseException ignored) {
-        } catch (RuntimeException e) {
+        } catch (Exception | AssertionError e) {
             assertNoUnhandledCrash(e);
         }
     }
@@ -40,7 +40,7 @@ public class FuzzTest {
                 OsdWriter.write(schema);
             }
         } catch (OsdParseException ignored) {
-        } catch (RuntimeException e) {
+        } catch (Exception | AssertionError e) {
             assertNoUnhandledCrash(e);
         }
     }
@@ -52,7 +52,7 @@ public class FuzzTest {
             if (doc != null) {
                 doc.toString();
             }
-        } catch (RuntimeException e) {
+        } catch (Exception | AssertionError e) {
             assertNoUnhandledCrash(e);
         }
     }
@@ -64,7 +64,7 @@ public class FuzzTest {
             if (doc != null) {
                 doc.toString();
             }
-        } catch (RuntimeException e) {
+        } catch (Exception | AssertionError e) {
             assertNoUnhandledCrash(e);
         }
     }
@@ -76,7 +76,7 @@ public class FuzzTest {
             if (doc != null) {
                 doc.toString();
             }
-        } catch (RuntimeException e) {
+        } catch (Exception | AssertionError e) {
             assertNoUnhandledCrash(e);
         }
     }
@@ -88,7 +88,7 @@ public class FuzzTest {
             if (doc != null) {
                 doc.toString();
             }
-        } catch (RuntimeException e) {
+        } catch (Exception | AssertionError e) {
             assertNoUnhandledCrash(e);
         }
     }
@@ -122,7 +122,8 @@ public class FuzzTest {
             t instanceof ArrayIndexOutOfBoundsException ||
             t instanceof StringIndexOutOfBoundsException ||
             t instanceof ClassCastException ||
-            t instanceof StackOverflowError) {
+            t instanceof StackOverflowError ||
+            t instanceof AssertionError) {
             throw new AssertionError("Unhandled parser crash: " + t.getClass().getName() + ": " + t.getMessage(), t);
         }
     }
