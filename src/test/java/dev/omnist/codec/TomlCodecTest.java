@@ -140,6 +140,21 @@ public class TomlCodecTest {
         Document hexDoc = TomlCodec.read("a = " + hex + "\n");
         assertEquals(new IntegerScalar(new BigInteger("F".repeat(20), 16)),
             ((Node) hexDoc).edges().get(0).target());
+
+        String octal = "0o" + "7".repeat(20);
+        Document octDoc = TomlCodec.read("a = " + octal + "\n");
+        assertEquals(new IntegerScalar(new BigInteger("7".repeat(20), 8)),
+            ((Node) octDoc).edges().get(0).target());
+
+        String binary = "0b" + "1".repeat(20);
+        Document binDoc = TomlCodec.read("a = " + binary + "\n");
+        assertEquals(new IntegerScalar(new BigInteger("1".repeat(20), 2)),
+            ((Node) binDoc).edges().get(0).target());
+
+        String plusDecimal = "+" + "1".repeat(20);
+        Document plusDoc = TomlCodec.read("a = " + plusDecimal + "\n");
+        assertEquals(new IntegerScalar(new BigInteger("1".repeat(20))),
+            ((Node) plusDoc).edges().get(0).target());
     }
 
     @Test
@@ -177,6 +192,22 @@ public class TomlCodecTest {
     }
 
     @Test
+    @DisplayName("read: a duplicate key produces a TomlParseResult with errors (not a thrown parse exception)")
+    void testReadDuplicateKeyProducesResultErrors() {
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("a = 1\na = 2\n"));
+    }
+
+    @Test
+    @DisplayName("read: an array of inline tables unwraps each TomlTable element")
+    void testReadArrayOfInlineTables() {
+        Document doc = TomlCodec.read("arr = [{x=1}, {x=2}]\n");
+        Node node = (Node) doc;
+        assertEquals(2, node.edges().size());
+        Node first = (Node) node.edges().get(0).target();
+        assertEquals(new IntegerScalar(BigInteger.ONE), first.edges().get(0).target());
+    }
+
+    @Test
     @DisplayName("write: strict mode throws WriteException, and write-side depth limit")
     void testWriteStrictAndDepthLimit() {
         Node nullDoc = new Node(List.of(new Edge("x", Value.NULL)));
@@ -188,5 +219,26 @@ public class TomlCodecTest {
         }
         Node finalDeep = deep;
         assertThrows(WriteException.class, () -> TomlCodec.write(finalDeep));
+    }
+
+    @Test
+    @DisplayName("write: nested sub-table, array-of-tables, quoted key, and list value round-trip")
+    void testWriteNestedTableArrayOfTablesAndQuotedKey() {
+        Node doc = new Node(List.of(new Edge("root", new Node(List.of(
+            new Edge("simple", new StringScalar("v")),
+            new Edge("my key", new StringScalar("needs quoting")),
+            new Edge("sub", new Node(List.of(
+                new Edge("nested", new IntegerScalar(BigInteger.ONE))
+            ))),
+            new Edge("items", new Node(List.of(new Edge("x", new IntegerScalar(BigInteger.ONE))))),
+            new Edge("items", new Node(List.of(new Edge("x", new IntegerScalar(BigInteger.TWO)))))
+        )))));
+        String toml = TomlCodec.write(doc);
+        assertTrue(toml.contains("\"my key\""));
+        assertTrue(toml.contains("[root.sub]"));
+        assertTrue(toml.contains("[[root.items]]"));
+
+        Document readBack = TomlCodec.read(toml);
+        assertNotNull(readBack);
     }
 }

@@ -335,6 +335,12 @@ public final class TomlCodec {
         if (value instanceof OffsetDateTime odt) {
             return new DateTimeScalar(DateTimeValue.of(odt.toLocalDateTime(), odt.getOffset()));
         }
+        // Verified empirically: tomlj's TomlParseResult#toMap() only ever
+        // produces Long for native integers and Double for native floats --
+        // never BigInteger/Integer/Float/BigDecimal. Literals long enough to
+        // need BigInteger are already intercepted by preprocessToml's own
+        // __omnist_int__ string-wrapping above before tomlj ever parses them.
+        // Kept as defensive handling in case tomlj's behavior ever changes.
         if (value instanceof BigInteger bi) {
             return new IntegerScalar(bi);
         }
