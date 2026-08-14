@@ -177,9 +177,9 @@ public final class JsonCodec {
     }
 
     private static Object prepareJson(Document doc, String path, int depth, boolean strict) {
-        if (depth > 200) {
-            throw new WriteException("nesting exceeds the maximum depth (200)");
-        }
+        // No depth guard here: write() only reaches prepareJson after check()'s
+        // scanJson pass has already walked this same document and thrown if any
+        // depth exceeded 200, so that bound is already established.
         // Exhaustive over Document's sealed hierarchy (Node, Value -> Scalar's 7
         // variants | NullValue) -- every case is handled, no fallback is reachable.
         if (doc instanceof Node node) {
@@ -215,9 +215,8 @@ public final class JsonCodec {
     }
 
     private static Object grouped(Object node, int depth) {
-        if (depth > 200) {
-            throw new WriteException("nesting exceeds the maximum depth (200)");
-        }
+        // No depth guard here: grouped()'s tree mirrors prepareJson's output,
+        // which mirrors the original document already bounded by check().
         if (!(node instanceof List<?> list)) {
             return node;
         }

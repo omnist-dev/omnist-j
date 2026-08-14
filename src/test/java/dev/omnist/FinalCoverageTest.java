@@ -1725,4 +1725,23 @@ class FinalCoverageTest {
         assertInstanceOf(dev.omnist.document.Scalar.TimeScalar.class, resultNode.edges().get(1).target());
         assertInstanceOf(dev.omnist.document.Scalar.DateTimeScalar.class, resultNode.edges().get(2).target());
     }
+
+    @Test
+    void allCodecs_writeStillRejectsExcessiveDepth() {
+        // Regression guard: Json/Yaml/TomlCodec's write-side depth checks were
+        // consolidated onto the first function in each pipeline (scanJson/
+        // scanYaml/stripNulls), removing the redundant duplicate checks in
+        // prepareX/grouped that could never fire given that call order. This
+        // asserts the consolidation didn't silently weaken the actual limit --
+        // every codec must still reject a document deep enough to matter.
+        Node deep = new Node(List.of());
+        for (int i = 0; i < 205; i++) {
+            deep = new Node(List.of(new Edge("child", deep)));
+        }
+        Node finalDeep = deep;
+        assertThrows(WriteException.class, () -> JsonCodec.write(finalDeep));
+        assertThrows(WriteException.class, () -> YamlCodec.write(finalDeep));
+        assertThrows(WriteException.class, () -> TomlCodec.write(finalDeep));
+        assertThrows(WriteException.class, () -> XmlCodec.write(finalDeep));
+    }
 }

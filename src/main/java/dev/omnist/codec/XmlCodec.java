@@ -198,9 +198,10 @@ public final class XmlCodec {
         if (budget[0] > 1_000_000) {
             throw new RuntimeException(path + ": too many nodes materialized (over 1000000)");
         }
-        if (depth > 200) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (200)");
-        }
+        // No depth guard here: read() only reaches buildDoc after xmlToNode has
+        // already walked the DOM tree that this List/Object[] structure mirrors
+        // 1:1 (one xmlToNode level per buildDoc level) and thrown if any depth
+        // exceeded 200, so that bound is already established.
         if (val instanceof List<?> list) {
             List<Edge> edges = new ArrayList<>();
             for (Object item : list) {

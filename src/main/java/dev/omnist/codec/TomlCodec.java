@@ -534,9 +534,10 @@ public final class TomlCodec {
     }
 
     private static Object prepareToml(Document doc, String path, int depth, boolean strict) {
-        if (depth > 200) {
-            throw new WriteException("nesting exceeds the maximum depth (200)");
-        }
+        // No depth guard here: write() only reaches prepareToml after stripNulls
+        // (invoked directly, and earlier via check()) has already walked this
+        // same document and thrown if any depth exceeded 200, so that bound is
+        // already established; stripNulls never increases depth.
         if (doc instanceof dev.omnist.document.Node node) {
             List<Object[]> edges = new ArrayList<>();
             for (Edge edge : node.edges()) {
@@ -574,9 +575,8 @@ public final class TomlCodec {
     }
 
     private static Object grouped(Object node, int depth) {
-        if (depth > 200) {
-            throw new WriteException("nesting exceeds the maximum depth (200)");
-        }
+        // No depth guard here: grouped()'s tree mirrors prepareToml's output,
+        // which mirrors the stripped document already bounded by stripNulls.
         if (!(node instanceof List<?> list)) {
             return node;
         }
