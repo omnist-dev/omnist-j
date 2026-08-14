@@ -1380,6 +1380,19 @@ class FinalCoverageTest {
     }
 
     @Test
+    void materializer_unboundedCardinalityViolationMessage() {
+        // f.max() == null -> "unbounded" ternary branch in the diagnostic message
+        Schema schema = OsdReader.read("record R { \"x\" [1,]: integer } root R\n");
+        Node doc = new Node(List.of());
+        try {
+            Materializer.materialize(doc, schema);
+            fail("expected ValidationException");
+        } catch (ValidationException e) {
+            assertTrue(e.getResult().diagnostics().get(0).message().contains("unbounded"));
+        }
+    }
+
+    @Test
     void materializer_inexactConversionFails() {
         // materializeScalar: non-integral Double where INTEGER expected -> ValidationException
         Schema schema = OsdReader.read("record R { \"x\": integer }\nroot R\n");
