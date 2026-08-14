@@ -271,24 +271,25 @@ public final class YamlCodec {
             return edges;
         } else if (doc instanceof Value.NullValue) {
             return null;
-        } else if (doc instanceof Scalar s) {
-            if (s instanceof StringScalar str) {
-                return str.value();
-            } else if (s instanceof BooleanScalar bool) {
-                return bool.value();
-            } else if (s instanceof IntegerScalar integer) {
-                return integer.value();
-            } else if (s instanceof NumberScalar num) {
-                return num.value();
-            } else if (s instanceof DateScalar date) {
-                return date.value();
-            } else if (s instanceof DateTimeScalar dt) {
-                return dt.value();
-            } else if (s instanceof TimeScalar time) {
-                return time.value().format();
-            }
+        } else if (doc instanceof StringScalar str) {
+            return str.value();
+        } else if (doc instanceof BooleanScalar bool) {
+            return bool.value();
+        } else if (doc instanceof IntegerScalar integer) {
+            return integer.value();
+        } else if (doc instanceof NumberScalar num) {
+            return num.value();
+        } else if (doc instanceof DateScalar date) {
+            return date.value();
+        } else if (doc instanceof DateTimeScalar dt) {
+            return dt.value();
+        } else {
+            // Exhaustive over Document's sealed hierarchy (Node, Value ->
+            // Scalar's 7 variants | NullValue) -- TimeScalar is the only
+            // remaining case, no fallback is reachable.
+            TimeScalar time = (TimeScalar) doc;
+            return time.value().format();
         }
-        return null;
     }
 
     private static Object grouped(Object node, int depth) {

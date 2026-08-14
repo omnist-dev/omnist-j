@@ -99,4 +99,62 @@ public class YamlCodecTest {
         Document readBack = YamlCodec.read(out);
         assertEquals(doc, readBack);
     }
+
+    // ==========================================================================
+    // Coverage-gap-driven batch (inputs verified against real SnakeYAML behavior
+    // via a scratch diagnostic before writing assertions)
+    // ==========================================================================
+
+    @Test
+    @DisplayName("read: YAML 1.1-style boolean word (CustomResolver's BOOL implicit pattern)")
+    void testReadYaml11StyleBoolean() {
+        Document doc = YamlCodec.read("a: yes\nb: off\n", null);
+        Node node = (Node) doc;
+        assertEquals(new BooleanScalar(true), node.edges().get(0).target());
+        assertEquals(new BooleanScalar(false), node.edges().get(1).target());
+    }
+
+    @Test
+    @DisplayName("read: non-string mapping key throws")
+    void testReadNonStringKeyThrows() {
+        assertThrows(RuntimeException.class, () -> YamlCodec.read("123: foo\n", null));
+    }
+
+    @Test
+    @DisplayName("read: object depth exceeding 200 throws")
+    void testReadDepthLimitExceeded() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 205; i++) sb.append("a:\n").append("  ".repeat(i + 1));
+        sb.append("1\n");
+        assertThrows(RuntimeException.class, () -> YamlCodec.read(sb.toString(), null));
+    }
+
+    @Test
+    @DisplayName("read: timestamp construction falls through to SnakeYAML's default on invalid custom formats")
+    void testReadTimestampFallsThroughToDefault() {
+        assertThrows(RuntimeException.class, () -> YamlCodec.read("a: !!timestamp \"garbage\"\n", null));
+    }
+
+    @Test
+    @DisplayName("read: datetime-with-space-separator via CustomConstructor's parseDateTimeValue path")
+    void testReadDateTimeWithSpaceSeparator() {
+        Document doc = YamlCodec.read("a: 2024-01-01 10:00:00\n", null);
+        Node node = (Node) doc;
+        assertInstanceOf(DateTimeScalar.class, node.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("write: strict mode throws WriteException, and prepareYaml/scanYaml depth limits")
+    void testWriteStrictAndDepthLimit() {
+        Document tDoc = new Node(List.of(new Edge("t", new TimeScalar(
+            dev.omnist.document.TimeValue.of(LocalTime.of(10, 0), java.time.ZoneOffset.UTC)))));
+        assertThrows(WriteException.class, () -> YamlCodec.write(tDoc, true, null));
+
+        Node deep = new Node(List.of());
+        for (int i = 0; i < 205; i++) {
+            deep = new Node(List.of(new Edge("child", deep)));
+        }
+        Node finalDeep = deep;
+        assertThrows(WriteException.class, () -> YamlCodec.write(finalDeep));
+    }
 }
