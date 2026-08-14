@@ -1,14 +1,22 @@
 package dev.omnist.algebra;
 
+import dev.omnist.algebra.LintFinding;
+import dev.omnist.algebra.SchemaAlgebra;
 import dev.omnist.document.Edge;
 import dev.omnist.document.Node;
 import dev.omnist.document.Scalar;
+import dev.omnist.schema.Field;
 import dev.omnist.schema.OsdReader;
+import dev.omnist.schema.Record;
 import dev.omnist.schema.Schema;
+import dev.omnist.schema.ScalarKind;
+import dev.omnist.schema.Type;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,5 +77,25 @@ class AlgebraCoverageTest {
         assertNotNull(findings);
         assertFalse(findings.isEmpty());
         assertTrue(findings.stream().anyMatch(f -> f.code().equals("lint.unreachable-record")));
+    }
+
+    @Test
+    void testSchemaAlgebraSelfCycleLintsAndPrunes() {
+        // Self-reference cycle should not cause infinite loop in lint() or prune()
+        // Tests dedupe-on-revisit in both reachablePlain() and reachable() methods
+        Map<String, Record> records = new LinkedHashMap<>();
+        records.put("R", new Record("R", List.of(
+            new Field("name", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+            new Field("self", new Type.Ref("R"), 0, 1)  // Optional self-reference
+        )));
+        Schema schema = new Schema("R", records);
+
+        // Both lint and prune should complete without hanging or throwing
+        List<LintFinding> lintFindings = SchemaAlgebra.lint(schema);
+        assertNotNull(lintFindings, "lint() should not throw or hang");
+
+        Schema prunedSchema = SchemaAlgebra.prune(schema);
+        assertNotNull(prunedSchema, "prune() should not throw or hang");
+        assertFalse(prunedSchema.records().isEmpty(), "prune() should preserve the record");
     }
 }
