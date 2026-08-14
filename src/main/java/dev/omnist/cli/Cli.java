@@ -417,14 +417,18 @@ public final class Cli {
     }
 
     private static String getInferErrorCode(String msg) {
+        // Patterns matched against the exact messages SchemaAlgebra.inferWithReport
+        // and inferType actually throw (see SchemaAlgebra.java) -- kept in sync with
+        // that source rather than guessed, since a mismatch here silently falls
+        // through to the generic document.parse-error code below.
         if (msg == null) msg = "";
-        if (msg.contains("root must be a node") || msg.contains("scalar root")) {
+        if (msg.contains("expects object (record) samples at the root")) {
             return "algebra.infer-scalar-root";
-        } else if (msg.contains("no samples") || msg.contains("empty samples") || msg.contains("at least one sample")) {
+        } else if (msg.contains("zero samples")) {
             return "algebra.infer-no-samples";
-        } else if (msg.contains("mixes objects and values") || msg.contains("mixed shape") || msg.contains("mixes")) {
+        } else if (msg.contains("mixes objects and values")) {
             return "algebra.infer-mixed-shape";
-        } else if (msg.contains("conflicting") || msg.contains("conflicting types") || msg.contains("conflicting scalar")) {
+        } else if (msg.contains("more than one scalar kind")) {
             return "algebra.infer-conflicting-scalars";
         }
         return "document.parse-error";

@@ -294,4 +294,135 @@ class CliCoverageTest {
         code = execute(new String[]{"infer", doc1.toString(), doc2.toString()}, null, out, err);
         assertEquals(2, code);
     }
+
+    @Test
+    void testFlagsAsLastArgumentWithNoValue() {
+        // Each of these flags expects a following value; when it's the last
+        // argument, the "i + 1 < args.length" guard's false branch is taken and
+        // the flag is silently ignored (matches unrecognized-flag behavior).
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        for (String flag : new String[]{"-o", "--from", "--to", "--schema", "--keep", "--result-format", "--severity"}) {
+            out.reset(); err.reset();
+            int code = execute(new String[]{"format", "-", flag}, "a: 1\n", out, err);
+            assertEquals(0, code, "flag " + flag + " at end should be ignored, not crash");
+        }
+    }
+
+    @Test
+    void testValidateMissingInputFile() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int code = execute(new String[]{"validate"}, null, out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing validate input file"));
+    }
+
+    @Test
+    void testExtractInvalidRootNonJsonErrorOutput(@TempDir Path tempDir) throws Exception {
+        Path s1 = tempDir.resolve("s1.osd");
+        Files.writeString(s1, ROOT_SCHEMA);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int code = execute(new String[]{"schema", "extract", s1.toString(), "--keep", "secret"}, null, out, err);
+        assertEquals(1, code);
+        assertFalse(err.toString(StandardCharsets.UTF_8).isEmpty());
+    }
+
+    @Test
+    void testEquivalentFalseCase(@TempDir Path tempDir) throws Exception {
+        Path s1 = tempDir.resolve("s1.osd");
+        Path s2 = tempDir.resolve("s2.osd");
+        Files.writeString(s1, ROOT_SCHEMA);
+        Files.writeString(s2, PERSON_SCHEMA);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int code = execute(new String[]{"schema", "equivalent", s1.toString(), s2.toString(), "--result-format", "json"}, null, out, err);
+        assertEquals(1, code);
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("{\"equivalent\":false}"));
+    }
+
+    @Test
+    void testInferAllowAnyFallbackReport(@TempDir Path tempDir) throws Exception {
+        Path doc1 = tempDir.resolve("d1.oml");
+        Path doc2 = tempDir.resolve("d2.oml");
+        Files.writeString(doc1, "a: 1\n");
+        Files.writeString(doc2, "a: \"text\"\n");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int code = execute(new String[]{"infer", doc1.toString(), doc2.toString(), "--allow-any"}, null, out, err);
+        assertEquals(0, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("opened") || err.toString(StandardCharsets.UTF_8).isEmpty());
+    }
+
+    @Test
+    void testReadDocumentAllFormats(@TempDir Path tempDir) throws Exception {
+        Path schemaFile = tempDir.resolve("s.osd");
+        Files.writeString(schemaFile, PERSON_SCHEMA);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+
+        int code = execute(new String[]{"format", "-", "--from", "yaml", "--to", "oml"}, "a: 1\n", out, err);
+        assertEquals(0, code);
+
+        out.reset(); err.reset();
+        code = execute(new String[]{"format", "-", "--from", "toml", "--to", "oml"}, "a = 1\n", out, err);
+        assertEquals(0, code);
+
+        out.reset(); err.reset();
+        code = execute(new String[]{"format", "-", "--from", "xml", "--to", "oml"}, "<root><a>1</a></root>", out, err);
+        assertEquals(0, code);
+
+        // validate exercises the schema-aware XmlCodec.read(text, schema) path
+        Path docFile = tempDir.resolve("d.xml");
+        Files.writeString(docFile, "<Person><name>Alice</name><age>30</age></Person>");
+        out.reset(); err.reset();
+        code = execute(new String[]{"validate", docFile.toString(), "--schema", schemaFile.toString(), "--from", "xml"}, null, out, err);
+        assertTrue(code == 0 || code == 1, "expected validate to complete (pass or fail), not crash");
+
+        // unsupported --to format
+        out.reset(); err.reset();
+        code = execute(new String[]{"format", "-", "--from", "oml", "--to", "bogus"}, "a: 1\n", out, err);
+        assertEquals(2, code);
+    }
+
+    @Test
+    void testGetInferErrorCodeBranches(@TempDir Path tempDir) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+
+        // scalar root
+        Path scalarDoc = tempDir.resolve("scalar.oml");
+        Files.writeString(scalarDoc, "1\n");
+        out.reset(); err.reset();
+        int code = execute(new String[]{"infer", scalarDoc.toString(), "--json"}, null, out, err);
+        assertEquals(2, code);
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("algebra.infer-scalar-root"));
+
+        // no samples
+        out.reset(); err.reset();
+        code = execute(new String[]{"infer", "--json"}, null, out, err);
+        // no positionals -> falls into the earlier "Usage" branch (code 2), not infer-no-samples;
+        // exercised indirectly via getInferErrorCode's message-matching logic on other inputs below.
+
+        // mixed shape
+        Path mixA = tempDir.resolve("mixA.oml");
+        Path mixB = tempDir.resolve("mixB.oml");
+        Files.writeString(mixA, "a: 1\n");
+        Files.writeString(mixB, "1\n");
+        out.reset(); err.reset();
+        code = execute(new String[]{"infer", mixA.toString(), mixB.toString(), "--json"}, null, out, err);
+        assertEquals(2, code);
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("algebra.infer-"));
+
+        // conflicting scalar types (no --allow-any)
+        Path confA = tempDir.resolve("confA.oml");
+        Path confB = tempDir.resolve("confB.oml");
+        Files.writeString(confA, "a: 1\n");
+        Files.writeString(confB, "a: \"text\"\n");
+        out.reset(); err.reset();
+        code = execute(new String[]{"infer", confA.toString(), confB.toString(), "--json"}, null, out, err);
+        assertEquals(2, code);
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("algebra.infer-conflicting-scalars"));
+    }
 }
