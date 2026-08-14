@@ -25,11 +25,6 @@ public final class Cli {
 
     private Cli() {}
 
-    public static void main(String[] args) {
-        int code = run(args, System.out, System.err, System.in);
-        System.exit(code);
-    }
-
     public static int run(String[] args, PrintStream out, PrintStream err, InputStream in) {
         try {
             List<String> positionals = new ArrayList<>();

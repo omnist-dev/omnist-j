@@ -83,9 +83,14 @@
                                 omnist-spec's 181 live test-suite vectors, not exhaustive unit
                                 coverage — identical justification to omnist-go CI's exclusion
                                 of tools/conformance/ from its own 100% bar.
+
+                                CliMain is excluded because it is a one-line process entry point
+                                (System.exit after delegating to Cli.run, which itself carries
+                                all real logic and is fully covered/tested).
                             -->
                             <excludes>
                                 <exclude>dev/omnist/conformance/**</exclude>
+                                <exclude>dev/omnist/cli/CliMain.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -99,9 +104,12 @@
                             <!--
                                 dev.omnist.conformance excluded: verified by live harness
                                 (181/0/0), not unit tests — see omnist-go tools/conformance/.
+                                CliMain excluded: one-line System.exit entry point, all real
+                                logic lives in the fully-covered Cli.run.
                             -->
                             <excludes>
                                 <exclude>dev/omnist/conformance/**</exclude>
+                                <exclude>dev/omnist/cli/CliMain.class</exclude>
                             </excludes>
                             <rules>
                                 <rule>
@@ -144,7 +152,7 @@
                         <configuration>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>dev.omnist.cli.Cli</mainClass>
+                                    <mainClass>dev.omnist.cli.CliMain</mainClass>
                                 </transformer>
                             </transformers>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
