@@ -306,7 +306,9 @@ public final class Cli {
 
                 try {
                     InferResult res = SchemaAlgebra.inferWithReport(samples, "R", allowAny);
-                    if (allowAny && res.fallbacks() != null && !res.fallbacks().isEmpty()) {
+                    // res.fallbacks() is always non-null (inferWithReport builds it via
+                    // List.copyOf), so only allowAny and emptiness are real conditions.
+                    if (allowAny && !res.fallbacks().isEmpty()) {
                         err.println("opened " + res.fallbacks().size() + " field(s) as `any`:");
                         for (AnyFallback fb : res.fallbacks()) {
                             err.println("  " + fb.location() + " — " + fb.reason());
@@ -416,7 +418,12 @@ public final class Cli {
         }
     }
 
-    private static String getInferErrorCode(String msg) {
+    // Package-private (not private): the "zero samples" mapping is
+    // unreachable through Cli.run itself -- the infer command's own
+    // positionals.size() < 2 check guarantees at least one sample before
+    // SchemaAlgebra.inferWithReport is ever called -- so it needs a direct
+    // unit test rather than a CLI-driven one.
+    static String getInferErrorCode(String msg) {
         // Patterns matched against the exact messages SchemaAlgebra.inferWithReport
         // and inferType actually throw (see SchemaAlgebra.java) -- kept in sync with
         // that source rather than guessed, since a mismatch here silently falls

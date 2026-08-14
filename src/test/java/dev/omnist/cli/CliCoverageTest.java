@@ -176,6 +176,13 @@ class CliCoverageTest {
         int code = execute(new String[]{"schema"}, null, out, err);
         assertEquals(2, code);
 
+        // unknown schema subcommand: falls through every equals() check
+        // (including lint's, exercising its false branch) with no dedicated
+        // "unknown subcommand" handling -- ends up at the outer "Unknown command" fallback.
+        out.reset(); err.reset();
+        code = execute(new String[]{"schema", "bogus-subcommand", s1.toString()}, null, out, err);
+        assertEquals(2, code);
+
         // normalize missing file
         out.reset(); err.reset();
         code = execute(new String[]{"schema", "normalize"}, null, out, err);
@@ -243,6 +250,12 @@ class CliCoverageTest {
         assertEquals(1, code, "s1 is not empty");
         assertTrue(out.toString(StandardCharsets.UTF_8).contains("{\"empty\":false}"));
 
+        // is-empty without --result-format json: no JSON body printed, only exit code
+        out.reset(); err.reset();
+        code = execute(new String[]{"schema", "is-empty", s1.toString()}, null, out, err);
+        assertEquals(1, code);
+        assertFalse(out.toString(StandardCharsets.UTF_8).contains("{\"empty\""));
+
         // compatible-with
         out.reset(); err.reset();
         code = execute(new String[]{"schema", "compatible-with", s1.toString(), s2.toString(), "--result-format", "json"}, null, out, err);
@@ -265,6 +278,14 @@ class CliCoverageTest {
         out.reset(); err.reset();
         code = execute(new String[]{"schema", "lint", sUnreachable.toString()}, null, out, err);
         assertEquals(1, code);
+
+        // lint: a schema whose only finding is "info" severity (any-typed field)
+        // keeps ok == true, exercising the severity.equals("warning") false branch.
+        Path sAnyOnly = tempDir.resolve("sany.osd");
+        Files.writeString(sAnyOnly, "record R { \"x\": any } root R\n");
+        out.reset(); err.reset();
+        code = execute(new String[]{"schema", "lint", sAnyOnly.toString()}, null, out, err);
+        assertEquals(0, code, "an info-only lint result should not fail the command");
     }
 
     @Test
@@ -352,7 +373,18 @@ class CliCoverageTest {
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         int code = execute(new String[]{"infer", doc1.toString(), doc2.toString(), "--allow-any"}, null, out, err);
         assertEquals(0, code);
-        assertTrue(err.toString(StandardCharsets.UTF_8).contains("opened") || err.toString(StandardCharsets.UTF_8).isEmpty());
+        // Verified via a scratch diagnostic that this exact conflicting-scalar
+        // pair does populate fallbacks with --allow-any, hitting the reporting branch.
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("opened 1 field(s) as `any`"));
+
+        // --allow-any with no actual conflicts: fallbacks is empty, so the
+        // reporting branch's other half (allowAny true, isEmpty true) is exercised.
+        Path doc3 = tempDir.resolve("d3.oml");
+        Files.writeString(doc3, "a: 1\n");
+        out.reset(); err.reset();
+        code = execute(new String[]{"infer", doc3.toString(), "--allow-any"}, null, out, err);
+        assertEquals(0, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).isEmpty());
     }
 
     @Test
@@ -363,6 +395,11 @@ class CliCoverageTest {
         ByteArrayOutputStream err = new ByteArrayOutputStream();
 
         int code = execute(new String[]{"format", "-", "--from", "yaml", "--to", "oml"}, "a: 1\n", out, err);
+        assertEquals(0, code);
+
+        // --to oml with --compact: exercises writeDocument's compact ternary branch
+        out.reset(); err.reset();
+        code = execute(new String[]{"format", "-", "--from", "yaml", "--to", "oml", "--compact"}, "a: 1\n", out, err);
         assertEquals(0, code);
 
         out.reset(); err.reset();
@@ -424,5 +461,25 @@ class CliCoverageTest {
         code = execute(new String[]{"infer", confA.toString(), confB.toString(), "--json"}, null, out, err);
         assertEquals(2, code);
         assertTrue(out.toString(StandardCharsets.UTF_8).contains("algebra.infer-conflicting-scalars"));
+    }
+
+    @Test
+    void testGetInferErrorCodeDirect() {
+        // Tested directly against the exact real messages SchemaAlgebra throws
+        // (see SchemaAlgebra.java) rather than through CLI-triggered exceptions:
+        // "zero samples" is unreachable through Cli.run itself (the infer
+        // command's own arg-count check guarantees >=1 sample), and pinning the
+        // exact message per branch is more reliable than a generic CLI-output
+        // substring match, which can pass without confirming the right branch.
+        assertEquals("algebra.infer-scalar-root",
+            Cli.getInferErrorCode("infer expects object (record) samples at the root"));
+        assertEquals("algebra.infer-no-samples",
+            Cli.getInferErrorCode("cannot infer a schema from zero samples"));
+        assertEquals("algebra.infer-mixed-shape",
+            Cli.getInferErrorCode("Root.x: mixes objects and values; cannot infer one type"));
+        assertEquals("algebra.infer-conflicting-scalars",
+            Cli.getInferErrorCode("Root.x: has values of more than one scalar kind (integer, string)"));
+        assertEquals("document.parse-error", Cli.getInferErrorCode(null));
+        assertEquals("document.parse-error", Cli.getInferErrorCode("some unrelated message"));
     }
 }
