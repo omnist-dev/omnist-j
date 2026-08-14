@@ -48,6 +48,7 @@ public final class JsonCodec {
         if (val instanceof Map<?, ?> map) {
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
+                // Defensive: Invalid JSON (non-string keys) should never occur with ObjectMapper#readValue
                 if (!(entry.getKey() instanceof String k)) {
                     throw new RuntimeException(path + ": object key " + entry.getKey() + " is not a string");
                 }

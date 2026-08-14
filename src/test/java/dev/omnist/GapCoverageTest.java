@@ -649,4 +649,70 @@ class GapCoverageTest {
         Node doc = new Node(List.of(new Edge("s", Value.NULL)));
         assertThrows(ValidationException.class, () -> Materializer.materialize(doc, schema));
     }
+
+    @Test
+    void omlLexer_multilineStringBareNewlineFirstLine() {
+        // parseMultilineString: bare \n (no \r) consumed immediately after opening """
+        String oml = "a: \"\"\"\nhello\nworld\"\"\"";
+        Document doc = OmlReader.read(oml);
+        Node node = (Node) doc;
+        Edge edge = node.edges().get(0);
+        StringScalar scalar = (StringScalar) edge.target();
+        // Leading newline should be stripped: content starts with "hello"
+        assertTrue(scalar.value().startsWith("hello"), "Leading newline should be stripped, got: " + scalar.value());
+    }
+
+    @Test
+    void omlLexer_surrogateEmojiValue() {
+        // Validate surrogate-pair emoji decodes to correct Unicode value
+        Document doc = OmlReader.read("a: \"😀\"");
+        Node node = (Node) doc;
+        Edge edge = node.edges().get(0);
+        StringScalar scalar = (StringScalar) edge.target();
+        assertEquals("😀", scalar.value(), "Emoji should decode to actual character");
+    }
+
+
+    @Test
+    void materializer_invalidDateFormat() {
+        // Materializer should produce materialize.inexact-conversion diagnostic for invalid date
+        // "2024-13-45" matches date shape pattern but fails LocalDate.parse()
+        Schema schema = OsdReader.read("record R { \"d\": date }\nroot R\n");
+        Node doc = new Node(List.of(new Edge("d", new StringScalar("2024-13-45"))));
+        assertThrows(ValidationException.class, () -> Materializer.materialize(doc, schema));
+    }
+
+    @Test
+    void omlLexer_multilineStringCrlfNewlineFirstLine() {
+        // parseMultilineString: \r\n (not just bare \n) consumed immediately after opening """
+        Document doc = OmlReader.read("a: \"\"\"\r\nhello\r\nworld\"\"\"");
+        Node node = (Node) doc;
+        StringScalar scalar = (StringScalar) node.edges().get(0).target();
+        assertTrue(scalar.value().startsWith("hello"), "Leading CRLF should be stripped, got: " + scalar.value());
+    }
+
+    @Test
+    void omlReader_nestedArrayRejected() {
+        // parseArrayElements: an array element that is itself LBRACKET-started is rejected
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: [[1]]\n"));
+    }
+
+    @Test
+    void omlReader_trailingCommaAfterBracedArrayElement() {
+        // parseArrayElements: comma immediately followed by RBRACKET closes the array
+        Document doc = OmlReader.read("a: [{ x: 1 },]\n");
+        Node node = (Node) doc;
+        Node arrayElem = (Node) node.edges().get(0).target();
+        assertEquals(new IntegerScalar(java.math.BigInteger.ONE), arrayElem.edges().get(0).target());
+    }
+
+    @Test
+    void materializer_timeWithColonInOffset() {
+        // parseTimeValue: sign appears after a ':' in the offset portion (10:00:00+05:30)
+        Schema schema = OsdReader.read("record R { \"t\": time }\nroot R\n");
+        Node doc = new Node(List.of(new Edge("t", new StringScalar("10:00:00+05:30"))));
+        Document result = Materializer.materialize(doc, schema);
+        Node resultNode = (Node) result;
+        assertInstanceOf(dev.omnist.document.Scalar.TimeScalar.class, resultNode.edges().get(0).target());
+    }
 }

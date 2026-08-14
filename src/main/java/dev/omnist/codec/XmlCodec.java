@@ -55,6 +55,7 @@ public final class XmlCodec {
             InputSource is = new InputSource(new StringReader(text));
             org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(is);
             rootElem = domDoc.getDocumentElement();
+            // Defensive: getDocumentElement() rarely returns null for valid XML documents
             if (rootElem == null) {
                 throw new RuntimeException("no document element found");
             }
