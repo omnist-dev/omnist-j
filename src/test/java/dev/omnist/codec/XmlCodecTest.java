@@ -190,6 +190,34 @@ public class XmlCodecTest {
     }
 
     @Test
+    @DisplayName("read: pretype false-boolean match and an unschema'd extra field")
+    void testReadPretypeFalseBooleanAndExtraField() {
+        Schema schema = OsdReader.read("record Root { \"flag\": boolean } root Root\n");
+        Document doc = XmlCodec.read(
+            "<root><flag>false</flag><extra>unschema'd</extra></root>", schema);
+        Node root = (Node) doc;
+        Node node = (Node) root.edges().get(0).target();
+        assertEquals(new BooleanScalar(false), node.edges().get(0).target());
+        // "extra" has no matching field on Root -- passes through unpretyped
+        assertEquals(new StringScalar("unschema'd"), node.edges().get(1).target());
+    }
+
+    @Test
+    @DisplayName("read: a Ref field pointing at an undefined record resolves to null, falling through unpretyped")
+    void testReadPretypeRefToUndefinedRecord() {
+        // Bypasses OsdReader's own root-reference validation to construct a
+        // schema with a dangling Ref, exercising resolveType's null-lookup path.
+        dev.omnist.schema.Record root = new dev.omnist.schema.Record("Root", List.of(
+            new dev.omnist.schema.Field("other", new dev.omnist.schema.Type.Ref("MissingTarget"), 0, 1)
+        ));
+        Schema schema = new Schema("Root", java.util.Map.of("Root", root));
+        Document doc = XmlCodec.read("<root><other>text</other></root>", schema);
+        Node rootNode = (Node) doc;
+        Node node = (Node) rootNode.edges().get(0).target();
+        assertEquals(new StringScalar("text"), node.edges().get(0).target());
+    }
+
+    @Test
     @DisplayName("write: root must have exactly one top-level edge")
     void testWriteRequiresSingleRootEdge() {
         Node multiRoot = new Node(List.of(
