@@ -6,7 +6,9 @@ import java.util.Map;
  * OSD (Omnist Schema Definition) Canonical Writer (omnist-spec §5.9).
  * Serializes a {@link Schema} into canonical OSD text format.
  */
-public class OsdWriter {
+public final class OsdWriter {
+
+    private OsdWriter() {}
 
     public static String write(Schema schema) {
         StringBuilder sb = new StringBuilder();

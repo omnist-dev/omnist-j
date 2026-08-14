@@ -27,11 +27,9 @@ public class Validator {
             return new ValidationResult(false, List.copyOf(diagnostics));
         }
 
-        if (document instanceof Target target) {
-            conformTarget(target, schema, schema.root(), "$", diagnostics);
-        } else {
-            diagnostics.add(new ValidationDiagnostic("$", "validate.shape-mismatch", "expected an object, got a value"));
-        }
+        // Document and Target are sealed to the identical permit set (Node, Value),
+        // so every Document is exhaustively a Target -- no reachable fallback case.
+        conformTarget((Target) document, schema, schema.root(), "$", diagnostics);
 
         return new ValidationResult(diagnostics.isEmpty(), List.copyOf(diagnostics));
     }
@@ -100,20 +98,20 @@ public class Validator {
                 return;
             }
 
-            if (target == Value.NULL || target == null) {
+            if (target instanceof Value.NullValue || target == null) {
                 if (!scalar.nullable()) {
                     diagnostics.add(new ValidationDiagnostic(path, "validate.null-not-allowed", "null not allowed here"));
                 }
                 return;
             }
 
-            if (target instanceof Scalar valScalar) {
-                if (!matchesKind(valScalar.kind(), scalar.kind())) {
-                    diagnostics.add(new ValidationDiagnostic(path, "validate.type-mismatch",
-                            "value kind " + valScalar.kind() + " does not match declared kind " + scalar.kind()));
-                }
-            } else {
-                diagnostics.add(new ValidationDiagnostic(path, "validate.shape-mismatch", "expected a scalar value"));
+            // target is not a Node (checked above) and not a NullValue (checked above);
+            // Value is sealed to permit only Scalar and NullValue, so target is
+            // exhaustively a Scalar here -- no reachable fallback case remains.
+            Scalar valScalar = (Scalar) target;
+            if (!matchesKind(valScalar.kind(), scalar.kind())) {
+                diagnostics.add(new ValidationDiagnostic(path, "validate.type-mismatch",
+                        "value kind " + valScalar.kind() + " does not match declared kind " + scalar.kind()));
             }
         } else if (type instanceof Type.Ref ref) {
             conformTarget(target, schema, ref.name(), path, diagnostics);

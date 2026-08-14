@@ -1450,4 +1450,52 @@ class FinalCoverageTest {
         Node doc = new Node(List.of(new Edge("dt", new StringScalar("not-a-datetime"))));
         assertThrows(ValidationException.class, () -> Materializer.materialize(doc, schema));
     }
+
+    // ==========================================================================
+    // Batch 2: Validator, OsdLexer, OsdWriter
+    // ==========================================================================
+
+    @Test
+    void validator_rootRecordNotDefinedInSchema() {
+        // validate(): schema.root() names a record that isn't in schema.records()
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Other", new dev.omnist.schema.Record("Other", List.of()));
+        Schema schema = new Schema("Missing", records);
+        Document doc = new Node(List.of());
+        ValidationResult result = dev.omnist.validation.Validator.validate(doc, schema);
+        assertFalse(result.isValid());
+        assertEquals("validate.shape-mismatch", result.diagnostics().get(0).code());
+    }
+
+    @Test
+    void osdLexer_unterminatedEscapeInString() {
+        // parseOsdString: backslash as the last character before EOF
+        assertThrows(dev.omnist.schema.OsdParseException.class,
+            () -> OsdReader.read("record R { \"a\\"));
+    }
+
+    @Test
+    void osdWriter_compactWithZeroFieldRecord() {
+        // writeRecordCompact: record.fields().isEmpty() -- no trailing space appended
+        dev.omnist.schema.Record r = new dev.omnist.schema.Record("Empty", List.of());
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Empty", r);
+        Schema schema = new Schema("Empty", records);
+        String compact = OsdWriter.writeCompact(schema);
+        assertTrue(compact.contains("record Empty {}"));
+    }
+
+    @Test
+    void osdWriter_quotedLabelWithEscapedCharacters() {
+        // writeQuotedString: label containing a literal quote and backslash
+        Field f = new Field("a\"b\\c", new Type.Scalar(dev.omnist.schema.ScalarKind.STRING, false), 1, 1);
+        dev.omnist.schema.Record r = new dev.omnist.schema.Record("R", List.of(f));
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("R", r);
+        Schema schema = new Schema("R", records);
+        String written = OsdWriter.write(schema);
+        assertTrue(written.contains("\\\"") && written.contains("\\\\"));
+        Schema roundTrip = OsdReader.read(written);
+        assertEquals(schema, roundTrip);
+    }
 }
