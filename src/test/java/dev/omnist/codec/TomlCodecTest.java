@@ -95,4 +95,90 @@ public class TomlCodecTest {
         assertEquals(1, report.adjustments().size());
         assertEquals("format.null-unrepresentable", report.adjustments().get(0).code());
     }
+
+    // ==========================================================================
+    // Coverage-gap-driven batch (inputs verified against real TomlCodec/tomlj
+    // behavior via a scratch diagnostic before writing assertions)
+    // ==========================================================================
+
+    @Test
+    @DisplayName("read: unterminated triple-quoted strings hit EOF before the closing delimiter")
+    void testReadUnterminatedTripleQuotedStrings() {
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("a = \"\"\"unterminated\n"));
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("a = '''unterminated\n"));
+    }
+
+    @Test
+    @DisplayName("read: raw triple-single-quoted string does not process backslash escapes")
+    void testReadRawTripleSingleQuotedString() {
+        Document doc = TomlCodec.read("a = '''raw\\nstring'''\n");
+        Node node = (Node) doc;
+        assertEquals(new StringScalar("raw\\nstring"), node.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("read: integer literal exceeding 18 digits routes through the __omnist_int__ string-wrapping path")
+    void testReadLongIntegerLiteral() {
+        String longDigits = "1".repeat(25);
+        Document doc = TomlCodec.read("a = " + longDigits + "\n");
+        Node node = (Node) doc;
+        assertEquals(new IntegerScalar(new BigInteger(longDigits)), node.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("read: long hex/octal/binary literals route through __omnist_int__ with the correct radix")
+    void testReadLongRadixIntegerLiterals() {
+        String hex = "0x" + "F".repeat(20);
+        Document hexDoc = TomlCodec.read("a = " + hex + "\n");
+        assertEquals(new IntegerScalar(new BigInteger("F".repeat(20), 16)),
+            ((Node) hexDoc).edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("read: invalid hex/octal/binary tokens (isHex/isOctal/isBinary false) fail parsing")
+    void testReadInvalidRadixTokens() {
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("a = 0x1G\n"));
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("a = 0o18\n"));
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("a = 0b12\n"));
+    }
+
+    @Test
+    @DisplayName("read: integer exceeding the 4300-digit safety limit throws")
+    void testReadIntegerDigitLimitExceeded() {
+        String tooLong = "1".repeat(4301);
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("a = " + tooLong + "\n"));
+    }
+
+    @Test
+    @DisplayName("read: object depth exceeding 200 throws")
+    void testReadDepthLimitExceeded() {
+        StringBuilder header = new StringBuilder();
+        for (int i = 1; i <= 205; i++) {
+            if (i > 1) header.append(".");
+            header.append("t").append(i);
+        }
+        String toml = "[" + header + "]\nx = 1\n";
+        assertThrows(RuntimeException.class, () -> TomlCodec.read(toml));
+    }
+
+    @Test
+    @DisplayName("check(): a non-Node document returns an empty report without throwing")
+    void testCheckNonNodeDocument() {
+        WriteReport rep = TomlCodec.check(new StringScalar("bare"));
+        assertTrue(rep.adjustments().isEmpty());
+    }
+
+    @Test
+    @DisplayName("write: strict mode throws WriteException, and write-side depth limit")
+    void testWriteStrictAndDepthLimit() {
+        Node nullDoc = new Node(List.of(new Edge("x", Value.NULL)));
+        assertThrows(WriteException.class, () -> TomlCodec.write(nullDoc, true, null));
+
+        Node deep = new Node(List.of());
+        for (int i = 0; i < 205; i++) {
+            deep = new Node(List.of(new Edge("child", deep)));
+        }
+        Node finalDeep = deep;
+        assertThrows(WriteException.class, () -> TomlCodec.write(finalDeep));
+    }
 }
