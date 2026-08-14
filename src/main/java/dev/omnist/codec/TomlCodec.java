@@ -234,6 +234,11 @@ public final class TomlCodec {
         }
 
         Map<String, Object> raw = result.toMap();
+        // Not observed to be reachable: tomlj's TomlTable#toMap() (which
+        // TomlParseResult extends) is declared to return Map<String, Object>
+        // with no Optional/nullable contract in its own API, and no malformed-
+        // but-still-non-error-result input has been found that returns null.
+        // Kept as defensive handling against a library-contract violation.
         if (raw == null) {
             throw new RuntimeException("invalid TOML: no document found");
         }

@@ -271,6 +271,11 @@ public class OmlReader {
     }
 
     private Token peekToken() {
+        // The fallback branch is not known to be reachable: OmlLexer.tokenizeAll()
+        // always appends a real terminal EOF token, so index only reaches
+        // tokens.size() if something calls consumeToken() one extra time after
+        // already consuming that real EOF token -- no malformed-input probe this
+        // session triggered that call pattern. Kept as a defensive bounds guard.
         if (index < tokens.size()) {
             return tokens.get(index);
         }

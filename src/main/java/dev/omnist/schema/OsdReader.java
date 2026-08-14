@@ -213,6 +213,12 @@ public class OsdReader {
     }
 
     private Token peekToken() {
+        // The fallback branch is not known to be reachable: OsdLexer's own
+        // tokenizer always appends a real terminal EOF token, so index only
+        // reaches tokens.size() if something calls consumeToken() one extra
+        // time after already consuming that real EOF token -- no malformed-
+        // schema probe this session triggered that call pattern. Kept as a
+        // defensive bounds guard (same reasoning as OmlReader's identical case).
         if (index < tokens.size()) {
             return tokens.get(index);
         }
