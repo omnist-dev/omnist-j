@@ -109,4 +109,28 @@ class OmlWriterTest {
         Document readBack = OmlReader.read(written);
         assertEquals(doc, readBack, "String escape round-trip failed");
     }
+
+    @Test
+    @DisplayName("A label with characters outside IDENT_PATTERN (not just a reserved word) writes quoted")
+    void testNonIdentLabelWritesQuoted() {
+        Node doc = new Node(List.of(new Edge("has space", new Scalar.IntegerScalar(BigInteger.ONE))));
+        String written = OmlWriter.write(doc);
+        assertTrue(written.contains("\"has space\": 1"));
+        assertEquals(doc, OmlReader.read(written));
+    }
+
+    @Test
+    @DisplayName("An empty nested node writes as {} at any nesting depth (writeCompact and canonical write)")
+    void testEmptyNestedNodeAtDepth() {
+        Document doc = new Node(List.of(
+            new Edge("a", new Node(List.of(new Edge("empty", new Node(List.of())))))
+        ));
+        String compact = OmlWriter.writeCompact(doc);
+        assertTrue(compact.contains("empty: {}"));
+        assertEquals(doc, OmlReader.read(compact));
+
+        String canonical = OmlWriter.write(doc);
+        assertTrue(canonical.contains("{}"));
+        assertEquals(doc, OmlReader.read(canonical));
+    }
 }

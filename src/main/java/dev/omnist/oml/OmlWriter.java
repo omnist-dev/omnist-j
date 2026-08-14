@@ -63,8 +63,10 @@ public class OmlWriter {
                     }
                     sb.append("}");
                 }
-            } else if (target instanceof Value val) {
-                writeScalarOrNull(sb, val);
+            } else {
+                // Target is sealed to {Node, Value}; Node is handled above, so
+                // target is exhaustively a Value here.
+                writeScalarOrNull(sb, (Value) target);
             }
             first = false;
         }
@@ -92,8 +94,10 @@ public class OmlWriter {
                     appendIndent(sb, indentLevel);
                     sb.append("}");
                 }
-            } else if (target instanceof Value val) {
-                writeScalarOrNull(sb, val);
+            } else {
+                // Target is sealed to {Node, Value}; Node is handled above, so
+                // target is exhaustively a Value here.
+                writeScalarOrNull(sb, (Value) target);
             }
             first = false;
         }
@@ -119,7 +123,9 @@ public class OmlWriter {
     }
 
     private static boolean isBareLabelLegal(String label) {
-        if (label == null || label.isEmpty()) return false;
+        // label is never Java null (Edge's constructor enforces a non-null
+        // label) and IDENT_PATTERN already requires at least one character,
+        // so an explicit empty-string check would be redundant.
         if (!IDENT_PATTERN.matcher(label).matches()) return false;
         return switch (label) {
             case "null", "true", "false", "nan", "inf" -> false;
@@ -128,11 +134,17 @@ public class OmlWriter {
     }
 
     private static void writeScalarOrNull(StringBuilder sb, Value value) {
-        if (value == null || value == Value.NULL) {
+        // value is never Java null (every caller passes a Value obtained from an
+        // `instanceof Value val` pattern match). Value is sealed to {Scalar,
+        // NullValue}, so this switch is exhaustive -- no reachable fallback exists.
+        if (value instanceof Value.NullValue) {
             sb.append("null");
             return;
         }
-        if (value instanceof Scalar scalar) {
+        {
+            // value is not NullValue (checked above); Value is sealed to
+            // {Scalar, NullValue}, so value is exhaustively a Scalar here.
+            Scalar scalar = (Scalar) value;
             if (scalar instanceof Scalar.StringScalar str) {
                 writeQuotedString(sb, str.value());
             } else if (scalar instanceof Scalar.IntegerScalar intVal) {
@@ -162,7 +174,10 @@ public class OmlWriter {
                         sb.append(tv.offset().getId());
                     }
                 }
-            } else if (scalar instanceof Scalar.DateTimeScalar dtScalar) {
+            } else {
+                // Scalar is sealed to 7 variants; the other 6 are handled above,
+                // so DateTimeScalar is the only remaining case.
+                Scalar.DateTimeScalar dtScalar = (Scalar.DateTimeScalar) scalar;
                 DateTimeValue dtv = dtScalar.value();
                 sb.append(dtv.dateTime().toString());
                 if (dtv.offset() != null) {
