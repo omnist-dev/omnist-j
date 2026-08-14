@@ -12,6 +12,8 @@ import java.util.*;
  */
 public class Validator {
 
+    private Validator() {}
+
     /**
      * Validates a Document against a Schema.
      * Collects all validation diagnostics across the document tree into {@link ValidationResult}.

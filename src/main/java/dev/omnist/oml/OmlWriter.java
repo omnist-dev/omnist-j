@@ -11,6 +11,8 @@ import java.util.regex.Pattern;
  */
 public class OmlWriter {
 
+    private OmlWriter() {}
+
     private static final Pattern IDENT_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
 
     public static String write(Document doc) {
@@ -31,6 +33,8 @@ public class OmlWriter {
         } else if (doc instanceof Value val) {
             writeScalarOrNull(sb, val);
         } else {
+            // UNREACHABLE: Document is a sealed interface with exactly Node and Value as subtypes;
+            // this branch cannot be reached without illegal bytecode manipulation.
             throw new IllegalArgumentException("Unknown document type: " + doc);
         }
     }

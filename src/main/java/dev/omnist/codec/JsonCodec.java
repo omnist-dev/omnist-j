@@ -107,6 +107,8 @@ public final class JsonCodec {
                 return new NumberScalar(bd.doubleValue());
             }
         }
+        // UNREACHABLE: Jackson's ObjectMapper only ever produces null, String, Boolean, BigInteger,
+        // Integer, Long, Double, Float, BigDecimal from standard JSON — all handled above.
         throw new IllegalArgumentException("Unsupported JSON value type: " + value.getClass().getName());
     }
 

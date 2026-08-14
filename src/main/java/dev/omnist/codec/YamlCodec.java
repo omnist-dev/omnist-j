@@ -190,6 +190,9 @@ public final class YamlCodec {
         if (value instanceof java.util.Date d) {
             return new DateTimeScalar(DateTimeValue.of(d.toInstant().atZone(ZoneOffset.UTC).toLocalDateTime(), ZoneOffset.UTC));
         }
+        // UNREACHABLE: CustomConstructor + CustomResolver guarantee the type is one of:
+        // null, String, Boolean, LocalDate, DateTimeValue, Integer, Long, Double, Float,
+        // BigDecimal, or java.util.Date — all handled above.
         throw new IllegalArgumentException("Unsupported YAML value type: " + value.getClass().getName());
     }
 

@@ -15,9 +15,6 @@ public class OmlParseException extends RuntimeException {
         this.code = code;
     }
 
-    public OmlParseException(int line, int column, String message) {
-        this(line, column, "parse.unexpected-token", message);
-    }
 
     public int getLine() {
         return line;

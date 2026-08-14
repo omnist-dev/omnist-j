@@ -76,6 +76,18 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                        <configuration>
+                            <!--
+                                dev.omnist.conformance is excluded from coverage metrics.
+                                Its primary verification is running ./run-conformance against
+                                omnist-spec's 181 live test-suite vectors, not exhaustive unit
+                                coverage — identical justification to omnist-go CI's exclusion
+                                of tools/conformance/ from its own 100% bar.
+                            -->
+                            <excludes>
+                                <exclude>dev/omnist/conformance/**</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                     <execution>
                         <id>check</id>
@@ -84,6 +96,13 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
+                            <!--
+                                dev.omnist.conformance excluded: verified by live harness
+                                (181/0/0), not unit tests — see omnist-go tools/conformance/.
+                            -->
+                            <excludes>
+                                <exclude>dev/omnist/conformance/**</exclude>
+                            </excludes>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
@@ -91,12 +110,14 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.83</minimum>
+                                            <!-- 91.9% measured 2026-08-14 (excl. dev.omnist.conformance) -->
+                                            <minimum>0.91</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.71</minimum>
+                                            <!-- 84.2% measured 2026-08-14 (excl. dev.omnist.conformance) -->
+                                            <minimum>0.84</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

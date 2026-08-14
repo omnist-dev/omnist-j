@@ -406,8 +406,4 @@ public class OmlLexer {
     private OmlParseException error(String code, String message, int errLine, int errCol) {
         return new OmlParseException(errLine, errCol, code, message);
     }
-
-    private OmlParseException error(String message, int errLine, int errCol) {
-        return new OmlParseException(errLine, errCol, "parse.unexpected-token", message);
-    }
 }
