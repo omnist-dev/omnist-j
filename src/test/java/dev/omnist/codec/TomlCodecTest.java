@@ -109,6 +109,14 @@ public class TomlCodecTest {
     }
 
     @Test
+    @DisplayName("read: triple-double-quoted string with a backslash escape preserves the escape through preprocessing")
+    void testReadTripleQuotedStringWithEscape() {
+        Document doc = TomlCodec.read("a = \"\"\"he said \\\"hi\\\"\"\"\"\n");
+        Node node = (Node) doc;
+        assertEquals(new StringScalar("he said \"hi\""), node.edges().get(0).target());
+    }
+
+    @Test
     @DisplayName("read: raw triple-single-quoted string does not process backslash escapes")
     void testReadRawTripleSingleQuotedString() {
         Document doc = TomlCodec.read("a = '''raw\\nstring'''\n");
