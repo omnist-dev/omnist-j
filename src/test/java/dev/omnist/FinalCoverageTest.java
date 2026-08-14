@@ -1640,6 +1640,18 @@ class FinalCoverageTest {
         assertThrows(OmlParseException.class, () -> OmlReader.read("a: { b: 1\n"));
     }
 
+    @Test
+    void omlReader_unclosedBraceInsideArrayElement() {
+        // parseArrayElements: braced element that never closes before ']'/EOF
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: [{ b: 1 ]\n"));
+    }
+
+    @Test
+    void omlReader_reservedWordAsSecondArrayContextLabel() {
+        // parseLabel via a nested node inside an array: reserved word as label
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: [{ x: 1\nnull: 2 }]\n"));
+    }
+
     // ==========================================================================
     // Batch 6: Materializer
     // ==========================================================================

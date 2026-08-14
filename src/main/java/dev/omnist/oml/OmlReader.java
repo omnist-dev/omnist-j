@@ -8,12 +8,15 @@ import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * OML (Omnist Markup Language) Core Reader (omnist-spec §4).
  * Reads OML-Core text format into a {@link Document} using {@link OmlLexer}.
  */
 public class OmlReader {
+
+    private static final Set<String> RESERVED_WORDS = Set.of("null", "true", "false");
 
     private final List<Token> tokens;
     private final Limits limits;
@@ -61,10 +64,12 @@ public class OmlReader {
     }
 
     private boolean isEdgeListStart() {
+        // isEdgeListStart's only caller (parseDocument) already calls
+        // skipSeparators() and checks for EOF before invoking this, so
+        // peekNonSeparatorToken(0) always finds a real non-separator token here.
         Token t1 = peekNonSeparatorToken(0);
-        if (t1 == null) return false;
 
-        if (t1.type() == TokenType.IDENT && ("null".equals(t1.text()) || "true".equals(t1.text()) || "false".equals(t1.text()))) {
+        if (t1.type() == TokenType.IDENT && RESERVED_WORDS.contains(t1.text())) {
             return false;
         }
 
@@ -153,7 +158,7 @@ public class OmlReader {
             consumeToken();
             return (String) t.value();
         } else if (t.type() == TokenType.IDENT) {
-            if ("null".equals(t.text()) || "true".equals(t.text()) || "false".equals(t.text())) {
+            if (RESERVED_WORDS.contains(t.text())) {
                 throw new OmlParseException(t.line(), t.col(), "parse.reserved-word-label", "Reserved word '" + t.text() + "' cannot be used as a bare label");
             }
             consumeToken();
