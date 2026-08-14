@@ -24,16 +24,15 @@ public final class YamlCodec {
 
     private YamlCodec() {}
 
-    private static class CustomResolver extends org.yaml.snakeyaml.resolver.Resolver {
-        @Override
-        public void addImplicitResolver(Tag tag, java.util.regex.Pattern regexp, String first) {
-            if (tag.equals(Tag.BOOL)) {
-                regexp = java.util.regex.Pattern.compile("^(?:yes|Yes|YES|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF)$");
-                first = "yYnNtTfFoO";
-            }
-            super.addImplicitResolver(tag, regexp, first);
-        }
-    }
+    // A prior version of this class subclassed org.yaml.snakeyaml.resolver.Resolver
+    // to widen the BOOL tag's implicit-match pattern to accept YAML 1.1-style
+    // words (yes/no/on/off). A live diagnostic (a logging Resolver subclass run
+    // against this project's pinned SnakeYAML version) confirmed the base
+    // Resolver constructor never actually routes Tag.BOOL through
+    // addImplicitResolver at all -- only INT and FLOAT are -- so the override
+    // had no effect. YAML 1.1 booleans already resolve correctly via
+    // SnakeYAML's own default BOOL pattern with no customization needed; the
+    // subclass was removed and the base Resolver is used directly below.
 
     private static class CustomConstructor extends SafeConstructor {
         public CustomConstructor(LoaderOptions loaderOptions) {
@@ -93,7 +92,7 @@ public final class YamlCodec {
 
         LoaderOptions loaderOptions = new LoaderOptions();
         CustomConstructor constructor = new CustomConstructor(loaderOptions);
-        CustomResolver resolver = new CustomResolver();
+        org.yaml.snakeyaml.resolver.Resolver resolver = new org.yaml.snakeyaml.resolver.Resolver();
         DumperOptions dumperOptions = new DumperOptions();
         Yaml yaml = new Yaml(constructor, new Representer(dumperOptions), dumperOptions, loaderOptions, resolver);
 
@@ -190,9 +189,9 @@ public final class YamlCodec {
         if (value instanceof java.util.Date d) {
             return new DateTimeScalar(DateTimeValue.of(d.toInstant().atZone(ZoneOffset.UTC).toLocalDateTime(), ZoneOffset.UTC));
         }
-        // UNREACHABLE: CustomConstructor + CustomResolver guarantee the type is one of:
-        // null, String, Boolean, LocalDate, DateTimeValue, Integer, Long, Double, Float,
-        // BigDecimal, or java.util.Date — all handled above.
+        // UNREACHABLE: CustomConstructor + SnakeYAML's own SafeConstructor guarantee
+        // the type is one of: null, String, Boolean, LocalDate, DateTimeValue, Integer,
+        // Long, Double, Float, BigDecimal, or java.util.Date — all handled above.
         throw new IllegalArgumentException("Unsupported YAML value type: " + value.getClass().getName());
     }
 
