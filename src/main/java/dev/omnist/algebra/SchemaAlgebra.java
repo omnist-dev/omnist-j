@@ -53,10 +53,11 @@ public final class SchemaAlgebra {
             if (f.type() instanceof Type.Scalar || f.type() instanceof Type.Any) {
                 continue; // Scalars and Any are always satisfiable
             }
-            if (f.type() instanceof Type.Ref ref) {
-                if (!sat.contains(ref.name())) {
-                    return false; // Blocked by an unsatisfied required reference target
-                }
+            // Type is sealed to exactly {Scalar, Ref, Any}; both other cases are
+            // excluded above, so f.type() is exhaustively a Ref here.
+            Type.Ref ref = (Type.Ref) f.type();
+            if (!sat.contains(ref.name())) {
+                return false; // Blocked by an unsatisfied required reference target
             }
         }
         return true;
@@ -586,16 +587,13 @@ public final class SchemaAlgebra {
     private static LocalSigKey localSignature(Record rec) {
         List<FieldSigKey> fields = new ArrayList<>();
         for (Field f : rec.fields()) {
-            Object shapeKey;
-            if (f.type() instanceof Type.Any) {
-                shapeKey = "any";
-            } else if (f.type() instanceof Type.Ref) {
-                shapeKey = "ref";
-            } else if (f.type() instanceof Type.Scalar sc) {
-                shapeKey = List.of("scalar", sc.kind().keyword(), sc.nullable());
-            } else {
-                shapeKey = f.type().toString();
-            }
+            // Type is sealed to exactly {Any, Ref, Scalar} -- this switch is
+            // exhaustive, no fallback case is reachable.
+            Object shapeKey = switch (f.type()) {
+                case Type.Any ignored -> "any";
+                case Type.Ref ignored -> "ref";
+                case Type.Scalar sc -> List.of("scalar", sc.kind().keyword(), sc.nullable());
+            };
             fields.add(new FieldSigKey(f.label(), f.min(), f.max(), shapeKey));
         }
         fields.sort(Comparator.comparing(FieldSigKey::label));

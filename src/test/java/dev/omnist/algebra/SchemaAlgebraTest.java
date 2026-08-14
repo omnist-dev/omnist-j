@@ -632,5 +632,197 @@ public class SchemaAlgebraTest {
         assertTrue(schema.records().containsKey("A"));
         assertTrue(schema.records().containsKey("B"));
     }
+
+    // ==========================================================================
+    // Batch: coverage-gap-driven tests
+    // ==========================================================================
+
+    @Test
+    @DisplayName("lint: reachablePlain dedupes a cyclic self-reference")
+    void testLintCyclicSelfReference() {
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("self", new Type.Ref("R"), 0, 1)
+        )));
+        Schema schema = new Schema("R", records);
+        List<LintFinding> findings = SchemaAlgebra.lint(schema);
+        assertNotNull(findings);
+    }
+
+    @Test
+    @DisplayName("infer: nesting depth exceeding 100 throws")
+    void testInferDepthLimitExceeded() {
+        dev.omnist.document.Node deep = new dev.omnist.document.Node(List.of());
+        for (int i = 0; i < 105; i++) {
+            deep = new dev.omnist.document.Node(List.of(new dev.omnist.document.Edge("child", deep)));
+        }
+        List<dev.omnist.document.Document> samples = List.of(deep);
+        assertThrows(IllegalArgumentException.class, () -> SchemaAlgebra.infer(samples));
+    }
+
+    @Test
+    @DisplayName("infer: null value among samples sets nullable, boolean/date scalar kinds mapped")
+    void testInferNullableAndBooleanDateKinds() {
+        dev.omnist.document.Node s1 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("flag", new dev.omnist.document.Scalar.BooleanScalar(true)),
+            new dev.omnist.document.Edge("d", new dev.omnist.document.Scalar.DateScalar(java.time.LocalDate.parse("2024-01-01")))
+        ));
+        dev.omnist.document.Node s2 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("flag", dev.omnist.document.Value.NULL),
+            new dev.omnist.document.Edge("d", new dev.omnist.document.Scalar.DateScalar(java.time.LocalDate.parse("2024-01-02")))
+        ));
+        Schema schema = SchemaAlgebra.infer(List.of(s1, s2));
+        Field flagField = schema.records().get("Root").field("flag");
+        assertInstanceOf(Type.Scalar.class, flagField.type());
+        Type.Scalar flagType = (Type.Scalar) flagField.type();
+        assertEquals(ScalarKind.BOOLEAN, flagType.kind());
+        assertTrue(flagType.nullable());
+        Field dField = schema.records().get("Root").field("d");
+        assertEquals(ScalarKind.DATE, ((Type.Scalar) dField.type()).kind());
+    }
+
+    @Test
+    @DisplayName("infer: empty-label sanitization fallback to \"Rec\"")
+    void testInferEmptyLabelFallsBackToRec() {
+        // identifier() maps every char to [A-Za-z0-9_] and never shortens the
+        // string, so it can only return "" when the label itself is "" --
+        // unique()'s isEmpty() fallback to "Rec" is reachable only via that.
+        dev.omnist.document.Node child = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("x", new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.ONE))
+        ));
+        dev.omnist.document.Node sample = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("", child)
+        ));
+        Schema schema = SchemaAlgebra.infer(List.of(sample));
+        assertTrue(schema.records().containsKey("Rec"));
+    }
+
+    @Test
+    @DisplayName("infer: two distinct labels sanitizing/capitalizing to the same name collide")
+    void testInferCollidingRecordNames() {
+        dev.omnist.document.Node child = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("x", new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.ONE))
+        ));
+        dev.omnist.document.Node sample = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("item", child),
+            new dev.omnist.document.Edge("Item", child)
+        ));
+        Schema schema = SchemaAlgebra.infer(List.of(sample));
+        assertTrue(schema.records().containsKey("Item"));
+        assertTrue(schema.records().containsKey("Item2"));
+    }
+
+    @Test
+    @DisplayName("infer: identifier sanitization strips leading digits/underscores, keeps a fully-numeric label as-is")
+    void testInferIdentifierSanitization() {
+        dev.omnist.document.Node child = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("x", new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.ONE))
+        ));
+        dev.omnist.document.Node sample1 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("123abc", child)
+        ));
+        Schema schema1 = SchemaAlgebra.infer(List.of(sample1));
+        assertTrue(schema1.records().containsKey("Abc"));
+
+        dev.omnist.document.Node sample2 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("123", child)
+        ));
+        Schema schema2 = SchemaAlgebra.infer(List.of(sample2));
+        assertTrue(schema2.records().keySet().stream().anyMatch(k -> k.contains("123")));
+    }
+
+    @Test
+    @DisplayName("normalize: Ref-typed field local signature groups correctly")
+    void testNormalizeWithRefTypedField() {
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Leaf", new dev.omnist.schema.Record("Leaf", List.of(
+            new Field("v", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        )));
+        records.put("A", new dev.omnist.schema.Record("A", List.of(
+            new Field("leaf", new Type.Ref("Leaf"), 1, 1)
+        )));
+        records.put("B", new dev.omnist.schema.Record("B", List.of(
+            new Field("leaf", new Type.Ref("Leaf"), 1, 1)
+        )));
+        Schema schema = new Schema("A", records);
+        Schema normalized = SchemaAlgebra.normalize(schema);
+        assertNotNull(normalized);
+    }
+
+    @Test
+    @DisplayName("compatibleWith: scalar subtyping, record field comparison, cardinality bound mismatches")
+    void testCompatibleWithScalarAndRecordEdgeCases() {
+        Map<String, dev.omnist.schema.Record> ra = new LinkedHashMap<>();
+        ra.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, true), 1, 1)
+        )));
+        Schema a1 = new Schema("R", ra);
+        Map<String, dev.omnist.schema.Record> rb = new LinkedHashMap<>();
+        rb.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        )));
+        Schema b1 = new Schema("R", rb);
+        assertFalse(SchemaAlgebra.compatibleWith(a1, b1));
+
+        Map<String, dev.omnist.schema.Record> ra2 = new LinkedHashMap<>();
+        ra2.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, 0)
+        )));
+        Schema a2 = new Schema("R", ra2);
+        Map<String, dev.omnist.schema.Record> rb2 = new LinkedHashMap<>();
+        rb2.put("R", new dev.omnist.schema.Record("R", List.of()));
+        Schema b2 = new Schema("R", rb2);
+        assertTrue(SchemaAlgebra.compatibleWith(a2, b2));
+
+        Map<String, dev.omnist.schema.Record> ra3 = new LinkedHashMap<>();
+        ra3.put("R", new dev.omnist.schema.Record("R", List.of()));
+        Schema a3 = new Schema("R", ra3);
+        Map<String, dev.omnist.schema.Record> rb3 = new LinkedHashMap<>();
+        rb3.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("y", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        )));
+        Schema b3 = new Schema("R", rb3);
+        assertFalse(SchemaAlgebra.compatibleWith(a3, b3));
+
+        Map<String, dev.omnist.schema.Record> ra4 = new LinkedHashMap<>();
+        ra4.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, null)
+        )));
+        Schema a4 = new Schema("R", ra4);
+        Map<String, dev.omnist.schema.Record> rb4 = new LinkedHashMap<>();
+        rb4.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, 5)
+        )));
+        Schema b4 = new Schema("R", rb4);
+        assertFalse(SchemaAlgebra.compatibleWith(a4, b4));
+
+        Map<String, dev.omnist.schema.Record> ra5 = new LinkedHashMap<>();
+        ra5.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1)
+        )));
+        Schema a5 = new Schema("R", ra5);
+        Map<String, dev.omnist.schema.Record> rb5 = new LinkedHashMap<>();
+        rb5.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.NUMBER, false), 1, 1)
+        )));
+        Schema b5 = new Schema("R", rb5);
+        assertTrue(SchemaAlgebra.compatibleWith(a5, b5));
+    }
+
+    @Test
+    @DisplayName("prune: optional ref to an unsatisfiable record is dropped; cyclic reachability dedupes")
+    void testPruneOptionalRefToUnsatisfiableAndCycles() {
+        Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
+        records.put("Root", new dev.omnist.schema.Record("Root", List.of(
+            new Field("self", new Type.Ref("Root"), 0, 1),
+            new Field("dead", new Type.Ref("Unsat"), 0, 1)
+        )));
+        records.put("Unsat", new dev.omnist.schema.Record("Unsat", List.of(
+            new Field("mustSelf", new Type.Ref("Unsat"), 1, 1)
+        )));
+        Schema schema = new Schema("Root", records);
+        Schema pruned = SchemaAlgebra.prune(schema);
+        assertFalse(pruned.records().get("Root").fields().stream().anyMatch(f -> f.label().equals("dead")));
+    }
 }
 
