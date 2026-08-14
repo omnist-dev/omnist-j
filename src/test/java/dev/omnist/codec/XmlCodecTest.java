@@ -203,6 +203,20 @@ public class XmlCodecTest {
     }
 
     @Test
+    @DisplayName("read: pretype passthrough when integer/number-typed text doesn't match the schema's regex")
+    void testReadPretypeIntegerAndNumberRegexNoMatchPassthrough() {
+        // Verified empirically via a diagnostic against the real codec+schema: "12.5" fails
+        // XML_INT_RE (no decimal point allowed) and "abc" fails XML_NUM_RE, so both fields
+        // fall through xmlPretype's Type.Scalar branch unconverted, staying StringScalar.
+        Schema schema = OsdReader.read("record Root { \"n\": integer, \"d\": number } root Root\n");
+        Document doc = XmlCodec.read("<root><n>12.5</n><d>abc</d></root>", schema);
+        Node root = (Node) doc;
+        Node node = (Node) root.edges().get(0).target();
+        assertEquals(new StringScalar("12.5"), node.edges().get(0).target());
+        assertEquals(new StringScalar("abc"), node.edges().get(1).target());
+    }
+
+    @Test
     @DisplayName("read: a Ref field pointing at an undefined record resolves to null, falling through unpretyped")
     void testReadPretypeRefToUndefinedRecord() {
         // Bypasses OsdReader's own root-reference validation to construct a

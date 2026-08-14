@@ -136,6 +136,26 @@ public class YamlCodecTest {
     }
 
     @Test
+    @DisplayName("read: timestamp with a space-separated single-digit UTC offset falls through to " +
+                 "SnakeYAML's native ConstructYamlTimestamp (neither the plain-date check nor this " +
+                 "codec's own parseDateTimeValue accept a bare '-5' offset)")
+    void testReadTimestampFallsThroughToDefaultOnSuccessfulNativeParse() {
+        // Verified empirically: this codec's parseDateTimeValue rejects
+        // "2001-12-14 21:59:43.10 -5" (DateTimeParseException, unparsed trailing "-5"
+        // after the space->'T' substitution), but SnakeYAML's own ConstructYamlTimestamp
+        // accepts it and resolves to 2001-12-15T02:59:43.100 UTC (java.util.Date -- the
+        // codec's own java.util.Date branch converts it to a DateTimeScalar with offset Z).
+        Document doc = YamlCodec.read("a: !!timestamp \"2001-12-14 21:59:43.10 -5\"\n", null);
+        Node node = (Node) doc;
+        Object target = node.edges().get(0).target();
+        assertInstanceOf(DateTimeScalar.class, target);
+        DateTimeScalar dts = (DateTimeScalar) target;
+        assertEquals(LocalDate.of(2001, 12, 15), dts.value().dateTime().toLocalDate());
+        assertEquals(java.time.LocalTime.of(2, 59, 43, 100_000_000), dts.value().dateTime().toLocalTime());
+        assertEquals(java.time.ZoneOffset.UTC, dts.value().offset());
+    }
+
+    @Test
     @DisplayName("read: datetime-with-space-separator via CustomConstructor's parseDateTimeValue path")
     void testReadDateTimeWithSpaceSeparator() {
         Document doc = YamlCodec.read("a: 2024-01-01 10:00:00\n", null);
