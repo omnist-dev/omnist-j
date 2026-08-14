@@ -810,6 +810,47 @@ public class SchemaAlgebraTest {
     }
 
     @Test
+    @DisplayName("sub: required field's Ref type to an unsatisfiable record is vacuously compatible; " +
+                 "le: A's bounded max against B's unbounded (null) max is compatible")
+    void testSubVacuousUnsatisfiableRefAndUnboundedMaxB() {
+        // Verified empirically: compatibleWith(a, b) below returns true because Root.x is a
+        // *required* (min=1) field typed as a Ref to "Unsat", a record that can never be
+        // satisfied (its own field is a mandatory self-cycle). Per sub()'s first check
+        // (ta instanceof Type.Ref && !satA.contains(ref.name())), A can never actually emit
+        // a document containing this field at all, so the comparison is vacuously true --
+        // this is distinct from the existing recordSub pre-filter, which only skips *optional*
+        // (min == 0) unsatisfiable-ref fields.
+        Map<String, dev.omnist.schema.Record> ra = new LinkedHashMap<>();
+        ra.put("Root", new dev.omnist.schema.Record("Root", List.of(
+            new Field("x", new Type.Ref("Unsat"), 1, 1)
+        )));
+        ra.put("Unsat", new dev.omnist.schema.Record("Unsat", List.of(
+            new Field("self", new Type.Ref("Unsat"), 1, 1)
+        )));
+        Schema a = new Schema("Root", ra);
+        Map<String, dev.omnist.schema.Record> rb = new LinkedHashMap<>();
+        rb.put("Root", new dev.omnist.schema.Record("Root", List.of()));
+        Schema b = new Schema("Root", rb);
+        assertTrue(SchemaAlgebra.compatibleWith(a, b));
+
+        // Verified empirically: compatibleWith(a2, b2) below returns true. A's field "x" has a
+        // bounded max (3) and B's has an unbounded max (null), so cardinalitySub delegates to
+        // le(maxA=3, maxB=null), which hits the y == null -> return true branch (B's cardinality
+        // is unbounded, so any bounded A max satisfies it).
+        Map<String, dev.omnist.schema.Record> ra2 = new LinkedHashMap<>();
+        ra2.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, 3)
+        )));
+        Schema a2 = new Schema("R", ra2);
+        Map<String, dev.omnist.schema.Record> rb2 = new LinkedHashMap<>();
+        rb2.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, null)
+        )));
+        Schema b2 = new Schema("R", rb2);
+        assertTrue(SchemaAlgebra.compatibleWith(a2, b2));
+    }
+
+    @Test
     @DisplayName("prune: optional ref to an unsatisfiable record is dropped; cyclic reachability dedupes")
     void testPruneOptionalRefToUnsatisfiableAndCycles() {
         Map<String, dev.omnist.schema.Record> records = new LinkedHashMap<>();
