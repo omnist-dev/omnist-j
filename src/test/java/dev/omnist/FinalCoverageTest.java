@@ -1523,4 +1523,81 @@ class FinalCoverageTest {
         assertThrows(dev.omnist.schema.OsdParseException.class,
             () -> OsdReader.read("record R { \"a\": string"));
     }
+
+    // ==========================================================================
+    // Batch 4: OmlLexer
+    // ==========================================================================
+
+    @Test
+    void omlLexer_nullSourceAndLimitsDefaulted() {
+        OmlLexer lexer = new OmlLexer(null, null);
+        assertNotNull(lexer.tokenizeAll());
+    }
+
+    @Test
+    void omlLexer_datetimeSyntacticallyMatchedButInvalid() {
+        // DATETIME_PATTERN matches, but LocalDateTime.parse rejects it (invalid
+        // month) -- catch (DateTimeParseException ignored), falls through to
+        // later rules.
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: 2024-13-45T10:00:00\n"));
+    }
+
+    @Test
+    void omlLexer_dateFollowedByTimeShapedLookahead() {
+        // DATE regex matches "2024-01-01", followed by 'T' + a TIME_PATTERN-shaped
+        // (but semantically invalid) tail -- isDateTimeLookahead becomes true, so
+        // Rule 4 does not emit a bare DATE token here.
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: 2024-01-01T99:99:99\n"));
+    }
+
+    @Test
+    void omlLexer_reservedFloatWordBoundary() {
+        // isReservedFloatWord: "nan"/"inf" must not be immediately followed by an
+        // identifier character (boundary check on both sides of the match).
+        Document doc = OmlReader.read("a: nan\nb: inf\nc: -inf\n");
+        assertNotNull(doc);
+        // "nanny" is not the reserved word "nan" -- must lex as an identifier/label context instead
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: nanny+1\n"));
+    }
+
+    @Test
+    void omlLexer_invalidIntegerLiteralTooManyDigits() {
+        Limits limits = new Limits(200, 1_000_000, 3);
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: 12345\n", limits));
+    }
+
+    @Test
+    void omlLexer_multilineStringWithCrlfOpeningNewline() {
+        Document doc = OmlReader.read("a: \"\"\"\r\nhello\r\n\"\"\"\n");
+        assertNotNull(doc);
+    }
+
+    @Test
+    void omlLexer_multilineStringControlCharacterThrows() {
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: \"\"\"\u0001\"\"\"\n"));
+    }
+
+    @Test
+    void omlLexer_surrogatePairEscape() {
+        // \uD83D\uDE00 = a valid high+low surrogate pair (grinning face emoji)
+        Document doc = OmlReader.read("a: \"\\uD83D\\uDE00\"\n");
+        assertNotNull(doc);
+    }
+
+    @Test
+    void omlLexer_unpairedHighSurrogateEscape() {
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: \"\\uD83Dx\"\n"));
+    }
+
+    @Test
+    void omlLexer_unpairedLowSurrogateEscape() {
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: \"\\uDE00\"\n"));
+    }
+
+    @Test
+    void omlLexer_timeWithOffsetColonBeforeSign() {
+        // parseTimeValue: sign appears after a ':' in the offset portion
+        Document doc = OmlReader.read("a: 10:00:00+05:30\n");
+        assertNotNull(doc);
+    }
 }
