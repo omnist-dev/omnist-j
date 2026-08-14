@@ -1626,4 +1626,68 @@ class FinalCoverageTest {
     void omlReader_unclosedBraceAtTopLevel() {
         assertThrows(OmlParseException.class, () -> OmlReader.read("a: { b: 1\n"));
     }
+
+    // ==========================================================================
+    // Batch 6: Materializer
+    // ==========================================================================
+
+    @Test
+    void materializer_undefinedRootRecordFallsThroughUnmaterialized() {
+        // resolveType: Type.Ref to a name absent from schema.records() resolves to
+        // null, which is neither Any, Scalar, nor Record -- materializeType falls
+        // through to its final "return node" (unmaterialized, as-is).
+        Schema schema = new Schema("Missing", Map.of());
+        Node doc = new Node(List.of());
+        Document result = Materializer.materialize(doc, schema);
+        assertSame(doc, result);
+    }
+
+    @Test
+    void materializer_depthLimitExceeded() {
+        // Materializer.materialize operates on an already-built Document, so a
+        // program-constructed (not OML-parsed) tree can exceed the 200-depth
+        // safety limit that OmlReader's own parser would have rejected first.
+        Schema schema = OsdReader.read("record R { \"child\" [0,1]: R } root R\n");
+        Node deep = new Node(List.of());
+        for (int i = 0; i < 205; i++) {
+            deep = new Node(List.of(new Edge("child", deep)));
+        }
+        Node finalDeep = deep;
+        assertThrows(RuntimeException.class, () -> Materializer.materialize(finalDeep, schema));
+    }
+
+    @Test
+    void materializer_repeatedFieldIndexingAndCardinalityViolation() {
+        Schema schema = OsdReader.read("record R { \"x\" [1,1]: integer } root R\n");
+        Node doc = new Node(List.of(
+            new Edge("x", new IntegerScalar(java.math.BigInteger.ONE)),
+            new Edge("x", new IntegerScalar(java.math.BigInteger.TWO))
+        ));
+        assertThrows(ValidationException.class, () -> Materializer.materialize(doc, schema));
+    }
+
+    @Test
+    void materializer_integerToNumberConversion() {
+        Schema schema = OsdReader.read("record R { \"x\": number } root R\n");
+        Node doc = new Node(List.of(new Edge("x", new IntegerScalar(java.math.BigInteger.valueOf(42)))));
+        Document result = Materializer.materialize(doc, schema);
+        Node resultNode = (Node) result;
+        Scalar scalar = (Scalar) resultNode.edges().get(0).target();
+        assertInstanceOf(NumberScalar.class, scalar);
+    }
+
+    @Test
+    void materializer_stringToDateTimeAndTimeConversions() {
+        Schema schema = OsdReader.read("record R { \"d\": date, \"t\": time, \"dt\": datetime } root R\n");
+        Node doc = new Node(List.of(
+            new Edge("d", new StringScalar("2024-01-01")),
+            new Edge("t", new StringScalar("10:00:00+05:30")),
+            new Edge("dt", new StringScalar("2024-01-01T10:00:00Z"))
+        ));
+        Document result = Materializer.materialize(doc, schema);
+        Node resultNode = (Node) result;
+        assertInstanceOf(dev.omnist.document.Scalar.DateScalar.class, resultNode.edges().get(0).target());
+        assertInstanceOf(dev.omnist.document.Scalar.TimeScalar.class, resultNode.edges().get(1).target());
+        assertInstanceOf(dev.omnist.document.Scalar.DateTimeScalar.class, resultNode.edges().get(2).target());
+    }
 }

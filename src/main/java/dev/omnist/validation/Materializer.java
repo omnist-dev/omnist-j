@@ -108,17 +108,17 @@ public final class Materializer {
             return value;
         }
 
-        if (value == Value.NULL || value == null) {
+        if (value instanceof Value.NullValue || value == null) {
             if (!s.nullable()) {
                 diagnostics.add(new ValidationDiagnostic(path, "validate.null-not-allowed", "null not allowed here"));
             }
             return Value.NULL;
         }
 
-        if (!(value instanceof Scalar valScalar)) {
-            diagnostics.add(new ValidationDiagnostic(path, "validate.shape-mismatch", "expected a scalar value"));
-            return value;
-        }
+        // value is not a Node (checked above) and not a NullValue (checked above);
+        // Value is sealed to permit only Scalar and NullValue, so value is
+        // exhaustively a Scalar here -- no reachable fallback case remains.
+        Scalar valScalar = (Scalar) value;
 
         dev.omnist.schema.ScalarKind targetKind = s.kind();
         dev.omnist.document.ScalarKind valueKind = valScalar.kind();
