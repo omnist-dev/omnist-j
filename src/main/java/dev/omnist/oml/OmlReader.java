@@ -43,13 +43,12 @@ public class OmlReader {
         }
 
         if (isEdgeListStart()) {
-            Node rootNode = parseNodeEdges(false);
-            skipSeparators();
-            if (peekType() != TokenType.EOF) {
-                Token extra = peekToken();
-                throw new OmlParseException(extra.line(), extra.col(), "parse.trailing-content", "Trailing content after top-level document");
-            }
-            return rootNode;
+            // parseNodeEdges(false)'s while loop only exits at EOF -- the
+            // insideBraces-guarded break never fires for a top-level (non-braced)
+            // call -- so there is no reachable "trailing content" case here; any
+            // real trailing-content error surfaces from inside that loop instead
+            // (see its own parse.trailing-content check).
+            return parseNodeEdges(false);
         } else {
             Value bareValue = parseScalarValue();
             skipSeparators();

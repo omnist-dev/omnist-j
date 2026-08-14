@@ -1600,4 +1600,30 @@ class FinalCoverageTest {
         Document doc = OmlReader.read("a: 10:00:00+05:30\n");
         assertNotNull(doc);
     }
+
+    // ==========================================================================
+    // Batch 5: OmlReader
+    // ==========================================================================
+
+    @Test
+    void omlReader_missingColonAfterSecondLabel() {
+        // parseLabel's colon check only trivially passes for the first edge
+        // (isEdgeListStart already confirmed its lookahead colon); a later edge
+        // in the same node is not pre-validated, so this is where the real
+        // missing-colon branch fires.
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: 1\nb 2\n"));
+    }
+
+    @Test
+    void omlReader_reservedWordAsNonFirstBareLabel() {
+        // isEdgeListStart excludes true/false/null as a *first* label, routing to
+        // the bare-scalar-value path instead; the reserved-word-label check in
+        // parseLabel only fires for a later edge in the same node.
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: 1\ntrue: 2\n"));
+    }
+
+    @Test
+    void omlReader_unclosedBraceAtTopLevel() {
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: { b: 1\n"));
+    }
 }
