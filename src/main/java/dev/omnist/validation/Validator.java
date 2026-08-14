@@ -98,7 +98,10 @@ public class Validator {
                 return;
             }
 
-            if (target instanceof Value.NullValue || target == null) {
+            // target == null is not a reachable case: Edge's constructor enforces
+            // a non-null target via Objects.requireNonNull, so every Target this
+            // method ever receives is a real value.
+            if (target instanceof Value.NullValue) {
                 if (!scalar.nullable()) {
                     diagnostics.add(new ValidationDiagnostic(path, "validate.null-not-allowed", "null not allowed here"));
                 }
@@ -113,7 +116,11 @@ public class Validator {
                 diagnostics.add(new ValidationDiagnostic(path, "validate.type-mismatch",
                         "value kind " + valScalar.kind() + " does not match declared kind " + scalar.kind()));
             }
-        } else if (type instanceof Type.Ref ref) {
+        } else {
+            // Type is sealed to exactly {Scalar, Ref, Any}; Any is handled at the
+            // top of this method and Scalar is handled above, so type is
+            // exhaustively a Ref here -- no reachable fallback case remains.
+            Type.Ref ref = (Type.Ref) type;
             conformTarget(target, schema, ref.name(), path, diagnostics);
         }
     }

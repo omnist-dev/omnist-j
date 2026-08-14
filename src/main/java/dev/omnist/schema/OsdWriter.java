@@ -111,15 +111,17 @@ public final class OsdWriter {
     }
 
     private static void writeType(StringBuilder sb, Type type) {
-        if (type instanceof Type.Scalar scalar) {
-            sb.append(scalar.kind().keyword());
-            if (scalar.nullable()) {
-                sb.append("?");
+        // Exhaustive over Type's sealed permits (Scalar, Ref, Any) -- the
+        // compiler proves completeness, so no unreachable branch exists.
+        switch (type) {
+            case Type.Scalar scalar -> {
+                sb.append(scalar.kind().keyword());
+                if (scalar.nullable()) {
+                    sb.append("?");
+                }
             }
-        } else if (type instanceof Type.Ref ref) {
-            sb.append(ref.name());
-        } else if (type instanceof Type.Any) {
-            sb.append("any");
+            case Type.Ref ref -> sb.append(ref.name());
+            case Type.Any ignored -> sb.append("any");
         }
     }
 
