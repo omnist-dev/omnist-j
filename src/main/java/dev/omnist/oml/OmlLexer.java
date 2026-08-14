@@ -236,7 +236,16 @@ public class OmlLexer {
         int len = target.length();
         if (remaining.length() == len) return true;
         char next = remaining.charAt(len);
-        return !(next >= 'a' && next <= 'z') && !(next >= 'A' && next <= 'Z') && !(next >= '0' && next <= '9') && next != '_' && next != '-';
+        return !isIdentContinuationChar(next);
+    }
+
+    private boolean isIdentContinuationChar(char c) {
+        // ASCII-only by design (matching isTokenChar's own ASCII-only ranges
+        // elsewhere in this codebase) -- Character.isLetterOrDigit accepts
+        // Unicode letters/digits too, which would silently change behavior here.
+        boolean isAsciiLetter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        boolean isAsciiDigit = c >= '0' && c <= '9';
+        return isAsciiLetter || isAsciiDigit || c == '_' || c == '-';
     }
 
     private void skipHSpaceAndComments() {

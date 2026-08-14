@@ -1571,6 +1571,16 @@ class FinalCoverageTest {
         assertNotNull(doc);
         // "nanny" is not the reserved word "nan" -- must lex as an identifier/label context instead
         assertThrows(OmlParseException.class, () -> OmlReader.read("a: nanny+1\n"));
+        // hyphen and digit are also identifier-continuation characters, not boundaries
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: nan-x\n"));
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: nan1\n"));
+    }
+
+    @Test
+    void omlLexer_datePatternMatchesButInvalidDateFails() {
+        // DATE_PATTERN matches the shape, but LocalDate.parse rejects an invalid
+        // month/day -- catch (DateTimeParseException ignored), falls through.
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: 2024-13-45\n"));
     }
 
     @Test
