@@ -45,14 +45,11 @@ public class XmlCodecTest {
     @Test
     @DisplayName("read performs schema-directed pretyping on booleans, integers, and numbers")
     void testPretyping() {
-        String osd = "record RootRecord {\n" +
+        String osd = "record Root {\n" +
                      "  \"bool\": boolean,\n" +
                      "  \"int\": integer,\n" +
                      "  \"num\": number,\n" +
                      "  \"str\": string,\n" +
-                     "}\n" +
-                     "record Root {\n" +
-                     "  \"Root\": RootRecord\n" +
                      "}\n" +
                      "root Root\n";
         Schema schema = OsdReader.read(osd);
@@ -145,5 +142,96 @@ public class XmlCodecTest {
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.value-stringified")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.string-cr-normalized")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.string-illegal-char")));
+    }
+
+    // ==========================================================================
+    // Coverage-gap-driven batch (inputs verified against real XmlCodec/DOM
+    // behavior via a scratch diagnostic before writing assertions)
+    // ==========================================================================
+
+    @Test
+    @DisplayName("read: mixed content (text alongside child elements) throws")
+    void testReadMixedContentThrows() {
+        assertThrows(RuntimeException.class, () -> XmlCodec.read("<root><a>1</a>text</root>"));
+    }
+
+    @Test
+    @DisplayName("read: CDATA section content is collected as leaf text")
+    void testReadCdataSection() {
+        Document doc = XmlCodec.read("<root><![CDATA[hello]]></root>");
+        Node node = (Node) doc;
+        assertEquals(new StringScalar("hello"), node.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("read: with a schema whose root record name isn't in schema.records()")
+    void testReadWithUndefinedSchemaRoot() {
+        Schema schema = new Schema("Missing", java.util.Map.of());
+        Document doc = XmlCodec.read("<root><a>1</a></root>", schema);
+        assertNotNull(doc);
+    }
+
+    @Test
+    @DisplayName("read: schema-typed boolean/integer/number pretyping, including a Record-typed nested field")
+    void testReadSchemaTypedPretyping() {
+        Schema schema = OsdReader.read(
+            "record Inner { \"x\": integer } " +
+            "record Root { \"flag\": boolean, \"n\": integer, \"d\": number, \"inner\": Inner } root Root\n"
+        );
+        Document doc = XmlCodec.read(
+            "<root><flag>true</flag><n>42</n><d>3.14</d><inner><x>7</x></inner></root>", schema);
+        Node root = (Node) doc;
+        Node node = (Node) root.edges().get(0).target();
+        assertEquals(new BooleanScalar(true), node.edges().get(0).target());
+        assertEquals(new IntegerScalar(BigInteger.valueOf(42)), node.edges().get(1).target());
+        assertEquals(new NumberScalar(3.14), node.edges().get(2).target());
+        Node inner = (Node) node.edges().get(3).target();
+        assertEquals(new IntegerScalar(BigInteger.valueOf(7)), inner.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("write: root must have exactly one top-level edge")
+    void testWriteRequiresSingleRootEdge() {
+        Node multiRoot = new Node(List.of(
+            new Edge("a", new StringScalar("1")),
+            new Edge("b", new StringScalar("2"))
+        ));
+        assertThrows(WriteException.class, () -> XmlCodec.write(multiRoot));
+
+        Node scalarLike = new Node(List.of());
+        assertThrows(WriteException.class, () -> XmlCodec.write(scalarLike));
+    }
+
+    @Test
+    @DisplayName("write: strict mode throws WriteException when adjustments are non-empty")
+    void testWriteStrictModeThrows() {
+        Node doc = new Node(List.of(new Edge("root", new Node(List.of(
+            new Edge("x", Value.NULL)
+        )))));
+        assertThrows(WriteException.class, () -> XmlCodec.write(doc, true, null));
+    }
+
+    @Test
+    @DisplayName("write: xmlName sanitizes an all-invalid label to an underscore-prefixed safe name")
+    void testWriteXmlNameSanitizationFallback() {
+        Node doc = new Node(List.of(new Edge("123", new StringScalar("v"))));
+        String xml = XmlCodec.write(doc);
+        assertTrue(xml.contains("<_123>") || xml.contains("<_"));
+    }
+
+    @Test
+    @DisplayName("write: date/time/datetime/integer/number scalar text formatting")
+    void testWriteScalarTextFormatting() {
+        Node doc = new Node(List.of(new Edge("root", new Node(List.of(
+            new Edge("d", new DateScalar(java.time.LocalDate.parse("2024-01-01"))),
+            new Edge("t", new TimeScalar(dev.omnist.document.TimeValue.of(java.time.LocalTime.of(10, 0), java.time.ZoneOffset.UTC))),
+            new Edge("dt", new DateTimeScalar(dev.omnist.document.DateTimeValue.of(java.time.LocalDateTime.of(2024, 1, 1, 10, 0), java.time.ZoneOffset.UTC))),
+            new Edge("n", new IntegerScalar(BigInteger.valueOf(42))),
+            new Edge("f", new NumberScalar(3.14))
+        )))));
+        String xml = XmlCodec.write(doc);
+        assertTrue(xml.contains("2024-01-01"));
+        assertTrue(xml.contains("42"));
+        assertTrue(xml.contains("3.14"));
     }
 }

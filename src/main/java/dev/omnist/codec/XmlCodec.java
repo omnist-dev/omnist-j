@@ -65,18 +65,22 @@ public final class XmlCodec {
         int[] budget = new int[]{0};
         String rootLabel = localName(rootElem);
         Object rootContent = xmlToNode(rootElem, "$", 0, budget);
-        List<Object[]> rawList = new ArrayList<>();
-        rawList.add(new Object[]{rootLabel, rootContent});
-        Object raw = rawList;
 
         if (schema != null) {
             Object rootType = schema.records().get(schema.root());
             if (rootType != null) {
-                raw = xmlPretype(rawList, schema, rootType);
+                // xmlPretype matches a List<Object[]>'s edge labels against a
+                // Record's field names, so it must be applied to rootContent
+                // itself (the root element's own child edges) -- not to a
+                // [rootLabel, rootContent] wrapper, whose single "label" (the
+                // XML tag name) never matches any field of the root record.
+                rootContent = xmlPretype(rootContent, schema, rootType);
             }
         }
 
-        return buildDoc(raw, "$", 0, budget);
+        List<Object[]> rawList = new ArrayList<>();
+        rawList.add(new Object[]{rootLabel, rootContent});
+        return buildDoc(rawList, "$", 0, budget);
     }
 
     private static Object xmlToNode(org.w3c.dom.Element elem, String path, int depth, int[] budget) {
@@ -283,6 +287,9 @@ public final class XmlCodec {
     }
 
     private static String xmlText(Object v) {
+        // Called only from writeNode's non-Node (i.e. Value) branch, so v is
+        // exhaustively a Value here -- sealed to Scalar's 7 variants | NullValue,
+        // all handled below; no fallback is reachable.
         if (v instanceof BooleanScalar b) {
             return b.value() ? "true" : "false";
         }
@@ -309,10 +316,8 @@ public final class XmlCodec {
         if (v instanceof IntegerScalar s) {
             return s.value().toString();
         }
-        if (v instanceof NumberScalar s) {
-            return Double.toString(s.value());
-        }
-        return v.toString();
+        NumberScalar s = (NumberScalar) v;
+        return Double.toString(s.value());
     }
 
     public static WriteReport check(Document node) {
