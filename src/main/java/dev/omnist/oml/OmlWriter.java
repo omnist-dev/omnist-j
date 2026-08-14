@@ -28,14 +28,11 @@ public class OmlWriter {
     }
 
     private static void writeValue(StringBuilder sb, Document doc, int indentLevel, String edgeSeparator) {
-        if (doc instanceof Node node) {
-            writeNode(sb, node, indentLevel, edgeSeparator);
-        } else if (doc instanceof Value val) {
-            writeScalarOrNull(sb, val);
-        } else {
-            // UNREACHABLE: Document is a sealed interface with exactly Node and Value as subtypes;
-            // this branch cannot be reached without illegal bytecode manipulation.
-            throw new IllegalArgumentException("Unknown document type: " + doc);
+        // Exhaustive switch over Document's sealed permits (Node, Value) -- the
+        // compiler enforces completeness, so no unreachable default branch exists.
+        switch (doc) {
+            case Node node -> writeNode(sb, node, indentLevel, edgeSeparator);
+            case Value val -> writeScalarOrNull(sb, val);
         }
     }
 

@@ -1498,4 +1498,29 @@ class FinalCoverageTest {
         Schema roundTrip = OsdReader.read(written);
         assertEquals(schema, roundTrip);
     }
+
+    // ==========================================================================
+    // Batch 3: OsdReader parse-error branches
+    // ==========================================================================
+
+    @Test
+    void osdReader_expectedRecordNameIdentifier() {
+        // parseRecord: token after 'record' keyword is not an IDENT
+        assertThrows(dev.omnist.schema.OsdParseException.class,
+            () -> OsdReader.read("record \"quoted\" { \"a\": string } root R"));
+    }
+
+    @Test
+    void osdReader_expectedTypeIdentifier() {
+        // parseField: token in type position is neither STRING nor IDENT
+        assertThrows(dev.omnist.schema.OsdParseException.class,
+            () -> OsdReader.read("record R { \"a\": [1,1] } root R"));
+    }
+
+    @Test
+    void osdReader_unclosedRecordBrace() {
+        // parseRecord: EOF reached before closing '}'
+        assertThrows(dev.omnist.schema.OsdParseException.class,
+            () -> OsdReader.read("record R { \"a\": string"));
+    }
 }
