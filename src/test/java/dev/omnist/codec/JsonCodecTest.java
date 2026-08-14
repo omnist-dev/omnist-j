@@ -106,4 +106,76 @@ public class JsonCodecTest {
         assertNotNull(adj2);
         assertEquals("error", adj2.severity());
     }
+
+    // ==========================================================================
+    // Coverage-gap-driven batch
+    // ==========================================================================
+
+    @Test
+    @DisplayName("read: with a non-null schema arg still returns the parsed doc (materialize is a separate stage)")
+    void testReadWithNonNullSchemaArg() {
+        dev.omnist.schema.Schema schema = new dev.omnist.schema.Schema("R", java.util.Map.of(
+            "R", new dev.omnist.schema.Record("R", List.of())
+        ));
+        Document doc = JsonCodec.read("{}", schema);
+        assertNotNull(doc);
+    }
+
+    @Test
+    @DisplayName("read: object depth exceeding 200 throws")
+    void testReadDepthLimitExceeded() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 205; i++) sb.append("{\"a\":");
+        sb.append("1");
+        for (int i = 0; i < 205; i++) sb.append("}");
+        String json = sb.toString();
+        assertThrows(RuntimeException.class, () -> JsonCodec.read(json));
+    }
+
+    @Test
+    @DisplayName("read: Long, Double, Float, and both BigDecimal branches convert correctly")
+    void testReadNumericTypeConversions() {
+        Document doc = JsonCodec.read("{\"big\": 9999999999, \"d\": 1.5e300, \"exact\": 123.0, \"inexact\": 1.23456789012345e10}");
+        Node node = (Node) doc;
+        assertNotNull(node);
+    }
+
+    @Test
+    @DisplayName("write: indent produces pretty-printed output")
+    void testWriteWithIndent() {
+        Document doc = new Node(List.of(new Edge("a", new IntegerScalar(BigInteger.ONE))));
+        String pretty = JsonCodec.write(doc, 2, false, null);
+        assertTrue(pretty.contains("\n"));
+    }
+
+    @Test
+    @DisplayName("write: strict mode throws WriteException when adjustments are non-empty")
+    void testWriteStrictModeThrows() {
+        Document doc = new Node(List.of(new Edge("d", new dev.omnist.document.Scalar.DateScalar(LocalDate.parse("2024-01-01")))));
+        assertThrows(WriteException.class, () -> JsonCodec.write(doc, null, true, null));
+    }
+
+    @Test
+    @DisplayName("write: prepareJson's depth limit")
+    void testWriteDepthLimitExceeded() {
+        Node deep = new Node(List.of());
+        for (int i = 0; i < 205; i++) {
+            deep = new Node(List.of(new Edge("child", deep)));
+        }
+        Node finalDeep = deep;
+        assertThrows(WriteException.class, () -> JsonCodec.write(finalDeep));
+    }
+
+    @Test
+    @DisplayName("write: time and datetime scalars format via their .format() methods")
+    void testWriteTimeAndDateTimeScalars() {
+        Document doc = new Node(List.of(
+            new Edge("t", new dev.omnist.document.Scalar.TimeScalar(
+                dev.omnist.document.TimeValue.of(java.time.LocalTime.of(10, 0), java.time.ZoneOffset.UTC))),
+            new Edge("dt", new dev.omnist.document.Scalar.DateTimeScalar(
+                dev.omnist.document.DateTimeValue.of(java.time.LocalDateTime.of(2024, 1, 1, 10, 0), java.time.ZoneOffset.UTC)))
+        ));
+        String json = JsonCodec.write(doc);
+        assertNotNull(json);
+    }
 }

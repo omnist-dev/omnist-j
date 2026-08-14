@@ -97,6 +97,11 @@ public final class JsonCodec {
         if (value instanceof Double d) {
             return new NumberScalar(d);
         }
+        // UNREACHABLE with MAPPER's current default configuration: verified
+        // empirically that ObjectMapper#readValue(text, Object.class) only ever
+        // produces String/Boolean/Integer/Long/Double for JSON numbers, never
+        // Float or BigDecimal (that requires enabling USE_BIG_DECIMAL_FOR_FLOATS).
+        // Kept as defensive handling in case that configuration ever changes.
         if (value instanceof Float f) {
             return new NumberScalar(f.doubleValue());
         }
@@ -108,7 +113,7 @@ public final class JsonCodec {
             }
         }
         // UNREACHABLE: Jackson's ObjectMapper only ever produces null, String, Boolean, BigInteger,
-        // Integer, Long, Double, Float, BigDecimal from standard JSON — all handled above.
+        // Integer, Long, Double from standard JSON with this MAPPER's default config — all handled above.
         throw new IllegalArgumentException("Unsupported JSON value type: " + value.getClass().getName());
     }
 
@@ -175,6 +180,8 @@ public final class JsonCodec {
         if (depth > 200) {
             throw new WriteException("nesting exceeds the maximum depth (200)");
         }
+        // Exhaustive over Document's sealed hierarchy (Node, Value -> Scalar's 7
+        // variants | NullValue) -- every case is handled, no fallback is reachable.
         if (doc instanceof Node node) {
             List<Object[]> edges = new ArrayList<>();
             for (Edge edge : node.edges()) {
@@ -185,28 +192,26 @@ public final class JsonCodec {
             return edges;
         } else if (doc instanceof Value.NullValue) {
             return null;
-        } else if (doc instanceof Scalar s) {
-            if (s instanceof StringScalar str) {
-                return str.value();
-            } else if (s instanceof BooleanScalar bool) {
-                return bool.value();
-            } else if (s instanceof IntegerScalar integer) {
-                return integer.value();
-            } else if (s instanceof NumberScalar num) {
-                double d = num.value();
-                if (Double.isNaN(d) || Double.isInfinite(d)) {
-                    return null;
-                }
-                return d;
-            } else if (s instanceof DateScalar date) {
-                return date.value().toString();
-            } else if (s instanceof TimeScalar time) {
-                return time.value().format();
-            } else if (s instanceof DateTimeScalar dt) {
-                return dt.value().format();
+        } else if (doc instanceof StringScalar str) {
+            return str.value();
+        } else if (doc instanceof BooleanScalar bool) {
+            return bool.value();
+        } else if (doc instanceof IntegerScalar integer) {
+            return integer.value();
+        } else if (doc instanceof NumberScalar num) {
+            double d = num.value();
+            if (Double.isNaN(d) || Double.isInfinite(d)) {
+                return null;
             }
+            return d;
+        } else if (doc instanceof DateScalar date) {
+            return date.value().toString();
+        } else if (doc instanceof TimeScalar time) {
+            return time.value().format();
+        } else {
+            DateTimeScalar dt = (DateTimeScalar) doc;
+            return dt.value().format();
         }
-        return null;
     }
 
     private static Object grouped(Object node, int depth) {
