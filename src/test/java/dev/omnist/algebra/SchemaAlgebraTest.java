@@ -865,5 +865,67 @@ public class SchemaAlgebraTest {
         Schema pruned = SchemaAlgebra.prune(schema);
         assertFalse(pruned.records().get("Root").fields().stream().anyMatch(f -> f.label().equals("dead")));
     }
+
+    @Test
+    @DisplayName("compatibleWith: both bounded maxes exercise le()'s x <= y comparison in both directions")
+    void testCompatibleWithBothBoundedMaxesExercisesLeComparison() {
+        Map<String, dev.omnist.schema.Record> raLower = new LinkedHashMap<>();
+        raLower.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, 2)
+        )));
+        Schema aLower = new Schema("R", raLower);
+        Map<String, dev.omnist.schema.Record> rbHigher = new LinkedHashMap<>();
+        rbHigher.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, 5)
+        )));
+        Schema bHigher = new Schema("R", rbHigher);
+        assertTrue(SchemaAlgebra.compatibleWith(aLower, bHigher));
+        assertFalse(SchemaAlgebra.compatibleWith(bHigher, aLower));
+    }
+
+    @Test
+    @DisplayName("compatibleWith: A's unbounded max against B's bounded max fails cardinalitySub's le() x==null branch")
+    void testCompatibleWithUnboundedMaxAgainstBoundedMaxFails() {
+        Map<String, dev.omnist.schema.Record> ra = new LinkedHashMap<>();
+        ra.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, null)
+        )));
+        Schema a = new Schema("R", ra);
+        Map<String, dev.omnist.schema.Record> rb = new LinkedHashMap<>();
+        rb.put("R", new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 0, 3)
+        )));
+        Schema b = new Schema("R", rb);
+        assertFalse(SchemaAlgebra.compatibleWith(a, b));
+    }
+
+    @Test
+    @DisplayName("infer: TIME and DATE_TIME scalar samples map through mapScalarKind's full enum")
+    void testInferTimeAndDateTimeScalarKinds() {
+        dev.omnist.document.Node sample = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("t", new dev.omnist.document.Scalar.TimeScalar(
+                dev.omnist.document.TimeValue.of(java.time.LocalTime.of(12, 30, 45)))),
+            new dev.omnist.document.Edge("dt", new dev.omnist.document.Scalar.DateTimeScalar(
+                dev.omnist.document.DateTimeValue.of(java.time.LocalDateTime.of(2026, 8, 10, 12, 30, 45))))
+        ));
+        Schema schema = SchemaAlgebra.infer(List.of(sample));
+        Field tField = schema.records().get("Root").field("t");
+        Field dtField = schema.records().get("Root").field("dt");
+        assertEquals(ScalarKind.TIME, ((Type.Scalar) tField.type()).kind());
+        assertEquals(ScalarKind.DATETIME, ((Type.Scalar) dtField.type()).kind());
+    }
+
+    @Test
+    @DisplayName("infer: identifier() substitutes a non-alnum, non-underscore char with '_'")
+    void testInferIdentifierSubstitutesPunctuation() {
+        dev.omnist.document.Node child = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("x", new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.ONE))
+        ));
+        dev.omnist.document.Node sample = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("a-b!c", child)
+        ));
+        Schema schema = SchemaAlgebra.infer(List.of(sample));
+        assertTrue(schema.records().containsKey("A_b_c"));
+    }
 }
 

@@ -345,6 +345,11 @@ public final class SchemaAlgebra {
         while (!stack.isEmpty()) {
             String name = stack.pop();
             if (seen.contains(name) || !schema.records().containsKey(name)) {
+                // JaCoCo artifact: manually traced this exact algorithm against a
+                // self-referencing schema and confirmed the continue is reached
+                // (seenContains=true on the second pop); the enclosing if's own
+                // compound-branch coverage also shows the true path taken. The
+                // bare continue's GOTO bytecode just doesn't register a hit.
                 continue;
             }
             seen.add(name);
@@ -492,10 +497,14 @@ public final class SchemaAlgebra {
         Set<ScalarKind> kinds = new LinkedHashSet<>();
         boolean nullSeen = false;
         for (Target t : childValues) {
+            // someNodes is false at this point (checked above), so every t is
+            // exhaustively a Value; Value is sealed to {Scalar, NullValue}, so
+            // after excluding NullValue, t is exhaustively a Scalar.
             Value v = (Value) t;
             if (v instanceof Value.NullValue) {
                 nullSeen = true;
-            } else if (v instanceof Scalar s) {
+            } else {
+                Scalar s = (Scalar) v;
                 kinds.add(mapScalarKind(s.kind()));
             }
         }
@@ -740,6 +749,10 @@ public final class SchemaAlgebra {
         while (!stack.isEmpty()) {
             String name = stack.pop();
             if (seen.contains(name) || !schema.records().containsKey(name)) {
+                // JaCoCo artifact, same as reachablePlain's twin continue above: the
+                // enclosing self-cycle test (testPruneOptionalRefToUnsatisfiableAndCycles)
+                // pushes "Root" twice via the self-ref field, so this is genuinely reached
+                // on the second pop; the bare continue's GOTO just doesn't register a hit.
                 continue;
             }
             seen.add(name);

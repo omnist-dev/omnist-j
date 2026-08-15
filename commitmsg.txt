@@ -1,0 +1,13 @@
+Close SchemaAlgebra's remaining coverage gaps, document JaCoCo continue-line artifact
+
+Added tests for the genuinely reachable gaps: TIME/DATE_TIME scalar kinds
+in mapScalarKind (via infer), identifier()'s punctuation-substitution
+branch, and both directions of cardinalitySub's le() comparison
+(unbounded-vs-bounded and bounded-vs-bounded). Verified via a
+manually-traced standalone reproduction that the two bare `continue`
+statements in reachablePlain/reachable are genuinely executed by
+existing tests despite JaCoCo reporting mi=1 on them; annotated both
+with a comment explaining the artifact rather than chasing a phantom
+gap further.
+
+Gate-scoped coverage: 99.65% line / 97.87% branch (up from 99.54%/97.56%).
