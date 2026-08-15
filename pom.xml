@@ -118,17 +118,18 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 98.49% measured 2026-08-15 (excl. dev.omnist.conformance);
-                                                 gate set just below the real achieved number so it catches
-                                                 actual regressions immediately rather than sitting on a
-                                                 stale floor from an earlier, lower-coverage baseline. -->
-                                            <minimum>0.98</minimum>
+                                            <!-- 99.65% measured 2026-08-15 (excl. dev.omnist.conformance),
+                                                 after closing SchemaAlgebra's remaining gaps; gate set just
+                                                 below the real achieved number so it catches actual
+                                                 regressions immediately rather than sitting on a stale
+                                                 floor from an earlier, lower-coverage baseline. -->
+                                            <minimum>0.996</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 95.71% measured 2026-08-15 (excl. dev.omnist.conformance) -->
-                                            <minimum>0.95</minimum>
+                                            <!-- 97.87% measured 2026-08-15 (excl. dev.omnist.conformance) -->
+                                            <minimum>0.978</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
