@@ -1,6 +1,6 @@
 # Status and limitations
 
-`omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.0.1-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four

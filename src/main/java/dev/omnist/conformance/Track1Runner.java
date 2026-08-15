@@ -230,7 +230,7 @@ public final class Track1Runner {
             String stderr = "";
             int exitCode = -1;
 
-            Path omnistJar = repoDir.resolve("target/omnist-j-0.0.1-SNAPSHOT.jar");
+            Path omnistJar = repoDir.resolve("target/omnist-j-0.0.1-alpha.jar");
             Path omnistBin = repoDir.resolve("omnist");
             if (Files.exists(omnistJar) && Files.exists(omnistBin) && Files.isExecutable(omnistBin)) {
                 try {
