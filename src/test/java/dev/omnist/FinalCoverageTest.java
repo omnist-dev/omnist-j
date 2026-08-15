@@ -1706,8 +1706,54 @@ class FinalCoverageTest {
 
     @Test
     void omlReader_unclosedBraceInsideArrayElement() {
-        // parseArrayElements: braced element that never closes before ']'/EOF
-        assertThrows(OmlParseException.class, () -> OmlReader.read("a: [{ b: 1 ]\n"));
+        // The original version of this test ("a: [{ b: 1 ]\n") did NOT actually
+        // reach parseArrayElements's own "Expected '}'" check -- traced via a
+        // stack-trace diagnostic, it threw earlier from parseNodeEdges's
+        // trailing-content check (the inner "]" was parsed as garbage after the
+        // "b: 1" edge, not as a stand-in for the missing "}"). The real way to
+        // reach parseArrayElements's own unclosed-brace check is EOF immediately
+        // after valid inner content, with no "]" at all.
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: [{ b: 1\n"));
+    }
+
+    @Test
+    void omlReader_isEdgeListStartSecondTokenNull() {
+        // isEdgeListStart: peekNonSeparatorToken(1) returns null when there is
+        // no second non-separator token at all (a bare identifier at EOF) --
+        // falls through to the bare-scalar-value path, which then rejects "a"
+        // as not one of null/true/false.
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a"));
+    }
+
+    @Test
+    void omlReader_indexBoundaryHelpers() throws Exception {
+        // skipSeparators/consumeToken/peekNonSeparatorToken's index<tokens.size()
+        // false branches, reflection-forced to the same over-consumed-index
+        // state used for peekToken's manufactured-EOF fallback -- no malformed
+        // input reaches this through real parsing (the outer parse loops all
+        // check peekType() != EOF before ever consuming).
+        OmlReader reader = new OmlReader("a: 1\n", null);
+
+        java.lang.reflect.Field tokensField = OmlReader.class.getDeclaredField("tokens");
+        tokensField.setAccessible(true);
+        java.util.List<?> tokens = (java.util.List<?>) tokensField.get(reader);
+
+        java.lang.reflect.Field indexField = OmlReader.class.getDeclaredField("index");
+        indexField.setAccessible(true);
+        indexField.set(reader, tokens.size() + 1);
+
+        java.lang.reflect.Method skipSeparators = OmlReader.class.getDeclaredMethod("skipSeparators");
+        skipSeparators.setAccessible(true);
+        assertEquals(false, skipSeparators.invoke(reader));
+
+        java.lang.reflect.Method consumeToken = OmlReader.class.getDeclaredMethod("consumeToken");
+        consumeToken.setAccessible(true);
+        consumeToken.invoke(reader);
+        assertEquals(tokens.size() + 1, indexField.get(reader));
+
+        java.lang.reflect.Method peekNonSeparatorToken = OmlReader.class.getDeclaredMethod("peekNonSeparatorToken", int.class);
+        peekNonSeparatorToken.setAccessible(true);
+        assertNull(peekNonSeparatorToken.invoke(reader, 0));
     }
 
     @Test
