@@ -1,0 +1,76 @@
+package dev.omnist.codec;
+
+import dev.omnist.document.Scalar.NumberScalar;
+import dev.omnist.document.Value;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Reflection-based tests for JsonCodec/YamlCodec/TomlCodec's toScalar()
+ * Float/BigDecimal (and YamlCodec's java.util.Date) branches. Verified
+ * empirically earlier this session that the real Jackson/SnakeYAML/tomlj
+ * parsers, as configured by these codecs, never actually produce these
+ * Java types -- only Long/Double (and LocalDate/DateTimeValue for YAML).
+ * These branches are defensive against a library-configuration change, not
+ * reachable through any real input. Reflection proves the branch logic
+ * itself is correct without claiming real-world reachability -- distinct
+ * from the peekToken()/toMap() cases, which reflection proved were
+ * reachable through a genuine (if contrived) call sequence.
+ */
+class ToScalarTripwireReflectionTest {
+
+    private static Value invokeToScalar(Class<?> codec, Object value) throws Exception {
+        Method toScalar = codec.getDeclaredMethod("toScalar", Object.class);
+        toScalar.setAccessible(true);
+        try {
+            return (Value) toScalar.invoke(null, value);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof RuntimeException re) throw re;
+            throw e;
+        }
+    }
+
+    @Test
+    @DisplayName("JsonCodec.toScalar: Float and BigDecimal branches")
+    void jsonCodecFloatAndBigDecimal() throws Exception {
+        assertEquals(new NumberScalar(3.5), invokeToScalar(JsonCodec.class, 3.5f));
+        assertEquals(new NumberScalar(3.5), invokeToScalar(JsonCodec.class, new BigDecimal("3.5")));
+        // Exact integer-valued BigDecimal takes the toBigIntegerExact() success path
+        Value exact = invokeToScalar(JsonCodec.class, new BigDecimal("42"));
+        assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(42)), exact);
+    }
+
+    @Test
+    @DisplayName("YamlCodec.toScalar: Float, BigDecimal, and java.util.Date branches")
+    void yamlCodecFloatBigDecimalAndDate() throws Exception {
+        assertEquals(new NumberScalar(3.5), invokeToScalar(YamlCodec.class, 3.5f));
+        assertEquals(new NumberScalar(3.5), invokeToScalar(YamlCodec.class, new BigDecimal("3.5")));
+        Value fromDate = invokeToScalar(YamlCodec.class, new java.util.Date(0));
+        assertInstanceOf(dev.omnist.document.Scalar.DateTimeScalar.class, fromDate);
+    }
+
+    @Test
+    @DisplayName("TomlCodec.toScalar: BigInteger, Integer, Float, and BigDecimal branches")
+    void tomlCodecBigIntegerIntegerFloatAndBigDecimal() throws Exception {
+        assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.TEN), invokeToScalar(TomlCodec.class, BigInteger.TEN));
+        assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(7)), invokeToScalar(TomlCodec.class, 7));
+        assertEquals(new NumberScalar(3.5), invokeToScalar(TomlCodec.class, 3.5f));
+        assertEquals(new NumberScalar(3.5), invokeToScalar(TomlCodec.class, new BigDecimal("3.5")));
+    }
+
+    @Test
+    @DisplayName("Unsupported-type fallback throw in all three toScalar() implementations")
+    void unsupportedTypeFallbackThrows() {
+        Object unsupported = new Object();
+        assertThrows(IllegalArgumentException.class, () -> invokeToScalar(JsonCodec.class, unsupported));
+        assertThrows(IllegalArgumentException.class, () -> invokeToScalar(YamlCodec.class, unsupported));
+        assertThrows(IllegalArgumentException.class, () -> invokeToScalar(TomlCodec.class, unsupported));
+    }
+}
