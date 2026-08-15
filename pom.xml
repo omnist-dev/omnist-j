@@ -118,14 +118,17 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 91.9% measured 2026-08-14 (excl. dev.omnist.conformance) -->
-                                            <minimum>0.91</minimum>
+                                            <!-- 98.49% measured 2026-08-15 (excl. dev.omnist.conformance);
+                                                 gate set just below the real achieved number so it catches
+                                                 actual regressions immediately rather than sitting on a
+                                                 stale floor from an earlier, lower-coverage baseline. -->
+                                            <minimum>0.98</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 84.2% measured 2026-08-14 (excl. dev.omnist.conformance) -->
-                                            <minimum>0.84</minimum>
+                                            <!-- 95.71% measured 2026-08-15 (excl. dev.omnist.conformance) -->
+                                            <minimum>0.95</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
