@@ -95,4 +95,4 @@ assertTrue(json.contains("\"Alice\""));
 
 - [`docs/01-api-reference.md`](01-api-reference.md): Complete Java API Reference for all public classes and methods.
 - [`docs/02-cli-reference.md`](02-cli-reference.md): Complete Command-Line Interface (CLI) Reference.
-- [`workflow-playbook.md`](../workflow-playbook.md): Development & Spec Alignment Playbook.
+- [`workflow-playbook.md`](workflow-playbook.md): Development & Spec Alignment Playbook.

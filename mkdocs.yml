@@ -1,0 +1,46 @@
+site_name: omnist-j
+site_description: A from-scratch, spec-first Java implementation of Omnist.
+site_url: https://j.omnist.dev/
+repo_url: https://github.com/omnist-dev/omnist-j
+repo_name: omnist-dev/omnist-j
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - tables
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Guide & quickstart: 00-guide.md
+  - API reference: 01-api-reference.md
+  - CLI reference: 02-cli-reference.md
+  - Status & limitations: limitations.md
+  - Workflow playbook: workflow-playbook.md
