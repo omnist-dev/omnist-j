@@ -1648,6 +1648,30 @@ class FinalCoverageTest {
     }
 
     @Test
+    void omlLexer_highSurrogateFollowedByValidButNonLowSurrogateEscape() {
+        // A valid high-surrogate escape followed by a syntactically valid
+        // unicode escape that isn't itself a low surrogate -- distinct from
+        // omlLexer_unpairedHighSurrogateEscape (not followed by another escape at all).
+        assertThrows(OmlParseException.class, () -> OmlReader.read("a: \"\\uD83D\\u0041\"\n"));
+    }
+
+    @Test
+    void omlLexer_plainNonSurrogateUnicodeEscape() {
+        // \u0041 = 'A', neither high nor low surrogate range -- exercises the
+        // plain-codepoint-append branch and the false side of the high-surrogate check.
+        Document doc = OmlReader.read("a: \"\\u0041\"\n");
+        Node node = (Node) doc;
+        assertEquals(new StringScalar("A"), node.edges().get(0).target());
+    }
+
+    @Test
+    void omlLexer_carriageReturnEscape() {
+        Document doc = OmlReader.read("a: \"\\r\"\n");
+        Node node = (Node) doc;
+        assertEquals(new StringScalar("\r"), node.edges().get(0).target());
+    }
+
+    @Test
     void omlLexer_timeWithOffsetColonBeforeSign() {
         // parseTimeValue: sign appears after a ':' in the offset portion
         Document doc = OmlReader.read("a: 10:00:00+05:30\n");
