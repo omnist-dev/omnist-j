@@ -164,6 +164,17 @@ public class XmlCodecTest {
     }
 
     @Test
+    @DisplayName("read: leaf text collection skips comment nodes (neither TEXT_NODE nor CDATA_SECTION_NODE)")
+    void testReadLeafTextSkipsCommentNodes() {
+        // Exercises all three outcomes of the TEXT_NODE || CDATA_SECTION_NODE
+        // check in one leaf: plain text, a CDATA section, and a comment (which
+        // matches neither and must be skipped).
+        Document doc = XmlCodec.read("<root>text<![CDATA[cdata]]><!--a comment--></root>");
+        Node node = (Node) doc;
+        assertEquals(new StringScalar("textcdata"), node.edges().get(0).target());
+    }
+
+    @Test
     @DisplayName("read: with a schema whose root record name isn't in schema.records()")
     void testReadWithUndefinedSchemaRoot() {
         Schema schema = new Schema("Missing", java.util.Map.of());
