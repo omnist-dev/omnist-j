@@ -264,9 +264,12 @@ public final class TomlCodec {
         if (val instanceof org.tomlj.TomlTable tt) {
             val = tt.toMap();
         }
-        if (val instanceof org.tomlj.TomlArray ta) {
-            val = ta.toList();
-        }
+        // val instanceof TomlArray is not reachable here: every caller of
+        // buildNode already unwraps a TomlArray before recursing (the map-value
+        // path at "v instanceof TomlArray" below, and the array-item path,
+        // which additionally rejects an array-of-arrays before ever reaching
+        // this call) -- the only remaining entry point (read()) always passes
+        // result.toMap(), never a bare TomlArray.
         if (val instanceof Map<?, ?> map) {
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -300,9 +303,10 @@ public final class TomlCodec {
             }
             return new dev.omnist.document.Node(edges);
         }
-        if (val instanceof List<?>) {
-            throw new RuntimeException(path + ": a bare array has no labeled-edge form (arrays appear only as a repeated field)");
-        }
+        // val instanceof List<?> is not reachable here either, for the same
+        // reason: a list-valued map entry is handled by the "v instanceof
+        // List<?>" branch above (iterating elements, never calling buildNode(v)
+        // directly), and the top-level entry point always passes a Map.
         return toScalar(val);
     }
 

@@ -77,4 +77,30 @@ class ToScalarTripwireReflectionTest {
         assertThrows(IllegalArgumentException.class, () -> invokeToScalar(YamlCodec.class, unsupported));
         assertThrows(IllegalArgumentException.class, () -> invokeToScalar(TomlCodec.class, unsupported));
     }
+
+    @Test
+    @DisplayName("TomlCodec.toScalar: value == null (TOML has no null literal; tomlj never produces one, but kept defensively)")
+    void tomlCodecNullValue() throws Exception {
+        assertEquals(Value.NULL, invokeToScalar(TomlCodec.class, null));
+    }
+
+    @Test
+    @DisplayName("TomlCodec.buildNode: budget guard and object-key-not-string (tomlj always produces String keys)")
+    void tomlCodecBuildNodeBudgetAndKeyGuards() throws Exception {
+        Method buildNode = TomlCodec.class.getDeclaredMethod(
+            "buildNode", Object.class, String.class, int.class, int[].class);
+        buildNode.setAccessible(true);
+
+        int[] overBudget = new int[]{1_000_001};
+        InvocationTargetException budgetThrown = assertThrows(InvocationTargetException.class,
+            () -> buildNode.invoke(null, "any value", "$", 0, overBudget));
+        assertTrue(budgetThrown.getCause().getMessage().contains("too many nodes materialized"));
+
+        java.util.Map<Object, Object> badMap = new java.util.LinkedHashMap<>();
+        badMap.put(123, "value");
+        int[] freshBudget = new int[]{0};
+        InvocationTargetException keyThrown = assertThrows(InvocationTargetException.class,
+            () -> buildNode.invoke(null, badMap, "$", 0, freshBudget));
+        assertTrue(keyThrown.getCause().getMessage().contains("is not a string"));
+    }
 }

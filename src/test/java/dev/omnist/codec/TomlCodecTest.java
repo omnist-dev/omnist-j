@@ -158,6 +158,25 @@ public class TomlCodecTest {
     }
 
     @Test
+    @DisplayName("read: uppercase-prefixed long radix literals (0X/0O/0B) route through the same __omnist_int__ unwrap")
+    void testReadUppercasePrefixedLongRadixIntegerLiterals() {
+        String hex = "0X" + "F".repeat(20);
+        Document hexDoc = TomlCodec.read("a = " + hex + "\n");
+        assertEquals(new IntegerScalar(new BigInteger("F".repeat(20), 16)),
+            ((Node) hexDoc).edges().get(0).target());
+
+        String octal = "0O" + "7".repeat(20);
+        Document octDoc = TomlCodec.read("a = " + octal + "\n");
+        assertEquals(new IntegerScalar(new BigInteger("7".repeat(20), 8)),
+            ((Node) octDoc).edges().get(0).target());
+
+        String binary = "0B" + "1".repeat(20);
+        Document binDoc = TomlCodec.read("a = " + binary + "\n");
+        assertEquals(new IntegerScalar(new BigInteger("1".repeat(20), 2)),
+            ((Node) binDoc).edges().get(0).target());
+    }
+
+    @Test
     @DisplayName("read: invalid hex/octal/binary tokens (isHex/isOctal/isBinary false) fail parsing")
     void testReadInvalidRadixTokens() {
         assertThrows(RuntimeException.class, () -> TomlCodec.read("a = 0x1G\n"));
@@ -240,5 +259,56 @@ public class TomlCodecTest {
 
         Document readBack = TomlCodec.read(toml);
         assertNotNull(readBack);
+    }
+
+    @Test
+    @DisplayName("read: array of arrays is rejected")
+    void testReadArrayOfArraysRejected() {
+        assertThrows(RuntimeException.class, () -> TomlCodec.read("arr = [[1, 2], [3, 4]]\n"));
+    }
+
+    @Test
+    @DisplayName("write: isListOfMaps handles an empty list and a list of non-map elements (plain repeated field)")
+    void testWriteListOfMapsFalseBranches() {
+        // Empty list: isListOfMaps short-circuits to false without checking an element.
+        Node emptyList = new Node(List.of(new Edge("root", new Node(List.of()))));
+        String tomlEmpty = TomlCodec.write(emptyList);
+        assertNotNull(tomlEmpty);
+
+        // Non-empty list whose first element is not a Map: a plain repeated
+        // scalar field, not an array-of-tables.
+        Node plainRepeated = new Node(List.of(new Edge("root", new Node(List.of(
+            new Edge("tags", new StringScalar("a")),
+            new Edge("tags", new StringScalar("b"))
+        )))));
+        String toml = TomlCodec.write(plainRepeated);
+        assertFalse(toml.contains("[["));
+        Document readBack = TomlCodec.read(toml);
+        assertNotNull(readBack);
+    }
+
+    @Test
+    @DisplayName("write: both true and false boolean values, and a string containing a literal double-quote")
+    void testWriteBooleanBothValuesAndQuoteEscaping() {
+        Node doc = new Node(List.of(new Edge("root", new Node(List.of(
+            new Edge("t", new BooleanScalar(true)),
+            new Edge("f", new BooleanScalar(false)),
+            new Edge("s", new StringScalar("has \"quotes\" inside"))
+        )))));
+        String toml = TomlCodec.write(doc);
+        assertTrue(toml.contains("t = true"));
+        assertTrue(toml.contains("f = false"));
+        assertTrue(toml.contains("\\\"quotes\\\""));
+
+        Document readBack = TomlCodec.read(toml);
+        Node readBackNode = (Node) ((Node) readBack).edges().get(0).target();
+        assertEquals(3, readBackNode.edges().size());
+        boolean foundTrue = false, foundFalse = false, foundQuotes = false;
+        for (Edge e : readBackNode.edges()) {
+            if (e.target().equals(new BooleanScalar(true))) foundTrue = true;
+            if (e.target().equals(new BooleanScalar(false))) foundFalse = true;
+            if (e.target().equals(new StringScalar("has \"quotes\" inside"))) foundQuotes = true;
+        }
+        assertTrue(foundTrue && foundFalse && foundQuotes);
     }
 }
