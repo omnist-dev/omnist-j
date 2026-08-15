@@ -164,6 +164,17 @@ public class YamlCodecTest {
     }
 
     @Test
+    @DisplayName("read: a 10-char date-shaped value with invalid month/day fails LocalDate.parse and cascades")
+    void testReadDateShapeMatchesButInvalidValueCascades() {
+        // "9999-99-99" is length-10 with dashes at positions 4/7 (matches the
+        // shape check) but month 99/day 99 are invalid, so LocalDate.parse
+        // throws and this falls through to the next constructor in the
+        // cascade -- exercising both the shape-match true branch and the catch.
+        Document doc = YamlCodec.read("a: !!timestamp \"9999-99-99\"\n", null);
+        assertNotNull(doc);
+    }
+
+    @Test
     @DisplayName("write: strict mode throws WriteException, and prepareYaml/scanYaml depth limits")
     void testWriteStrictAndDepthLimit() {
         Document tDoc = new Node(List.of(new Edge("t", new TimeScalar(
@@ -176,5 +187,36 @@ public class YamlCodecTest {
         }
         Node finalDeep = deep;
         assertThrows(WriteException.class, () -> YamlCodec.write(finalDeep));
+    }
+
+    @Test
+    @DisplayName("read: an integer beyond Integer range but within Long resolves via the Long branch")
+    void testReadLargeIntegerResolvesAsLong() {
+        // Verified via a scratch diagnostic that SnakeYAML's default Yaml
+        // produces java.lang.Long (not BigInteger) for this magnitude -- a
+        // genuinely reachable branch, not a trip-wire.
+        Document doc = YamlCodec.read("a: 99999999999\n", null);
+        Node node = (Node) doc;
+        assertEquals(new IntegerScalar(BigInteger.valueOf(99999999999L)), node.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("read: budget and depth guards (reflection)")
+    void testReadBudgetAndDepthGuardsViaReflection() throws Exception {
+        java.lang.reflect.Method buildNode = YamlCodec.class.getDeclaredMethod(
+            "buildNode", Object.class, String.class, int.class, int[].class);
+        buildNode.setAccessible(true);
+
+        int[] overBudget = new int[]{1_000_001};
+        java.lang.reflect.InvocationTargetException budgetThrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> buildNode.invoke(null, "any value", "$", 0, overBudget));
+        assertTrue(budgetThrown.getCause().getMessage().contains("too many nodes materialized"));
+
+        int[] freshBudget = new int[]{0};
+        java.lang.reflect.InvocationTargetException depthThrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> buildNode.invoke(null, "any value", "$", 201, freshBudget));
+        assertTrue(depthThrown.getCause().getMessage().contains("nesting exceeds the maximum depth"));
     }
 }

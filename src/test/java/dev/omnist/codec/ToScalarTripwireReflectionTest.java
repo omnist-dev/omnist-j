@@ -48,21 +48,25 @@ class ToScalarTripwireReflectionTest {
     }
 
     @Test
-    @DisplayName("YamlCodec.toScalar: Float, BigDecimal, and java.util.Date branches")
+    @DisplayName("YamlCodec.toScalar: Float, BigDecimal (both branches), and java.util.Date branches")
     void yamlCodecFloatBigDecimalAndDate() throws Exception {
         assertEquals(new NumberScalar(3.5), invokeToScalar(YamlCodec.class, 3.5f));
         assertEquals(new NumberScalar(3.5), invokeToScalar(YamlCodec.class, new BigDecimal("3.5")));
+        Value exact = invokeToScalar(YamlCodec.class, new BigDecimal("42"));
+        assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(42)), exact);
         Value fromDate = invokeToScalar(YamlCodec.class, new java.util.Date(0));
         assertInstanceOf(dev.omnist.document.Scalar.DateTimeScalar.class, fromDate);
     }
 
     @Test
-    @DisplayName("TomlCodec.toScalar: BigInteger, Integer, Float, and BigDecimal branches")
+    @DisplayName("TomlCodec.toScalar: BigInteger, Integer, Float, and BigDecimal (both branches)")
     void tomlCodecBigIntegerIntegerFloatAndBigDecimal() throws Exception {
         assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.TEN), invokeToScalar(TomlCodec.class, BigInteger.TEN));
         assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(7)), invokeToScalar(TomlCodec.class, 7));
         assertEquals(new NumberScalar(3.5), invokeToScalar(TomlCodec.class, 3.5f));
         assertEquals(new NumberScalar(3.5), invokeToScalar(TomlCodec.class, new BigDecimal("3.5")));
+        Value exact = invokeToScalar(TomlCodec.class, new BigDecimal("42"));
+        assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(42)), exact);
     }
 
     @Test
