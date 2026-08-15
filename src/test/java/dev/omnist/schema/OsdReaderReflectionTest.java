@@ -41,4 +41,24 @@ class OsdReaderReflectionTest {
         assertEquals(-1, result.line());
         assertEquals(-1, result.col());
     }
+
+    @Test
+    @DisplayName("consumeToken(): index does not advance further once already at/past tokens.size()")
+    void consumeTokenDoesNotAdvancePastEnd() throws Exception {
+        OsdReader reader = new OsdReader("record R { \"a\": string } root R\n");
+
+        Field tokensField = OsdReader.class.getDeclaredField("tokens");
+        tokensField.setAccessible(true);
+        java.util.List<Token> tokens = (java.util.List<Token>) tokensField.get(reader);
+
+        Field indexField = OsdReader.class.getDeclaredField("index");
+        indexField.setAccessible(true);
+        indexField.set(reader, tokens.size() + 1);
+
+        Method consumeToken = OsdReader.class.getDeclaredMethod("consumeToken");
+        consumeToken.setAccessible(true);
+        consumeToken.invoke(reader);
+
+        assertEquals(tokens.size() + 1, indexField.get(reader));
+    }
 }

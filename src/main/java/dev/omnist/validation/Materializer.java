@@ -108,7 +108,11 @@ public final class Materializer {
             return value;
         }
 
-        if (value instanceof Value.NullValue || value == null) {
+        // value == null is not a reachable case: materializeScalar's only real
+        // caller path passes (Document) edge.target(), which Edge's constructor
+        // guarantees is never null; a top-level null document would hit
+        // materializeRecord's instanceof Node check first, never reaching here.
+        if (value instanceof Value.NullValue) {
             if (!s.nullable()) {
                 diagnostics.add(new ValidationDiagnostic(path, "validate.null-not-allowed", "null not allowed here"));
             }

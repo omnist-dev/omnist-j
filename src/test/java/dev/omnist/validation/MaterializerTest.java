@@ -146,4 +146,30 @@ public class MaterializerTest {
         assertTrue(outInner.edges().get(0).target() instanceof StringScalar);
         assertEquals("2024-01-01", ((StringScalar) outInner.edges().get(0).target()).value());
     }
+
+    @Test
+    @DisplayName("materializeType: budget guard rejects when the node count would exceed 1,000,000 (reflection)")
+    void testBudgetGuardViaReflection() throws Exception {
+        // Materializing over one million real nodes for one defensive line
+        // would be a multi-second, multi-hundred-MB test; reflection invokes
+        // the private method directly with a pre-seeded budget array instead,
+        // with zero production code changes.
+        Schema schema = OsdReader.read("record R { \"x\": string }\nroot R\n");
+        Node doc = new Node(List.of(new Edge("x", new StringScalar("v"))));
+
+        java.lang.reflect.Method materializeType = Materializer.class.getDeclaredMethod(
+            "materializeType", Document.class, Schema.class, dev.omnist.schema.Type.class,
+            String.class, int.class, int[].class, List.class);
+        materializeType.setAccessible(true);
+
+        int[] budget = new int[]{1_000_001};
+        java.util.List<ValidationDiagnostic> diagnostics = new java.util.ArrayList<>();
+        dev.omnist.schema.Type.Ref rootType = new dev.omnist.schema.Type.Ref(schema.root());
+
+        java.lang.reflect.InvocationTargetException thrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> materializeType.invoke(null, doc, schema, rootType, "$", 0, budget, diagnostics));
+        assertInstanceOf(RuntimeException.class, thrown.getCause());
+        assertTrue(thrown.getCause().getMessage().contains("too many nodes materialized"));
+    }
 }

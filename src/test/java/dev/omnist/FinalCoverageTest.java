@@ -1464,6 +1464,36 @@ class FinalCoverageTest {
         assertThrows(ValidationException.class, () -> Materializer.materialize(doc, schema));
     }
 
+    @Test
+    void materializer_timeShapeMatchesButInvalidValueHitsCatch() {
+        // materializeScalar: ANCHORED_TIME matches the shape ("25:99:99" is
+        // HH:MM:SS-shaped) but LocalTime.parse rejects the out-of-range values --
+        // exercises the catch clause, distinct from a string that never matches
+        // the shape regex at all (materializer_invalidTimeFormatFails above).
+        Schema schema = OsdReader.read("record R { \"t\": time }\nroot R\n");
+        Node doc = new Node(List.of(new Edge("t", new StringScalar("25:99:99"))));
+        assertThrows(ValidationException.class, () -> Materializer.materialize(doc, schema));
+    }
+
+    @Test
+    void materializer_datetimeShapeMatchesButInvalidValueHitsCatch() {
+        // Same as above for ANCHORED_DATETIME / parseDateTimeValue.
+        Schema schema = OsdReader.read("record R { \"dt\": datetime }\nroot R\n");
+        Node doc = new Node(List.of(new Edge("dt", new StringScalar("9999-99-99T25:99:99"))));
+        assertThrows(ValidationException.class, () -> Materializer.materialize(doc, schema));
+    }
+
+    @Test
+    void materializer_integerToNumberFieldConversion() {
+        // materializeScalar: integer <- number is already tested; this covers
+        // number <- integer (the opposite direction).
+        Schema schema = OsdReader.read("record R { \"n\": number }\nroot R\n");
+        Node doc = new Node(List.of(new Edge("n", new IntegerScalar(java.math.BigInteger.valueOf(42)))));
+        Document result = Materializer.materialize(doc, schema);
+        Node resultNode = (Node) result;
+        assertEquals(new NumberScalar(42.0), resultNode.edges().get(0).target());
+    }
+
     // ==========================================================================
     // Batch 2: Validator, OsdLexer, OsdWriter
     // ==========================================================================
