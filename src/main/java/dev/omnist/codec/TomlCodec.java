@@ -229,16 +229,22 @@ public final class TomlCodec {
         } catch (Exception | AssertionError e) {
             throw new RuntimeException("invalid TOML: " + e.getMessage(), e);
         }
+        return documentFromParseResult(result);
+    }
+
+    // Extracted so the toMap()==null defensive branch can be exercised via
+    // reflection with a hand-built TomlParseResult stub, without any
+    // production-visible seam: tomlj's TomlTable#toMap() (which
+    // TomlParseResult extends) is declared to return Map<String, Object>
+    // with no Optional/nullable contract in its own API, and no malformed-
+    // but-still-non-error-result input has been found that returns null
+    // through the real Toml.parse() path.
+    private static Document documentFromParseResult(TomlParseResult result) {
         if (result.hasErrors()) {
             throw new RuntimeException("invalid TOML: " + result.errors().get(0).toString());
         }
 
         Map<String, Object> raw = result.toMap();
-        // Not observed to be reachable: tomlj's TomlTable#toMap() (which
-        // TomlParseResult extends) is declared to return Map<String, Object>
-        // with no Optional/nullable contract in its own API, and no malformed-
-        // but-still-non-error-result input has been found that returns null.
-        // Kept as defensive handling against a library-contract violation.
         if (raw == null) {
             throw new RuntimeException("invalid TOML: no document found");
         }
