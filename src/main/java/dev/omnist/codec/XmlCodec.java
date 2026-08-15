@@ -104,16 +104,22 @@ public final class XmlCodec {
         }
 
         if (!childElements.isEmpty()) {
+            // CDATA_SECTION_NODE is not reachable here: the DocumentBuilderFactory
+            // this class configures always sets setCoalescing(true) (see read()
+            // above), which merges CDATA sections into plain TEXT_NODE content
+            // before the DOM is ever exposed to this code -- verified empirically
+            // that a CDATA section's node type is TEXT_NODE (3), never
+            // CDATA_SECTION_NODE (4), under this exact configuration.
             for (int i = 0; i < children.getLength(); i++) {
                 org.w3c.dom.Node child = children.item(i);
-                if (child.getNodeType() == org.w3c.dom.Node.TEXT_NODE || child.getNodeType() == org.w3c.dom.Node.CDATA_SECTION_NODE) {
+                if (child.getNodeType() == org.w3c.dom.Node.TEXT_NODE) {
                     String text = child.getNodeValue();
                     if (text != null && !text.trim().isEmpty()) {
                         throw new RuntimeException(path + ": mixed content (text alongside child elements) is outside the data-XML profile");
                     }
                 }
             }
-            
+
             List<Object[]> edges = new ArrayList<>();
             for (org.w3c.dom.Element c : childElements) {
                 String localName = localName(c);
@@ -125,7 +131,7 @@ public final class XmlCodec {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < children.getLength(); i++) {
                 org.w3c.dom.Node child = children.item(i);
-                if (child.getNodeType() == org.w3c.dom.Node.TEXT_NODE || child.getNodeType() == org.w3c.dom.Node.CDATA_SECTION_NODE) {
+                if (child.getNodeType() == org.w3c.dom.Node.TEXT_NODE) {
                     sb.append(child.getNodeValue());
                 }
             }

@@ -287,4 +287,68 @@ public class XmlCodecTest {
         assertTrue(xml.contains("42"));
         assertTrue(xml.contains("3.14"));
     }
+
+    @Test
+    @DisplayName("localName(): getLocalName()==null fallback to getTagName() with colon-stripping (reflection -- XmlCodec always parses namespace-aware, so this never happens through read())")
+    void testLocalNameFallbackViaReflection() throws Exception {
+        javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(false);
+        org.w3c.dom.Document doc = dbf.newDocumentBuilder().parse(
+            new org.xml.sax.InputSource(new java.io.StringReader("<ns:root>1</ns:root>")));
+        org.w3c.dom.Element el = doc.getDocumentElement();
+        assertNull(el.getLocalName());
+
+        java.lang.reflect.Method localName = XmlCodec.class.getDeclaredMethod("localName", org.w3c.dom.Element.class);
+        localName.setAccessible(true);
+        assertEquals("root", localName.invoke(null, el));
+    }
+
+    @Test
+    @DisplayName("read/write: budget guards and buildDoc's unknown-type throw (reflection)")
+    void testBudgetGuardsAndUnknownTypeViaReflection() throws Exception {
+        java.lang.reflect.Method xmlToNode = XmlCodec.class.getDeclaredMethod(
+            "xmlToNode", org.w3c.dom.Element.class, String.class, int.class, int[].class);
+        xmlToNode.setAccessible(true);
+        javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(
+            new org.xml.sax.InputSource(new java.io.StringReader("<a>1</a>")));
+        org.w3c.dom.Element el = domDoc.getDocumentElement();
+
+        int[] overBudget = new int[]{1_000_001};
+        java.lang.reflect.InvocationTargetException readThrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> xmlToNode.invoke(null, el, "$", 0, overBudget));
+        assertTrue(readThrown.getCause().getMessage().contains("too many nodes materialized"));
+
+        java.lang.reflect.Method buildDoc = XmlCodec.class.getDeclaredMethod(
+            "buildDoc", Object.class, String.class, int.class, int[].class);
+        buildDoc.setAccessible(true);
+        int[] overBudget2 = new int[]{1_000_001};
+        java.lang.reflect.InvocationTargetException writeThrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> buildDoc.invoke(null, "any value", "$", 0, overBudget2));
+        assertTrue(writeThrown.getCause().getMessage().contains("too many nodes materialized"));
+
+        int[] freshBudget = new int[]{0};
+        java.lang.reflect.InvocationTargetException unknownTypeThrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> buildDoc.invoke(null, 3.14f, "$", 0, freshBudget));
+        assertInstanceOf(IllegalArgumentException.class, unknownTypeThrown.getCause());
+    }
+
+    @Test
+    @DisplayName("write: strict mode succeeds with no adjustments, and xmlName's fully-sanitized-to-empty fallback")
+    void testWriteStrictSucceedsAndXmlNameEmptyFallback() {
+        Node cleanDoc = new Node(List.of(new Edge("root", new StringScalar("v"))));
+        String xml = XmlCodec.write(cleanDoc, true, null);
+        assertTrue(xml.contains("<root>"));
+
+        // "123" sanitizes to itself (digits are XML_NAME-legal characters) but
+        // still fails XML_NAME's own match (a name can't start with a digit),
+        // forcing the "_" prefix fallback -- distinct from a label whose
+        // sanitized form is empty.
+        Node digitLabel = new Node(List.of(new Edge("123", new StringScalar("v"))));
+        String xml2 = XmlCodec.write(digitLabel);
+        assertTrue(xml2.contains("<_123"));
+    }
 }
