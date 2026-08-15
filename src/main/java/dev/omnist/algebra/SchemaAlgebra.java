@@ -109,7 +109,7 @@ public final class SchemaAlgebra {
 
     /**
      * Checks if two Schemas accept the exact same set of Documents (§6.7).
-     * Evaluates compatibleWith(A, B) && compatibleWith(B, A).
+     * Evaluates {@code compatibleWith(A, B) && compatibleWith(B, A)}.
      */
     public static boolean equivalent(Schema a, Schema b) {
         return compatibleWith(a, b) && compatibleWith(b, a);

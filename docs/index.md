@@ -24,5 +24,6 @@ This port follows [omnist-spec](https://spec.omnist.dev) as its primary normativ
 
 - [Guide & quickstart](00-guide.md) — the Omnist mental model and a working example
 - [API reference](01-api-reference.md) — the full Java API
+- [Javadoc](https://j.omnist.dev/javadoc/) — generated API docs, straight from source
 - [CLI reference](02-cli-reference.md) — every `omnist` subcommand
 - [Status & limitations](limitations.md) — conformance results, coverage, what's implemented

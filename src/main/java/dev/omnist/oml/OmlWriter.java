@@ -6,7 +6,7 @@ import java.time.ZoneOffset;
 import java.util.regex.Pattern;
 
 /**
- * OML (Omnist Markup Language) Canonical Writer (omnist-spec §4 & §9.5).
+ * OML (Omnist Markup Language) Canonical Writer (omnist-spec §4 and §9.5).
  * Serializes a {@link Document} into canonical OML text format.
  */
 public class OmlWriter {
