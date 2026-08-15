@@ -241,6 +241,24 @@ public class TomlCodecTest {
     }
 
     @Test
+    @DisplayName("write: strict mode succeeds when there are no adjustments to report")
+    void testWriteStrictModeSucceedsWithNoAdjustments() {
+        Node cleanDoc = new Node(List.of(new Edge("x", new IntegerScalar(BigInteger.ONE))));
+        String toml = TomlCodec.write(cleanDoc, true, null);
+        assertTrue(toml.contains("x = 1"));
+    }
+
+    @Test
+    @DisplayName("prepareToml: Value.NullValue branch (reflection -- stripNulls always removes null edges before prepareToml runs through the real write() path)")
+    void testPrepareTomlNullValueViaReflection() throws Exception {
+        java.lang.reflect.Method prepareToml = TomlCodec.class.getDeclaredMethod(
+            "prepareToml", Document.class, String.class, int.class, boolean.class);
+        prepareToml.setAccessible(true);
+        Object result = prepareToml.invoke(null, Value.NULL, "$", 0, false);
+        assertNull(result);
+    }
+
+    @Test
     @DisplayName("write: nested sub-table, array-of-tables, quoted key, and list value round-trip")
     void testWriteNestedTableArrayOfTablesAndQuotedKey() {
         Node doc = new Node(List.of(new Edge("root", new Node(List.of(
