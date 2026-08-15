@@ -149,6 +149,46 @@ public class JsonCodecTest {
     }
 
     @Test
+    @DisplayName("write: a non-null but non-positive indent (0) uses the compact writer, not pretty-printing")
+    void testWriteWithZeroIndentUsesCompactWriter() {
+        Document doc = new Node(List.of(new Edge("a", new IntegerScalar(BigInteger.ONE))));
+        String compact = JsonCodec.write(doc, 0, false, null);
+        assertFalse(compact.contains("\n"));
+    }
+
+    @Test
+    @DisplayName("read: object key not a string (reflection, Jackson never actually produces a non-String JSON object key)")
+    void testReadObjectKeyNotStringViaReflection() throws Exception {
+        java.lang.reflect.Method buildNode = JsonCodec.class.getDeclaredMethod(
+            "buildNode", Object.class, String.class, int.class, int[].class);
+        buildNode.setAccessible(true);
+        java.util.Map<Object, Object> badMap = new java.util.LinkedHashMap<>();
+        badMap.put(123, "value");
+        int[] budget = new int[]{0};
+
+        java.lang.reflect.InvocationTargetException thrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> buildNode.invoke(null, badMap, "$", 0, budget));
+        assertInstanceOf(RuntimeException.class, thrown.getCause());
+        assertTrue(thrown.getCause().getMessage().contains("is not a string"));
+    }
+
+    @Test
+    @DisplayName("read: budget guard rejects when the node count would exceed 1,000,000 (reflection)")
+    void testReadBudgetGuardViaReflection() throws Exception {
+        java.lang.reflect.Method buildNode = JsonCodec.class.getDeclaredMethod(
+            "buildNode", Object.class, String.class, int.class, int[].class);
+        buildNode.setAccessible(true);
+        int[] budget = new int[]{1_000_001};
+
+        java.lang.reflect.InvocationTargetException thrown = assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> buildNode.invoke(null, "any value", "$", 0, budget));
+        assertInstanceOf(RuntimeException.class, thrown.getCause());
+        assertTrue(thrown.getCause().getMessage().contains("too many nodes materialized"));
+    }
+
+    @Test
     @DisplayName("write: strict mode throws WriteException when adjustments are non-empty")
     void testWriteStrictModeThrows() {
         Document doc = new Node(List.of(new Edge("d", new dev.omnist.document.Scalar.DateScalar(LocalDate.parse("2024-01-01")))));

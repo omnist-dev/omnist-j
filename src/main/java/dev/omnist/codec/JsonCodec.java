@@ -139,6 +139,11 @@ public final class JsonCodec {
                 return MAPPER.writeValueAsString(grouped);
             }
         } catch (IOException e) {
+            // Not observed to be reachable: `grouped` is built entirely from
+            // this codec's own controlled types (List/Map/String/Boolean/
+            // BigInteger/Double), so Jackson's in-memory writeValueAsString has
+            // no real failure mode here short of a custom-serializer bug.
+            // Kept as defensive handling for the checked-exception contract.
             throw new RuntimeException(e);
         }
     }
