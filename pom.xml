@@ -145,8 +145,18 @@
                                                  gaps are the branch counterparts of the LINE gate's own
                                                  confirmed-unreachable lines (OmlLexer/Materializer's twin
                                                  parseTimeValue sign-offset checks, XmlCodec's Text.getNodeValue()
-                                                 null check), same documented-in-place convention as LINE. -->
-                                            <minimum>0.998</minimum>
+                                                 null check), same documented-in-place convention as LINE.
+
+                                                 Gate set with a larger margin than LINE's (0.995 vs. the 99.85%
+                                                 real number, not 0.998), because BRANCH, unlike LINE, is
+                                                 measurably sensitive to jqwik's RANDOMIZED fuzz-test seeding:
+                                                 FuzzTest/OmlLexerPropertyTest/TomlRadixPropertyTest pick a fresh
+                                                 seed every run, so which combinatorial branch outcomes a given
+                                                 run's random inputs happen to hit can legitimately shift by a
+                                                 branch or two run to run. A CI run at exactly 0.998 failed on
+                                                 real, non-regressive variance (0.997 measured) shortly after this
+                                                 gate was first set at 0.998; this margin is the fix. -->
+                                            <minimum>0.995</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
