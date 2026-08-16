@@ -209,6 +209,7 @@ public class OmlReader {
         }
 
         boolean first = true;
+        boolean closed = false;
         while (peekType() != TokenType.EOF) {
             if (peekType() == TokenType.SEPARATOR) {
                 Token sep = peekToken();
@@ -216,6 +217,7 @@ public class OmlReader {
             }
             if (peekType() == TokenType.RBRACKET) {
                 consumeToken();
+                closed = true;
                 break;
             }
 
@@ -228,6 +230,7 @@ public class OmlReader {
                     }
                     if (peekType() == TokenType.RBRACKET) {
                         consumeToken();
+                        closed = true;
                         break;
                     }
                 } else {
@@ -261,6 +264,11 @@ public class OmlReader {
             }
 
             first = false;
+        }
+
+        if (!closed) {
+            Token eof = peekToken();
+            throw new OmlParseException(eof.line(), eof.col(), "parse.unexpected-token", "Expected ',' or ']' in array, got EOF");
         }
     }
 

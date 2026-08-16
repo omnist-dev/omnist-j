@@ -267,16 +267,13 @@ class OmlReaderTest {
     }
 
     @Test
-    @DisplayName("testCharacterization6_UnterminatedArrayReachesEofSilently: parseArrayElements' while-loop " +
-                 "condition is the only thing that stops it at EOF -- there's no explicit unterminated-array " +
-                 "error, so a missing closing ']' currently produces edges without ever signaling a parse " +
-                 "error. Characterizing existing behavior, not asserting it's the intended long-term contract " +
-                 "-- see the follow-up task filed for this codec's array-termination handling.")
-    void testCharacterization6_UnterminatedArrayReachesEofSilently() {
-        Document doc = OmlReader.read("a: [1, 2");
-        Node node = (Node) doc;
-        assertEquals(2, node.edges().size());
-        assertEquals(new Scalar.IntegerScalar(java.math.BigInteger.valueOf(1)), node.edges().get(0).target());
-        assertEquals(new Scalar.IntegerScalar(java.math.BigInteger.valueOf(2)), node.edges().get(1).target());
+    @DisplayName("unterminated array (EOF before closing ']') raises parse.unexpected-token (issue #37)")
+    void testUnterminatedArrayThrows() {
+        // Verified against the omni-spec grammar and all four sibling ports
+        // (Python/TS/Rust/Go), which all reject this input -- omnist-j was the
+        // only implementation silently parsing it as two top-level edges.
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> OmlReader.read("a: [1, 2"));
+        assertEquals("parse.unexpected-token", ex.getCode());
+        assertTrue(ex.getMessage().contains("Expected ',' or ']' in array"));
     }
 }
