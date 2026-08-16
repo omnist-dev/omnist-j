@@ -243,7 +243,12 @@ public class OmlLexer {
                 double d = Double.parseDouble(text);
                 advance(text.length());
                 return new Token(TokenType.NUMBER, text, d, startLine, startCol);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+                // Unreachable in practice: every string NUMBER_PATTERN can match is
+                // -?\d+\.\d+([eE][-+]?\d+)? or -?\d+[eE][-+]?\d+, both of which are
+                // strict subsets of Double.parseDouble's grammar and never overflow
+                // into an exception (only into Infinity/0, neither of which throws).
+            }
         }
 
         // Rule 7: Reserved float spellings nan, inf, -inf (emitted as NUMBER)
@@ -273,6 +278,11 @@ public class OmlLexer {
                 advance(text.length());
                 return new Token(TokenType.INTEGER, text, bi, startLine, startCol);
             } catch (NumberFormatException e) {
+                // Unreachable in practice: every string INTEGER_PATTERN (-?\d+) can
+                // match is exactly BigInteger(String)'s accepted grammar, so this
+                // catch can't actually fire. Kept as defensive handling for the
+                // checked-exception-shaped contract, same as JsonCodec.write's
+                // IOException catch below.
                 throw error("parse.unexpected-token", "Invalid integer literal: " + text, startLine, startCol);
             }
         }

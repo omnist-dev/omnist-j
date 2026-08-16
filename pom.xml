@@ -118,18 +118,30 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 99.65% measured 2026-08-15 (excl. dev.omnist.conformance),
-                                                 after closing SchemaAlgebra's remaining gaps; gate set just
-                                                 below the real achieved number so it catches actual
-                                                 regressions immediately rather than sitting on a stale
-                                                 floor from an earlier, lower-coverage baseline. -->
-                                            <minimum>0.996</minimum>
+                                            <!-- 99.79% measured 2026-08-16 (excl. dev.omnist.conformance), after
+                                                 #34's investigation: the only 6 remaining gate-scoped missed lines
+                                                 are all confirmed-unreachable defensive code (regex/DOM/Jackson
+                                                 contract guarantees; see comments at OmlLexer's two
+                                                 NumberFormatException catches, XmlCodec.read's null-root check,
+                                                 and JsonCodec.write's IOException catch); JaCoCo has no
+                                                 line-level exclusion mechanism (only class-level, already used
+                                                 for dev.omnist.conformance/CliMain above), so these stay
+                                                 inline rather than being fragmented into dedicated excluded
+                                                 classes purely to chase the metric. Gate set just below the
+                                                 real achieved number so it catches actual regressions
+                                                 immediately rather than sitting on a stale floor. -->
+                                            <minimum>0.997</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 97.87% measured 2026-08-15 (excl. dev.omnist.conformance) -->
-                                            <minimum>0.978</minimum>
+                                            <!-- 97.96% measured 2026-08-16 (excl. dev.omnist.conformance). #34
+                                                 also tracks closing the remaining ~40 branch-only gaps, which
+                                                 need per-site investigation (some are likely reachable with a
+                                                 crafted test, per the OmlLexer/XmlCodec character-class and
+                                                 attribute-handling patterns; some may turn out equally
+                                                 unreachable); not yet done as of this measurement. -->
+                                            <minimum>0.979</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

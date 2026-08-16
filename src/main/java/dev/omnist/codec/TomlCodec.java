@@ -101,28 +101,26 @@ public final class TomlCodec {
             } else {
                 char c = text.charAt(i);
                 if ((c >= '0' && c <= '9') || c == '+' || c == '-') {
+                    // c is a digit, '+', or '-', all of which satisfy isTokenChar, so
+                    // the loop below always advances past `start` at least once --
+                    // there's no i == start case to guard against.
                     int start = i;
                     while (i < n && isTokenChar(text.charAt(i))) {
                         i++;
                     }
-                    if (i == start) {
-                        sb.append(c);
-                        i++;
-                    } else {
-                        String token = text.substring(start, i);
-                        if (isHex(token) || isOctal(token) || isBinary(token) || isDecimal(token)) {
-                            int digitCount = countDigits(token);
-                            if (digitCount > 4300) {
-                                throw new RuntimeException("Integer exceeds maximum digit limit of 4300");
-                            }
-                            if (digitCount > 18) {
-                                sb.append("\"__omnist_int__").append(token).append("\"");
-                            } else {
-                                sb.append(token);
-                            }
+                    String token = text.substring(start, i);
+                    if (isHex(token) || isOctal(token) || isBinary(token) || isDecimal(token)) {
+                        int digitCount = countDigits(token);
+                        if (digitCount > 4300) {
+                            throw new RuntimeException("Integer exceeds maximum digit limit of 4300");
+                        }
+                        if (digitCount > 18) {
+                            sb.append("\"__omnist_int__").append(token).append("\"");
                         } else {
                             sb.append(token);
                         }
+                    } else {
+                        sb.append(token);
                     }
                 } else {
                     sb.append(c);

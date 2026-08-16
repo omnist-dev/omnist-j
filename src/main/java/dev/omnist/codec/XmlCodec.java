@@ -103,7 +103,10 @@ public final class XmlCodec {
             InputSource is = new InputSource(new StringReader(text));
             org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(is);
             rootElem = domDoc.getDocumentElement();
-            // Defensive: getDocumentElement() rarely returns null for valid XML documents
+            // Unreachable in practice: DocumentBuilder.parse() either throws (malformed
+            // input, caught below) or returns a Document per the well-formedness
+            // contract, which always has exactly one root element -- there's no real
+            // input that reaches this line with a null rootElem.
             if (rootElem == null) {
                 throw new RuntimeException("no document element found");
             }
