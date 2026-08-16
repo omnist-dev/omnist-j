@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.0.1-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.0.2-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -27,15 +27,16 @@ Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.65%** | **97.87%** |
+| Overall | **99.83%** | **99.85%** |
 | `dev.omnist.document` | 100.0% | 100.0% |
 | `dev.omnist.schema` | 100.0% | 100.0% |
-| `dev.omnist.validation` | 100.0% | 97.5% |
-| `dev.omnist.algebra` | 99.6% | 96.7% |
-| `dev.omnist.codec` | 99.5% | 97.7% |
-| `dev.omnist.oml` | 99.5% | 97.1% |
+| `dev.omnist.algebra` | 100.0% | 100.0% |
+| `dev.omnist.cli` | 100.0% | 100.0% |
+| `dev.omnist.codec` | 99.8% | 99.9% |
+| `dev.omnist.validation` | 100.0% | 99.2% |
+| `dev.omnist.oml` | 99.5% | 99.7% |
 
-The CI gate (`pom.xml`) is set at 99.6% line / 97.8% branch — just below
+The CI gate (`pom.xml`) is set at 99.8% line / 99.8% branch — just below
 the real achieved number, so it catches actual regressions rather than
 sitting on a stale, looser floor.
 

@@ -28,8 +28,8 @@ For workflow details and engineering constraints, see [`docs/workflow-playbook.m
 
 ## Status
 
-**`v0.0.1-alpha`.**
+**`v0.0.2-alpha`.**
 
 - **Conformance Harness**: **181 / 181 (100%) PASS** across Track 1 CLI fixtures & Track 2 JSON test vectors.
-- **Unit & Fuzz Testing**: **513 tests passing**, 0 failures — JUnit unit/integration tests plus jqwik property-based and fuzz tests, zero crashes.
-- **Code Coverage (JaCoCo)**: **99.65% Line / 97.87% Branch** overall (gate-scoped, excludes the conformance harness and `CliMain`). `document` and `schema` are at 100%/100%; every remaining gap is a documented, empirically-verified trip-wire. See [Status & limitations](https://j.omnist.dev/limitations/) for the full breakdown.
+- **Unit & Fuzz Testing**: **553 tests passing**, 0 failures — JUnit unit/integration tests plus jqwik property-based and fuzz tests, zero crashes.
+- **Code Coverage (JaCoCo)**: **99.83% Line / 99.85% Branch** overall (gate-scoped, excludes the conformance harness and `CliMain`). Five of seven packages are at 100%/100%; every remaining gap is a documented, empirically-verified trip-wire. See [Status & limitations](https://j.omnist.dev/limitations/) for the full breakdown.
