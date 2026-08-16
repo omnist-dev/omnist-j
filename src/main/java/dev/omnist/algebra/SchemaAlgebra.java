@@ -610,7 +610,12 @@ public final class SchemaAlgebra {
         int start = 0;
         while (start < out.length()) {
             char c = out.charAt(start);
-            if ((c >= '0' && c <= '9') || c == '_') {
+            // c >= '0' is always true here: every char in `out` came from the
+            // sanitization loop above, which only ever appends a
+            // Character.isLetterOrDigit char or '_' (95) -- no Unicode letter,
+            // digit, or '_' has a code point below '0' (48) -- so the redundant
+            // lower bound is dropped rather than left as an unreachable branch.
+            if (c <= '9' || c == '_') {
                 start++;
             } else {
                 break;

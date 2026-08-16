@@ -63,6 +63,24 @@ class AlgebraCoverageTest {
     }
 
     @Test
+    void testInferGeneratesIdentifiersFromUnusualFieldLabels() {
+        // A nested Node field's label becomes a generated record name via
+        // identifier(): exercises the non-alnum/underscore sanitization branch
+        // ("my label" has a space), the leading-digit-strip branch ("123field"),
+        // the leading-underscore-strip branch ("_field"), and the immediate-break
+        // branch for a label that's already a valid leading char ("plain").
+        Node doc = new Node(List.of(
+            new Edge("my label", new Node(List.of(new Edge("x", new Scalar.IntegerScalar(BigInteger.ONE))))),
+            new Edge("123field", new Node(List.of(new Edge("x", new Scalar.IntegerScalar(BigInteger.ONE))))),
+            new Edge("_field", new Node(List.of(new Edge("x", new Scalar.IntegerScalar(BigInteger.ONE))))),
+            new Edge("plain", new Node(List.of(new Edge("x", new Scalar.IntegerScalar(BigInteger.ONE)))))
+        ));
+        Schema schema = SchemaAlgebra.infer(List.of(doc), "R", false);
+        assertNotNull(schema);
+        assertTrue(schema.records().size() >= 5);
+    }
+
+    @Test
     void testLintEdgeCases() {
         Schema s = OsdReader.read("""
             record Root {
@@ -77,6 +95,19 @@ class AlgebraCoverageTest {
         assertNotNull(findings);
         assertFalse(findings.isEmpty());
         assertTrue(findings.stream().anyMatch(f -> f.code().equals("lint.unreachable-record")));
+    }
+
+    @Test
+    void testLintWithUndefinedRootDoesNotThrow() {
+        // A schema whose root name isn't a key in records() at all (not constructible
+        // via OsdReader, which validates this, but Schema's own constructor doesn't) --
+        // exercises reachablePlain's schema.records().containsKey(name) false branch.
+        Map<String, Record> records = new LinkedHashMap<>();
+        records.put("Other", new Record("Other", List.of()));
+        Schema schema = new Schema("Missing", records);
+
+        List<LintFinding> findings = SchemaAlgebra.lint(schema);
+        assertNotNull(findings, "lint() should not throw on an undefined root");
     }
 
     @Test

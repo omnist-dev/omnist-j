@@ -102,14 +102,7 @@ public final class XmlCodec {
 
             InputSource is = new InputSource(new StringReader(text));
             org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(is);
-            rootElem = domDoc.getDocumentElement();
-            // Unreachable in practice: DocumentBuilder.parse() either throws (malformed
-            // input, caught below) or returns a Document per the well-formedness
-            // contract, which always has exactly one root element -- there's no real
-            // input that reaches this line with a null rootElem.
-            if (rootElem == null) {
-                throw new RuntimeException("no document element found");
-            }
+            rootElem = requireRootElement(domDoc);
         } catch (Exception e) {
             throw new RuntimeException("invalid XML: " + e.getMessage(), e);
         }
@@ -133,6 +126,22 @@ public final class XmlCodec {
         List<Object[]> rawList = new ArrayList<>();
         rawList.add(new Object[]{rootLabel, rootContent});
         return buildDoc(rawList, "$", 0, budget);
+    }
+
+    /**
+     * Extracted purely as a reflection seam for a defensive branch: unreachable in
+     * practice, since {@code DocumentBuilder.parse} either throws (malformed input,
+     * caught by {@code read}'s caller) or returns a {@code Document} per the
+     * well-formedness contract, which always has exactly one root element. See
+     * {@code XmlCodecReflectionTest} for the mocked-{@code Document} test that
+     * exercises the null case this guards against.
+     */
+    private static org.w3c.dom.Element requireRootElement(org.w3c.dom.Document domDoc) {
+        org.w3c.dom.Element rootElem = domDoc.getDocumentElement();
+        if (rootElem == null) {
+            throw new RuntimeException("no document element found");
+        }
+        return rootElem;
     }
 
     private static Object xmlToNode(org.w3c.dom.Element elem, String path, int depth, int[] budget) {
@@ -165,6 +174,10 @@ public final class XmlCodec {
                 org.w3c.dom.Node child = children.item(i);
                 if (child.getNodeType() == org.w3c.dom.Node.TEXT_NODE) {
                     String text = child.getNodeValue();
+                    // text != null's false side is unreachable in practice: per the DOM
+                    // spec, a Text node's getNodeValue() returns its (possibly empty, but
+                    // never null) character data -- kept as defensive handling for the
+                    // nullable-Object-returning Node.getNodeValue() signature itself.
                     if (text != null && !text.trim().isEmpty()) {
                         throw new RuntimeException(path + ": mixed content (text alongside child elements) is outside the data-XML profile");
                     }

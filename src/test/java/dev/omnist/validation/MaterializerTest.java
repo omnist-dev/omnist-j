@@ -101,6 +101,24 @@ public class MaterializerTest {
     }
 
     @Test
+    @DisplayName("materialize: a NUMBER-typed field given a STRING value doesn't match the number<-integer rule")
+    void testNumberFieldWithStringValueSkipsIntegerCoercionRule() {
+        // Distinct from testUpgrades' integer->number case (targetKind == NUMBER &&
+        // valueKind == INTEGER, both true): here targetKind == NUMBER is true but
+        // valueKind == INTEGER is false (it's STRING), so the number<-integer rule's
+        // whole condition is false and this falls through to the string-based
+        // coercion attempts below, ultimately failing as inexact.
+        String osd = "record R {\n" +
+                     "  \"n\": number,\n" +
+                     "}\n" +
+                     "root R\n";
+        Schema schema = OsdReader.read(osd);
+        Node input = new Node(List.of(new Edge("n", new StringScalar("not a number"))));
+        ValidationException ex = assertThrows(ValidationException.class, () -> Materializer.materialize(input, schema));
+        assertTrue(ex.getResult().diagnostics().stream().anyMatch(d -> d.code().equals("materialize.inexact-conversion") && d.path().equals("$.n")));
+    }
+
+    @Test
     @DisplayName("materialize checks cardinality and unexpected fields")
     void testUnexpectedFieldAndCardinality() {
         String osd = "record R {\n" +
@@ -119,6 +137,47 @@ public class MaterializerTest {
 
         assertTrue(diags.stream().anyMatch(d -> d.code().equals("validate.cardinality") && d.path().equals("$")));
         assertTrue(diags.stream().anyMatch(d -> d.code().equals("validate.unexpected-field") && d.path().equals("$.extra")));
+    }
+
+    @Test
+    @DisplayName("materialize checks cardinality against a bounded max, not just an unbounded min")
+    void testCardinalityExceedsBoundedMax() {
+        String osd = "record R {\n" +
+                     "  \"tags\" [0,2]: string,\n" +
+                     "}\n" +
+                     "root R\n";
+        Schema schema = OsdReader.read(osd);
+
+        // "tags" occurs 3 times, exceeding its [0,2] bound.
+        Node input = new Node(List.of(
+            new Edge("tags", new StringScalar("a")),
+            new Edge("tags", new StringScalar("b")),
+            new Edge("tags", new StringScalar("c"))
+        ));
+
+        ValidationException ex = assertThrows(ValidationException.class, () -> Materializer.materialize(input, schema));
+        List<ValidationDiagnostic> diags = ex.getResult().diagnostics();
+        assertTrue(diags.stream().anyMatch(d -> d.code().equals("validate.cardinality") && d.path().equals("$")
+                && d.message().contains("expected [0,2]")));
+    }
+
+    @Test
+    @DisplayName("materialize: an unbounded max field can never exceed cardinality, however many times it occurs")
+    void testCardinalityUnboundedMaxNeverExceeds() {
+        String osd = "record R {\n" +
+                     "  \"tags\" [0,]: string,\n" +
+                     "}\n" +
+                     "root R\n";
+        Schema schema = OsdReader.read(osd);
+
+        Node input = new Node(List.of(
+            new Edge("tags", new StringScalar("a")),
+            new Edge("tags", new StringScalar("b")),
+            new Edge("tags", new StringScalar("c"))
+        ));
+
+        Document result = Materializer.materialize(input, schema);
+        assertNotNull(result);
     }
 
     @Test

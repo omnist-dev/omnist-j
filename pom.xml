@@ -118,30 +118,35 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 99.79% measured 2026-08-16 (excl. dev.omnist.conformance), after
-                                                 #34's investigation: the only 6 remaining gate-scoped missed lines
-                                                 are all confirmed-unreachable defensive code (regex/DOM/Jackson
-                                                 contract guarantees; see comments at OmlLexer's two
-                                                 NumberFormatException catches, XmlCodec.read's null-root check,
-                                                 and JsonCodec.write's IOException catch); JaCoCo has no
-                                                 line-level exclusion mechanism (only class-level, already used
-                                                 for dev.omnist.conformance/CliMain above), so these stay
-                                                 inline rather than being fragmented into dedicated excluded
-                                                 classes purely to chase the metric. Gate set just below the
-                                                 real achieved number so it catches actual regressions
-                                                 immediately rather than sitting on a stale floor. -->
-                                            <minimum>0.997</minimum>
+                                            <!-- 99.82% measured 2026-08-16 (excl. dev.omnist.conformance), after
+                                                 #34's full LINE+BRANCH investigation: the only 5 remaining
+                                                 gate-scoped missed lines are all confirmed-unreachable defensive
+                                                 code (regex/DOM/Jackson contract guarantees; see comments at
+                                                 OmlLexer's two NumberFormatException catches and JsonCodec.write's
+                                                 IOException catch). JaCoCo has no line-level exclusion mechanism
+                                                 (only class-level, already used for
+                                                 dev.omnist.conformance/CliMain above), so these stay inline rather
+                                                 than being fragmented into dedicated excluded classes purely to
+                                                 chase the metric. Gate set just below the real achieved number so
+                                                 it catches actual regressions immediately rather than sitting on a
+                                                 stale floor. -->
+                                            <minimum>0.998</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- 97.96% measured 2026-08-16 (excl. dev.omnist.conformance). #34
-                                                 also tracks closing the remaining ~40 branch-only gaps, which
-                                                 need per-site investigation (some are likely reachable with a
-                                                 crafted test, per the OmlLexer/XmlCodec character-class and
-                                                 attribute-handling patterns; some may turn out equally
-                                                 unreachable); not yet done as of this measurement. -->
-                                            <minimum>0.979</minimum>
+                                            <!-- 99.85% measured 2026-08-16 (excl. dev.omnist.conformance). #34's
+                                                 branch-coverage pass closed 36 of the 39 gate-scoped gaps found at
+                                                 the start of that investigation: 2 real JaCoCo false negatives
+                                                 fixed (bare-continue GOTOs), 2 real dead branches deleted (proven
+                                                 unreachable by static analysis, not just unobserved), and the rest
+                                                 closed with real-input test fixtures or reflection-based tripwire
+                                                 tests for genuinely-unreachable defensive code. The 3 remaining
+                                                 gaps are the branch counterparts of the LINE gate's own
+                                                 confirmed-unreachable lines (OmlLexer/Materializer's twin
+                                                 parseTimeValue sign-offset checks, XmlCodec's Text.getNodeValue()
+                                                 null check), same documented-in-place convention as LINE. -->
+                                            <minimum>0.998</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
