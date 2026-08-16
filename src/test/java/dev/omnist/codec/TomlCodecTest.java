@@ -329,4 +329,19 @@ public class TomlCodecTest {
         }
         assertTrue(foundTrue && foundFalse && foundQuotes);
     }
+
+    @Test
+    @DisplayName("read: number/date/time token shapes exercise every isTokenChar disjunct")
+    void testReadTokenShapesExerciseEveryTokenChar() {
+        // Underscore digit separator, decimal point, lowercase 't'/'z' date-time
+        // separators (RFC 3339 permits lowercase as an alternative to 'T'/'Z'),
+        // and a ':'-bearing bare time, alongside the already-covered uppercase
+        // 'T'/'Z' forms in testNativeTemporals.
+        String toml = "big = 1_000_000\n" +
+                      "pi = 3.14\n" +
+                      "lowerDateTime = 2024-01-01t12:30:00z\n" +
+                      "bareTime = 12:30:00\n";
+        Document doc = TomlCodec.read(toml);
+        assertTrue(doc instanceof Node);
+    }
 }

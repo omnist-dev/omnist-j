@@ -111,6 +111,23 @@ public class SchemaAlgebraTest {
     }
 
     @Test
+    @DisplayName("prune on a root referencing an undefined record name doesn't throw (reachable's containsKey false branch)")
+    void testPruneRootRefersToUndefinedRecordName() {
+        // An unsatisfiable root (via the mandatory self-loop) keeps its fields
+        // unpruned, so "missing"'s Ref("DoesNotExist") gets pushed onto reachable's
+        // stack even though satisfiableSet would otherwise have filtered it -- the
+        // next pop of "DoesNotExist" hits schema.records().containsKey(name) == false.
+        dev.omnist.schema.Record unsatRoot = new dev.omnist.schema.Record("UnsatRoot", List.of(
+                new Field("loop", new Type.Ref("UnsatRoot"), 1, 1),
+                new Field("missing", new Type.Ref("DoesNotExist"), 1, 1)
+        ));
+        Schema schema = new Schema("UnsatRoot", Map.of("UnsatRoot", unsatRoot));
+
+        Schema pruned = SchemaAlgebra.prune(schema);
+        assertNotNull(pruned, "prune() should not throw when a mandatory ref target is undefined");
+    }
+
+    @Test
     @DisplayName("prune retains original declaration order in output environment map (§6.5)")
     void testPruneDeclarationOrderDeterminism() {
         dev.omnist.schema.Record c = new dev.omnist.schema.Record("C", List.of(new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)));
@@ -201,6 +218,49 @@ public class SchemaAlgebraTest {
     }
 
     @Test
+    @DisplayName("compatibleWith: an unsatisfiable optional ref field in A that B requires (recordSub part 2's fa.min() < fb.min() branch)")
+    void testCompatibleWithUnsatisfiableOptionalFieldRequiredByB() {
+        // Same "unsatisfiable optional ref" shape as testCompatibleWithUnsatisfiableRefPrefilter,
+        // but here B makes the same-named field *required* instead of omitting it. Part 1
+        // skips this field entirely via its pre-filter continue (fa.min() == 0 and the ref
+        // target is unsatisfiable), so cardinalitySub never runs for it -- part 2 is the
+        // only place that then catches B requiring what A merely permits-but-never-satisfies.
+        dev.omnist.schema.Record badRec = new dev.omnist.schema.Record("BadRec", List.of(
+                new Field("loop", new Type.Ref("BadRec"), 1, 1)
+        ));
+        dev.omnist.schema.Record userA = new dev.omnist.schema.Record("User", List.of(
+                new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+                new Field("opt_bad", new Type.Ref("BadRec"), 0, 1)
+        ));
+        Map<String, dev.omnist.schema.Record> mapA = new LinkedHashMap<>();
+        mapA.put("User", userA);
+        mapA.put("BadRec", badRec);
+        Schema schemaA = new Schema("User", mapA);
+
+        dev.omnist.schema.Record userB = new dev.omnist.schema.Record("User", List.of(
+                new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1),
+                new Field("opt_bad", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schemaB = new Schema("User", Map.of("User", userB));
+
+        assertFalse(SchemaAlgebra.compatibleWith(schemaA, schemaB));
+    }
+
+    @Test
+    @DisplayName("compatibleWith: B requires a field A doesn't declare at all (recordSub part 2's fa == null branch)")
+    void testCompatibleWithBRequiresFieldADoesNotHave() {
+        dev.omnist.schema.Record userA = new dev.omnist.schema.Record("User", List.of());
+        Schema schemaA = new Schema("User", Map.of("User", userA));
+
+        dev.omnist.schema.Record userB = new dev.omnist.schema.Record("User", List.of(
+                new Field("id", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schemaB = new Schema("User", Map.of("User", userB));
+
+        assertFalse(SchemaAlgebra.compatibleWith(schemaA, schemaB));
+    }
+
+    @Test
     @DisplayName("compatibleWith enforces scalar subtyping (§6.3): integer <: number")
     void testCompatibleWithScalarSubtyping() {
         dev.omnist.schema.Record rA = new dev.omnist.schema.Record("R", List.of(new Field("f", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1)));
@@ -211,6 +271,12 @@ public class SchemaAlgebraTest {
 
         assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaB));
         assertFalse(SchemaAlgebra.compatibleWith(schemaB, schemaA));
+
+        // equivalent() short-circuits on the first compatibleWith call being false --
+        // schemaB isn't compatibleWith schemaA (number isn't <: integer), so neither
+        // direction of equivalent() should need the second call to return false.
+        assertFalse(SchemaAlgebra.equivalent(schemaA, schemaB));
+        assertFalse(SchemaAlgebra.equivalent(schemaB, schemaA));
     }
 
     @Test
@@ -224,6 +290,80 @@ public class SchemaAlgebraTest {
 
         assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaB));
         assertTrue(SchemaAlgebra.equivalent(schemaA, schemaB));
+    }
+
+    @Test
+    @DisplayName("compatibleWith: a Record-typed field on one side compared against a Scalar-typed field on the other")
+    void testCompatibleWithRecordVsScalarMismatch() {
+        dev.omnist.schema.Record subA = new dev.omnist.schema.Record("Sub", List.of());
+        dev.omnist.schema.Record rootA = new dev.omnist.schema.Record("Root", List.of(
+            new Field("x", new Type.Ref("Sub"), 1, 1)
+        ));
+        Schema schemaA = new Schema("Root", Map.of("Root", rootA, "Sub", subA));
+
+        dev.omnist.schema.Record rootB = new dev.omnist.schema.Record("Root", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1)
+        ));
+        Schema schemaB = new Schema("Root", Map.of("Root", rootB));
+
+        assertFalse(SchemaAlgebra.compatibleWith(schemaA, schemaB));
+        assertFalse(SchemaAlgebra.compatibleWith(schemaB, schemaA));
+    }
+
+    @Test
+    @DisplayName("scalarSub: identical kinds are compatible; unrelated kinds (neither integer<:number) are not")
+    void testScalarSubIdenticalAndUnrelatedKinds() {
+        dev.omnist.schema.Record recA = new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schemaA = new Schema("R", Map.of("R", recA));
+
+        dev.omnist.schema.Record recBSame = new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schemaBSame = new Schema("R", Map.of("R", recBSame));
+        // Identical kinds: hits scalarSub's kind()==kind() true branch.
+        assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaBSame));
+
+        dev.omnist.schema.Record recBUnrelated = new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.BOOLEAN, false), 1, 1)
+        ));
+        Schema schemaBUnrelated = new Schema("R", Map.of("R", recBUnrelated));
+        // Different kinds, neither integer<:number: falls through to scalarSub's
+        // final return, which must also be false (not just the kind()==kind() check).
+        assertFalse(SchemaAlgebra.compatibleWith(schemaA, schemaBUnrelated));
+
+        // a.kind() == INTEGER true, but b.kind() == NUMBER false (b is BOOLEAN):
+        // a distinct branch outcome from the STRING-vs-BOOLEAN case above, where
+        // a.kind() == INTEGER was never even true.
+        dev.omnist.schema.Record recAInt = new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1)
+        ));
+        Schema schemaAInt = new Schema("R", Map.of("R", recAInt));
+        assertFalse(SchemaAlgebra.compatibleWith(schemaAInt, schemaBUnrelated));
+    }
+
+    @Test
+    @DisplayName("scalarSub: a.nullable() with a non-nullable b short-circuits to false before the kind check")
+    void testScalarSubNullableMismatch() {
+        dev.omnist.schema.Record recA = new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, true), 1, 1)
+        ));
+        Schema schemaA = new Schema("R", Map.of("R", recA));
+
+        dev.omnist.schema.Record recBNonNullable = new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schemaBNonNullable = new Schema("R", Map.of("R", recBNonNullable));
+        // a nullable, b not: fails immediately regardless of matching kind.
+        assertFalse(SchemaAlgebra.compatibleWith(schemaA, schemaBNonNullable));
+
+        dev.omnist.schema.Record recBNullable = new dev.omnist.schema.Record("R", List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, true), 1, 1)
+        ));
+        Schema schemaBNullable = new Schema("R", Map.of("R", recBNullable));
+        // a nullable, b also nullable: falls through to the kind check as normal.
+        assertTrue(SchemaAlgebra.compatibleWith(schemaA, schemaBNullable));
     }
 
     @Test

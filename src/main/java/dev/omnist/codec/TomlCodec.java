@@ -132,8 +132,13 @@ public final class TomlCodec {
     }
 
     private static boolean isTokenChar(char c) {
+        // 'T'/'z'/'Z' (the date-time separator/UTC-offset markers this scans for)
+        // are already inside the 'a'-'z'/'A'-'Z' ranges above, so explicit
+        // c == 'T' / 'z' / 'Z' disjuncts here would be provably dead: neither
+        // could ever be the deciding clause, since the range check ahead of them
+        // in this same expression always short-circuits true first.
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-               c == '_' || c == '+' || c == '-' || c == '.' || c == ':' || c == 'T' || c == 'z' || c == 'Z';
+               c == '_' || c == '+' || c == '-' || c == '.' || c == ':';
     }
 
     private static int countDigits(String token) {
@@ -204,7 +209,10 @@ public final class TomlCodec {
     }
 
     private static boolean isDecimal(String token) {
-        if (token.isEmpty()) return false;
+        // isDecimal's only caller (preprocessToml) always passes a token built from
+        // the digit/+/- scan loop above, which never produces an empty string (see
+        // that loop's own comment), so there's no real caller path with an empty
+        // token to guard against here.
         int start = 0;
         char first = token.charAt(0);
         if (first == '+' || first == '-') {

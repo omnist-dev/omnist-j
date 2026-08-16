@@ -175,6 +175,25 @@ public class YamlCodecTest {
     }
 
     @Test
+    @DisplayName("read: a length-10 timestamp value whose dashes aren't at positions 4/7 fails the shape check")
+    void testReadTimestampLength10WrongDashPositionsFallsThrough() {
+        // "2024/01/01" is exactly 10 chars (matching the length check) but has no
+        // '-' at all, so indexOf('-') == 4 is false -- a distinct branch outcome
+        // from both "9999-99-99" (shape matches, value invalid) and "garbage"
+        // (length doesn't even match).
+        assertThrows(RuntimeException.class, () -> YamlCodec.read("a: !!timestamp \"2024/01/01\"\n", null));
+    }
+
+    @Test
+    @DisplayName("read: a length-10 value with a dash at position 4 but not position 7 fails the shape check")
+    void testReadTimestampLength10DashAt4NotAt7FallsThrough() {
+        // "2024-01000" is 10 chars with indexOf('-') == 4 (matching that sub-check)
+        // but only one dash, so lastIndexOf('-') == 4, not 7 -- the remaining
+        // distinct branch outcome among the three-condition shape check.
+        assertThrows(RuntimeException.class, () -> YamlCodec.read("a: !!timestamp \"2024-01000\"\n", null));
+    }
+
+    @Test
     @DisplayName("write: strict mode throws WriteException, and prepareYaml/scanYaml depth limits")
     void testWriteStrictAndDepthLimit() {
         Document tDoc = new Node(List.of(new Edge("t", new TimeScalar(
@@ -218,5 +237,13 @@ public class YamlCodecTest {
             java.lang.reflect.InvocationTargetException.class,
             () -> buildNode.invoke(null, "any value", "$", 201, freshBudget));
         assertTrue(depthThrown.getCause().getMessage().contains("nesting exceeds the maximum depth"));
+    }
+
+    @Test
+    @DisplayName("write: strict mode succeeds when the document requires no adjustments")
+    void testWriteStrictModeSucceedsWithNoAdjustments() {
+        Document doc = new Node(List.of(new Edge("a", new IntegerScalar(BigInteger.ONE))));
+        String yaml = YamlCodec.write(doc, true, null);
+        assertNotNull(yaml);
     }
 }

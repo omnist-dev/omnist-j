@@ -218,4 +218,12 @@ public class JsonCodecTest {
         String json = JsonCodec.write(doc);
         assertNotNull(json);
     }
+
+    @Test
+    @DisplayName("write: strict mode succeeds when the document requires no adjustments")
+    void testWriteStrictModeSucceedsWithNoAdjustments() {
+        Document doc = new Node(List.of(new Edge("a", new IntegerScalar(BigInteger.ONE))));
+        String json = JsonCodec.write(doc, null, true, null);
+        assertNotNull(json);
+    }
 }
