@@ -41,6 +41,7 @@ nav:
   - Home: index.md
   - Guide & quickstart: 00-guide.md
   - API reference: 01-api-reference.md
+  - Javadoc: https://j.omnist.dev/javadoc/
   - CLI reference: 02-cli-reference.md
   - Status & limitations: limitations.md
   - Workflow playbook: workflow-playbook.md
