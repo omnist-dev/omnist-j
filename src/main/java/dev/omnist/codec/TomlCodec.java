@@ -238,11 +238,18 @@ public final class TomlCodec {
     }
 
     /**
-     * Parses TOML text into a {@link Document}, optionally with schema guidance.
+     * Parses TOML text into a {@link Document}.
+     *
+     * <p>The {@code schema} parameter is intentionally unused here: TOML's own
+     * grammar already distinguishes strings/integers/numbers/booleans/temporal
+     * values natively, so there is no scalar-kind ambiguity for a schema to
+     * resolve (unlike {@link XmlCodec#read(String, dev.omnist.schema.Schema)},
+     * where every value is a string until schema-guided pre-typing runs). The
+     * parameter exists only so callers can invoke every format codec through the
+     * same two-argument shape without special-casing TOML.
      *
      * @param text   the TOML text; must not be {@code null}
-     * @param schema currently unused by this codec's read path; accepted for API symmetry
-     *               with the other format codecs
+     * @param schema accepted for call-site symmetry with the other format codecs; has no effect
      * @return the parsed document
      * @throws RuntimeException if the TOML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
      */

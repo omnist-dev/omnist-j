@@ -110,11 +110,18 @@ public final class YamlCodec {
     }
 
     /**
-     * Parses YAML text into a {@link Document}, optionally with schema guidance.
+     * Parses YAML text into a {@link Document}.
+     *
+     * <p>The {@code schema} parameter is intentionally unused here: YAML's own
+     * grammar already distinguishes strings/integers/numbers/booleans/temporal
+     * values natively (via its resolvers), so there is no scalar-kind ambiguity
+     * for a schema to resolve (unlike {@link XmlCodec#read(String, dev.omnist.schema.Schema)},
+     * where every value is a string until schema-guided pre-typing runs). The
+     * parameter exists only so callers can invoke every format codec through the
+     * same two-argument shape without special-casing YAML.
      *
      * @param text   the YAML text; must not be {@code null}
-     * @param schema currently unused by this codec's read path; accepted for API symmetry
-     *               with the other format codecs
+     * @param schema accepted for call-site symmetry with the other format codecs; has no effect
      * @return the parsed document
      * @throws RuntimeException if the YAML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
      */
