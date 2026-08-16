@@ -454,6 +454,11 @@ public class OmlLexer {
             return TimeValue.of(t, ZoneOffset.UTC);
         }
         int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
+        // text.indexOf(':') < signPos is always true whenever signPos > 0: this
+        // method is only ever called with text TIME_PATTERN already matched, whose
+        // mandatory "HH:MM" prefix puts the first ':' at index 2, while a +/-HH:MM
+        // offset suffix (the only place a sign char can appear) can't start before
+        // index 5 -- so the ':' is provably always earlier than any real signPos.
         if (signPos > 0 && text.indexOf(':') < signPos) {
             LocalTime t = LocalTime.parse(text.substring(0, signPos));
             ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
