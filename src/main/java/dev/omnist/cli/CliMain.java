@@ -9,6 +9,12 @@ package dev.omnist.cli;
 public final class CliMain {
     private CliMain() {}
 
+    /**
+     * JVM entry point: delegates entirely to {@link Cli#run} and exits with its
+     * returned status code.
+     *
+     * @param args command-line arguments, forwarded unchanged to {@link Cli#run}
+     */
     public static void main(String[] args) {
         int code = Cli.run(args, System.out, System.err, System.in);
         System.exit(code);

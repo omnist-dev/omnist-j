@@ -15,6 +15,24 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Codec for reading and writing the Omnist Document model as XML (omnist-spec §7.3),
+ * built on {@code javax.xml.parsers}/DOM.
+ *
+ * <p><b>Reading</b>: always parses namespace-aware; a document's single root element
+ * becomes the sole top-level edge; child elements become nested edges, preserving
+ * repeated-element order (this is the one codec where cross-label interleaving both
+ * reads and writes faithfully — every other codec's writer groups same-label edges).
+ * Attribute and namespace-prefix information is discarded on read, silently per
+ * omnist-spec §9.4 D-3 (no diagnostic is emitted for this — it's a spec-mandated
+ * lossy conversion, not an oversight).
+ *
+ * <p><b>Writing</b>: scalar leaves are stringified per XML's own type rules
+ * ({@link #XML_INT_RE}/{@link #XML_NUM_RE}); a leaf label that isn't a legal XML
+ * name is sanitized, falling back to an underscore-prefixed form.
+ *
+ * <p>This class is stateless; all methods are {@code static}.
+ */
 public final class XmlCodec {
 
     private static final Pattern XML_INT_RE = Pattern.compile("^-?(0|[1-9]\\d*)$");
@@ -24,12 +42,30 @@ public final class XmlCodec {
 
     private XmlCodec() {}
 
+    /** Maximum accepted input length in characters, guarding against oversized XML input. */
     public static final int MAX_INPUT_LENGTH = 2_000_000;
 
+    /**
+     * Parses XML text into a {@link Document} without schema guidance.
+     * Equivalent to {@code read(text, null)}.
+     *
+     * @param text the XML text; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     */
     public static Document read(String text) {
         return read(text, null);
     }
 
+    /**
+     * Parses XML text into a {@link Document}, optionally with schema guidance.
+     *
+     * @param text   the XML text; must not be {@code null}
+     * @param schema currently unused by this codec's read path; accepted for API symmetry
+     *               with the other format codecs
+     * @return the parsed document
+     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     */
     public static Document read(String text, Schema schema) {
         if (text == null) {
             throw new IllegalArgumentException("input text cannot be null");
@@ -232,10 +268,33 @@ public final class XmlCodec {
         throw new IllegalArgumentException("Unknown value type: " + val.getClass());
     }
 
+    /**
+     * Serializes a {@link Document} to XML text, non-strict (dropping/sanitizing
+     * unrepresentable content rather than throwing). Equivalent to
+     * {@code write(node, false, null)}.
+     *
+     * @param node the document to serialize; must have exactly one top-level edge
+     *             (XML requires a single root element)
+     * @return the XML text
+     * @throws WriteException if {@code node} does not have exactly one top-level edge
+     */
     public static String write(Document node) {
         return write(node, false, null);
     }
 
+    /**
+     * Serializes a {@link Document} to XML text.
+     *
+     * @param node   the document to serialize; must have exactly one top-level edge
+     *               (XML requires a single root element)
+     * @param strict if {@code true}, throws when the document contains any adjustment
+     *               (e.g. a sanitized element name); if {@code false}, applies the
+     *               adjustment and continues
+     * @param report if non-{@code null}, every adjustment made during writing is appended here
+     * @return the XML text
+     * @throws WriteException if {@code node} does not have exactly one top-level edge,
+     *         or if {@code strict} is {@code true} and an adjustment was required
+     */
     public static String write(Document node, boolean strict, WriteReport report) {
         WriteReport rep = check(node);
         if (report != null) {
@@ -328,6 +387,14 @@ public final class XmlCodec {
         return Double.toString(s.value());
     }
 
+    /**
+     * Computes what adjustments {@link #write(Document)} would make to {@code node}
+     * without actually producing XML text.
+     *
+     * @param node the document to check
+     * @return the adjustments (e.g. sanitized names, dropped nulls) that a write of
+     *         {@code node} would require
+     */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
         scanXml(node, "$", rep, 0);

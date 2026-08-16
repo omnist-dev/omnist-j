@@ -12,15 +12,47 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
 
+/**
+ * Codec for reading and writing the Omnist Document model as JSON (omnist-spec §7.3).
+ *
+ * <p><b>Reading</b>: JSON objects map to {@link dev.omnist.document.Node} values; JSON arrays
+ * appearing as object-field values map to repeated edges with the same label; bare top-level
+ * arrays and nested arrays are rejected because they have no labeled-edge representation.
+ * Temporal scalars ({@link DateScalar}, {@link TimeScalar}, {@link DateTimeScalar}) are
+ * written as ISO-8601 strings with an accompanying {@code format.temporal-stringified} adjustment.
+ *
+ * <p><b>Writing</b>: {@link Double#NaN} and {@link Double#isInfinite(double) infinite} values
+ * are replaced with {@code null} and reported as {@code format.float-special} errors.
+ *
+ * <p>This class is stateless; all methods are {@code static}.
+ */
 public final class JsonCodec {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private JsonCodec() {}
 
+    /**
+     * Parses JSON text into a {@link Document} without schema guidance.
+     * Equivalent to {@code read(text, null)}.
+     *
+     * @param text the JSON text; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException if the JSON is syntactically invalid or structurally unsupported
+     */
     public static Document read(String text) {
         return read(text, null);
     }
 
+    /**
+     * Parses JSON text into a {@link Document}, optionally with schema guidance.
+     *
+     * @param text   the JSON text; must not be {@code null}
+     * @param schema if non-{@code null}, the document is accepted as-is after parsing
+     *               (schema-driven coercion is handled by a subsequent {@link dev.omnist.validation.Materializer} call)
+     * @return the parsed document
+     * @throws RuntimeException if the JSON is syntactically invalid, or if the root value is an array,
+     *         or if nesting depth exceeds 200, or if node count exceeds 1,000,000
+     */
     public static Document read(String text, Schema schema) {
         try {
             Object raw = MAPPER.readValue(text, Object.class);
@@ -118,10 +150,32 @@ public final class JsonCodec {
         throw new IllegalArgumentException("Unsupported JSON value type: " + value.getClass().getName());
     }
 
+    /**
+     * Serializes a {@link Document} to compact JSON with no indentation.
+     * Equivalent to {@code write(node, null, false, null)}.
+     *
+     * @param node the document to serialize
+     * @return the JSON text
+     * @throws WriteException if the document has structural issues (e.g. non-representable values)
+     */
     public static String write(Document node) {
         return write(node, null, false, null);
     }
 
+    /**
+     * Serializes a {@link Document} to JSON, optionally indented and in strict mode.
+     *
+     * <p>Temporal scalars are written as ISO-8601 strings; {@link Double#NaN} and
+     * infinite values are replaced with {@code null} and reported as {@code format.float-special}.
+     * Repeated edges with the same label are grouped into a JSON array under that key.
+     *
+     * @param node   the document to serialize
+     * @param indent if positive, pretty-print with that many spaces; {@code null} or {@code 0} for compact
+     * @param strict if {@code true}, throws a {@link WriteException} instead of accumulating adjustments
+     * @param report if non-{@code null}, receives all format adjustment records; may be {@code null}
+     * @return the JSON text
+     * @throws WriteException if {@code strict} is {@code true} and any adjustment is required
+     */
     public static String write(Document node, Integer indent, boolean strict, WriteReport report) {
         WriteReport rep = check(node);
         if (report != null) {
@@ -148,6 +202,13 @@ public final class JsonCodec {
         }
     }
 
+    /**
+     * Checks a {@link Document} for JSON-representability issues without serializing it.
+     * Returns a {@link WriteReport} that callers can inspect before deciding whether to proceed.
+     *
+     * @param node the document to check
+     * @return a report of any format adjustments that would be applied during {@link #write}
+     */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
         scanJson(node, "$", 0, rep);

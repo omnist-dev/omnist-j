@@ -9,6 +9,7 @@ import java.util.Objects;
  * @param target the target (Scalar, Node, or NullTarget, non-null)
  */
 public record Edge(String label, Target target) {
+    /** @throws NullPointerException if {@code label} or {@code target} is {@code null} */
     public Edge {
         Objects.requireNonNull(label, "label must not be null");
         Objects.requireNonNull(target, "target must not be null");

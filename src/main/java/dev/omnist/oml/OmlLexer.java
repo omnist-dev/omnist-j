@@ -31,21 +31,54 @@ import java.util.regex.Pattern;
  */
 public class OmlLexer {
 
+    /**
+     * Token types produced by the OML lexer (omnist-spec §4.2).
+     * Each variant corresponds to one lexical category in the OML grammar.
+     */
     public enum TokenType {
+        /** A string value — double-quoted, raw single-quoted, or triple-quoted multiline. */
         STRING,
-        LBRACE, RBRACE,
-        LBRACKET, RBRACKET,
-        COLON, COMMA,
+        /** Opening brace token, {@code &#123;}. */
+        LBRACE,
+        /** Closing brace token, {@code &#125;}. */
+        RBRACE,
+        /** Opening bracket {@code [}. */
+        LBRACKET,
+        /** Closing bracket {@code ]}. */
+        RBRACKET,
+        /** Colon {@code :} separating a label from its value. */
+        COLON,
+        /** Comma {@code ,} separating array elements. */
+        COMMA,
+        /** An ISO-8601 date-time literal (§4.2 rule 3); carries a {@link DateTimeValue} as its value. */
         DATETIME,
+        /** An ISO-8601 date literal (§4.2 rule 4); carries a {@link LocalDate} as its value. */
         DATE,
+        /** An ISO-8601 time literal (§4.2 rule 5); carries a {@link TimeValue} as its value. */
         TIME,
+        /** A floating-point number or reserved float spelling (nan, inf, -inf); carries a {@code double}. */
         NUMBER,
+        /** A decimal integer literal (§4.2 rule 8); carries a {@link BigInteger} as its value. */
         INTEGER,
+        /** A bare identifier used as an edge label, boolean keyword, or null keyword. */
         IDENT,
+        /** A logical line separator: one or more of {@code \n}, {@code \r}, or {@code ;}. */
         SEPARATOR,
+        /** End-of-input sentinel; always the last token returned by {@link #tokenizeAll()}. */
         EOF
     }
 
+    /**
+     * An individual token produced by {@link OmlLexer}.
+     *
+     * @param type  the token category
+     * @param text  the raw source text matched for this token
+     * @param value the parsed value (type-dependent: {@link BigInteger}, {@code Double},
+     *              {@link DateTimeValue}, {@link TimeValue}, {@link LocalDate}, or {@code String});
+     *              {@code null} for punctuation and separator tokens
+     * @param line  1-based source line number at the start of this token
+     * @param col   1-based source column number at the start of this token
+     */
     public record Token(TokenType type, String text, Object value, int line, int col) {}
 
     private static final Pattern DATE_PATTERN = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}");
@@ -61,11 +94,25 @@ public class OmlLexer {
     private int line = 1;
     private int col = 1;
 
+    /**
+     * Constructs a lexer for the given OML source text.
+     *
+     * @param source the OML text to tokenize; {@code null} is treated as an empty string
+     * @param limits safety limits applied during tokenization (e.g. {@link Limits#maxIntegerDigits()});
+     *               {@code null} defaults to {@link Limits#DEFAULT}
+     */
     public OmlLexer(String source, Limits limits) {
         this.source = source != null ? source : "";
         this.limits = limits != null ? limits : Limits.DEFAULT;
     }
 
+    /**
+     * Tokenizes the entire source, returning a list ending with a single {@link TokenType#EOF} token.
+     * Calls {@link #nextToken()} repeatedly until EOF is reached.
+     *
+     * @return an unmodifiable snapshot of all tokens, never empty (always contains at least EOF)
+     * @throws OmlParseException if any lexical error is encountered
+     */
     public List<Token> tokenizeAll() {
         List<Token> tokens = new ArrayList<>();
         Token t;
@@ -76,6 +123,16 @@ public class OmlLexer {
         return tokens;
     }
 
+    /**
+     * Scans and returns the next token from the source, advancing the lexer position.
+     * Applies the 9-rule priority order described in the class Javadoc (omnist-spec §4.2).
+     * Horizontal whitespace and {@code #}-comments are silently skipped before each token.
+     *
+     * @return the next {@link Token}; returns {@link TokenType#EOF} at end of input
+     * @throws OmlParseException if the character sequence does not match any rule,
+     *         or if an integer literal exceeds {@link Limits#maxIntegerDigits()},
+     *         or if a string literal is malformed or unterminated
+     */
     public Token nextToken() {
         skipHSpaceAndComments();
 

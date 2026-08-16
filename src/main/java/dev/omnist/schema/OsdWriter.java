@@ -10,6 +10,14 @@ public final class OsdWriter {
 
     private OsdWriter() {}
 
+    /**
+     * Serializes a {@link Schema} to canonical OSD text format (omnist-spec §5.9).
+     * Records appear first in declaration order, each on its own line; the {@code root}
+     * declaration appears last.
+     *
+     * @param schema the schema to serialize; must not be {@code null}
+     * @return the canonical OSD text; never {@code null}
+     */
     public static String write(Schema schema) {
         StringBuilder sb = new StringBuilder();
 
@@ -25,7 +33,16 @@ public final class OsdWriter {
         return sb.toString();
     }
 
+    /**
+     * Serializes a {@link Schema} to compact single-line OSD text.
+     * All record and field declarations are placed on a single line with space separators,
+     * suitable for embedding in test fixtures or compact output contexts.
+     *
+     * @param schema the schema to serialize; must not be {@code null}
+     * @return the compact OSD text; never {@code null}
+     */
     public static String writeCompact(Schema schema) {
+
         StringBuilder sb = new StringBuilder();
 
         boolean first = true;

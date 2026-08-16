@@ -20,6 +20,24 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 
+/**
+ * Codec for reading and writing the Omnist Document model as YAML (omnist-spec §7.3),
+ * built on SnakeYAML.
+ *
+ * <p><b>Reading</b>: YAML mappings map to {@link dev.omnist.document.Node} values;
+ * SnakeYAML's default core-schema resolution handles booleans (including YAML 1.1
+ * words like {@code yes}/{@code no}/{@code on}/{@code off}) with no customization
+ * needed. Timestamps are custom-resolved to distinguish a bare date from a full
+ * date-time before falling back to SnakeYAML's own timestamp construction.
+ *
+ * <p><b>Writing</b>: cannot achieve round-trip fidelity for {@code time}-kind
+ * scalars — no safe bare YAML spelling exists for a time-of-day that doesn't
+ * collide with YAML's sexagesimal (base-60) number notation — so {@code time}
+ * values are written as quoted ISO-8601 strings via the usual
+ * {@code format.temporal-stringified} adjustment.
+ *
+ * <p>This class is stateless; all methods are {@code static}.
+ */
 public final class YamlCodec {
 
     private YamlCodec() {}
@@ -76,12 +94,30 @@ public final class YamlCodec {
         return DateTimeValue.of(LocalDateTime.parse(text));
     }
 
+    /** Maximum accepted input length in characters, guarding against oversized YAML input. */
     public static final int MAX_INPUT_LENGTH = 2_000_000;
 
+    /**
+     * Parses YAML text into a {@link Document} without schema guidance.
+     * Equivalent to {@code read(text, null)}.
+     *
+     * @param text the YAML text; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException if the YAML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
+     */
     public static Document read(String text) {
         return read(text, null);
     }
 
+    /**
+     * Parses YAML text into a {@link Document}, optionally with schema guidance.
+     *
+     * @param text   the YAML text; must not be {@code null}
+     * @param schema currently unused by this codec's read path; accepted for API symmetry
+     *               with the other format codecs
+     * @return the parsed document
+     * @throws RuntimeException if the YAML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
+     */
     public static Document read(String text, Schema schema) {
         if (text == null) {
             throw new IllegalArgumentException("input text cannot be null");
@@ -195,10 +231,28 @@ public final class YamlCodec {
         throw new IllegalArgumentException("Unsupported YAML value type: " + value.getClass().getName());
     }
 
+    /**
+     * Serializes a {@link Document} to YAML text, non-strict (applying adjustments
+     * rather than throwing). Equivalent to {@code write(node, false, null)}.
+     *
+     * @param node the document to serialize
+     * @return the YAML text
+     */
     public static String write(Document node) {
         return write(node, false, null);
     }
 
+    /**
+     * Serializes a {@link Document} to YAML text.
+     *
+     * @param node   the document to serialize
+     * @param strict if {@code true}, throws when the document contains any adjustment
+     *               (e.g. a stringified time value); if {@code false}, applies the
+     *               adjustment and continues
+     * @param report if non-{@code null}, every adjustment made during writing is appended here
+     * @return the YAML text
+     * @throws WriteException if {@code strict} is {@code true} and an adjustment was required
+     */
     public static String write(Document node, boolean strict, WriteReport report) {
         WriteReport rep = check(node);
         if (report != null) {
@@ -220,6 +274,14 @@ public final class YamlCodec {
         return yaml.dump(grouped);
     }
 
+    /**
+     * Computes what adjustments {@link #write(Document)} would make to {@code node}
+     * without actually producing YAML text.
+     *
+     * @param node the document to check
+     * @return the adjustments (e.g. stringified time values) that a write of
+     *         {@code node} would require
+     */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
         scanYaml(node, "$", 0, rep);

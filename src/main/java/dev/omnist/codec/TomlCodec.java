@@ -15,6 +15,21 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 
+/**
+ * Codec for reading and writing the Omnist Document model as TOML (omnist-spec §7.3),
+ * built on the {@code tomlj} parser.
+ *
+ * <p><b>Reading</b>: TOML tables map to {@link dev.omnist.document.Node} values; repeated
+ * keys inside an array-of-tables map to repeated edges with the same label. TOML's native
+ * date/time/date-time types round-trip directly to their Omnist scalar counterparts.
+ *
+ * <p><b>Writing</b>: always emits inline-table and inline-array syntax rather than
+ * {@code [section]}/{@code [[section]]} headers, sidestepping TOML's header-positional
+ * ordering rules. Null-valued leaves cannot be represented in TOML and are dropped, reported
+ * via {@link WriteReport}.
+ *
+ * <p>This class is stateless; all methods are {@code static}.
+ */
 public final class TomlCodec {
 
     private TomlCodec() {}
@@ -207,12 +222,30 @@ public final class TomlCodec {
         return true;
     }
 
+    /** Maximum accepted input length in characters, guarding against oversized TOML input. */
     public static final int MAX_INPUT_LENGTH = 2_000_000;
 
+    /**
+     * Parses TOML text into a {@link Document} without schema guidance.
+     * Equivalent to {@code read(text, null)}.
+     *
+     * @param text the TOML text; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException if the TOML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
+     */
     public static Document read(String text) {
         return read(text, null);
     }
 
+    /**
+     * Parses TOML text into a {@link Document}, optionally with schema guidance.
+     *
+     * @param text   the TOML text; must not be {@code null}
+     * @param schema currently unused by this codec's read path; accepted for API symmetry
+     *               with the other format codecs
+     * @return the parsed document
+     * @throws RuntimeException if the TOML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
+     */
     public static Document read(String text, Schema schema) {
         if (text == null) {
             throw new IllegalArgumentException("input text cannot be null");
@@ -381,10 +414,30 @@ public final class TomlCodec {
         throw new IllegalArgumentException("Unsupported TOML value type: " + value.getClass().getName());
     }
 
+    /**
+     * Serializes a {@link Document} to TOML text, non-strict (dropping unrepresentable
+     * leaves rather than throwing). Equivalent to {@code write(node, false, null)}.
+     *
+     * @param node the document to serialize; must be a {@link dev.omnist.document.Node}
+     * @return the TOML text
+     * @throws WriteException if {@code node} is not a top-level table
+     */
     public static String write(Document node) {
         return write(node, false, null);
     }
 
+    /**
+     * Serializes a {@link Document} to TOML text.
+     *
+     * @param node   the document to serialize; must be a {@link dev.omnist.document.Node}
+     *               (TOML requires a top-level table)
+     * @param strict if {@code true}, throws when the document contains any adjustment
+     *               (e.g. a dropped null); if {@code false}, applies the adjustment and continues
+     * @param report if non-{@code null}, every adjustment made during writing is appended here
+     * @return the TOML text
+     * @throws WriteException if {@code node} is not a top-level table, or if {@code strict}
+     *         is {@code true} and an adjustment was required
+     */
     public static String write(Document node, boolean strict, WriteReport report) {
         if (!(node instanceof dev.omnist.document.Node)) {
             throw new WriteException("TOML needs a top-level table (the root must be an object)");
@@ -512,6 +565,15 @@ public final class TomlCodec {
         return sb.toString();
     }
 
+    /**
+     * Computes what adjustments {@link #write(Document)} would make to {@code node}
+     * without actually producing TOML text — useful for checking whether a document
+     * would round-trip cleanly before committing to a strict write.
+     *
+     * @param node the document to check; non-{@link dev.omnist.document.Node} values
+     *             yield an empty report rather than an error
+     * @return the adjustments (e.g. dropped nulls) that a write of {@code node} would require
+     */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
         if (!(node instanceof dev.omnist.document.Node)) {

@@ -14,16 +14,41 @@ public class OsdReader {
     private final List<Token> tokens;
     private int index = 0;
 
+    /**
+     * Constructs a reader for the given OSD source text.
+     * The source is immediately tokenized by {@link OsdLexer} during construction.
+     *
+     * @param source the OSD text to parse; {@code null} is treated as empty
+     */
     public OsdReader(String source) {
         OsdLexer lexer = new OsdLexer(source);
         this.tokens = lexer.tokenizeAll();
     }
 
+    /**
+     * Parses OSD text and returns the resulting {@link Schema}.
+     * Convenience wrapper for {@code new OsdReader(source).parseSchema()}.
+     *
+     * @param source the OSD text; {@code null} is treated as empty
+     * @return the fully-validated {@link Schema}
+     * @throws OsdParseException if the text is syntactically or structurally invalid
+     */
     public static Schema read(String source) {
         return new OsdReader(source).parseSchema();
     }
 
+    /**
+     * Parses the token stream into a {@link Schema} (omnist-spec §5.5–§5.8).
+     * Processes {@code record} and {@code root} declarations in any order, then validates
+     * that a root is declared, that the root record exists, and that all {@link Type.Ref}
+     * targets resolve to defined records.
+     *
+     * @return the fully-validated {@link Schema}
+     * @throws OsdParseException on duplicate record names, duplicate root declarations,
+     *         missing root, undeclared root record, or unresolved type references
+     */
     public Schema parseSchema() {
+
         String rootName = null;
         Map<String, Record> records = new LinkedHashMap<>();
 

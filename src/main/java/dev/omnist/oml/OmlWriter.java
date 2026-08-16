@@ -15,17 +15,33 @@ public class OmlWriter {
 
     private static final Pattern IDENT_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
 
+    /**
+     * Serializes a {@link Document} to canonical indented OML text (omnist-spec §4 and §9.5).
+     * Nested objects are indented by two spaces per level; edges are separated by newlines.
+     *
+     * @param doc the document to serialize; must not be {@code null}
+     * @return the canonical OML text; never {@code null}
+     */
     public static String write(Document doc) {
         StringBuilder sb = new StringBuilder();
         writeValue(sb, doc, 0, "\n");
         return sb.toString();
     }
 
+    /**
+     * Serializes a {@link Document} to compact inline OML text.
+     * Edges are separated by {@code "; "} instead of newlines and indentation is suppressed,
+     * producing output suitable for single-line display or embedding in other formats.
+     *
+     * @param doc the document to serialize; must not be {@code null}
+     * @return the compact OML text; never {@code null}
+     */
     public static String writeCompact(Document doc) {
         StringBuilder sb = new StringBuilder();
         writeValue(sb, doc, 0, "; ");
         return sb.toString();
     }
+
 
     private static void writeValue(StringBuilder sb, Document doc, int indentLevel, String edgeSeparator) {
         // Exhaustive switch over Document's sealed permits (Node, Value) -- the

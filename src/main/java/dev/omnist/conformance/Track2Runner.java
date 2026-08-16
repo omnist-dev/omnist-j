@@ -36,6 +36,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Track 2 of the conformance harness: runs the omnist-spec's JSON-vector test suite
+ * (omnist-spec §8.5) directly in-process against this port's public API (no CLI
+ * subprocess), dispatching each vector's operation and comparing the result or
+ * diagnostics against the vector's expected outcome.
+ */
 public final class Track2Runner {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -45,6 +51,13 @@ public final class Track2Runner {
 
     private Track2Runner() {}
 
+    /**
+     * Runs every JSON vector under {@code testSuiteDir} and returns the tally.
+     *
+     * @param testSuiteDir directory containing the Track 2 JSON vector files
+     * @return a 3-element array {@code {pass, fail, skip}}
+     * @throws Exception if a vector cannot be read or parsed
+     */
     public static int[] runTrack2(Path testSuiteDir) throws Exception {
         passCount = 0;
         failCount = 0;

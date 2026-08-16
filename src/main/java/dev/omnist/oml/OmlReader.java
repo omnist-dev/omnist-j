@@ -25,21 +25,55 @@ public class OmlReader {
     private int currentDepth = 1;
     private int materializedNodeCount = 0;
 
+    /**
+     * Constructs a reader over a pre-tokenized OML source.
+     * The source is immediately tokenized by {@link OmlLexer} during construction.
+     *
+     * @param source the OML text; {@code null} is treated as empty
+     * @param limits safety limits applied during tokenization and parsing;
+     *               {@code null} defaults to {@link Limits#DEFAULT}
+     */
     public OmlReader(String source, Limits limits) {
         this.limits = limits != null ? limits : Limits.DEFAULT;
         OmlLexer lexer = new OmlLexer(source, this.limits);
         this.tokens = lexer.tokenizeAll();
     }
 
+    /**
+     * Parses OML text into a {@link Document} using {@link Limits#DEFAULT} safety limits.
+     * Equivalent to {@code read(source, Limits.DEFAULT)}.
+     *
+     * @param source the OML text; {@code null} is treated as empty
+     * @return the parsed document
+     * @throws OmlParseException if the text contains any lexical or structural error
+     */
     public static Document read(String source) {
         return read(source, Limits.DEFAULT);
     }
 
+    /**
+     * Parses OML text into a {@link Document} using caller-supplied safety limits.
+     *
+     * @param source the OML text; {@code null} is treated as empty
+     * @param limits safety limits for depth, node count, and integer digit length;
+     *               {@code null} defaults to {@link Limits#DEFAULT}
+     * @return the parsed document
+     * @throws OmlParseException if any limit is exceeded or the text is malformed
+     */
     public static Document read(String source, Limits limits) {
         return new OmlReader(source, limits).parseDocument();
     }
 
+    /**
+     * Parses the token stream into a top-level {@link Document}.
+     * Handles three shapes: an empty document (returns an empty {@link Node}),
+     * a node-edge list (label-colon-value pairs separated by newlines), and a bare scalar value.
+     *
+     * @return the parsed document
+     * @throws OmlParseException if the token stream does not form a valid OML document
+     */
     public Document parseDocument() {
+
         skipSeparators();
         if (peekType() == TokenType.EOF) {
             return createNode(List.of());

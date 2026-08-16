@@ -7,20 +7,54 @@ import java.util.regex.Pattern;
 
 /**
  * Tokenizer for OSD (Omnist Schema Definition) grammar (omnist-spec §5.3).
+ *
+ * <p>Recognizes four lexical rules in priority order:
+ * <ol>
+ *   <li>STRING — a double-quoted field name ({@code "label"})</li>
+ *   <li>CARDINALITY — a bracket-enclosed cardinality expression ({@code [m,n]})</li>
+ *   <li>Punctuation — {@code { } : , ?}</li>
+ *   <li>IDENT / Keywords — {@code record}, {@code root}, or any other identifier</li>
+ * </ol>
+ * Whitespace, newlines, and {@code #}-comments are silently skipped between tokens.
  */
 public class OsdLexer {
 
+    /**
+     * Token types produced by the OSD lexer (omnist-spec §5.3).
+     */
     public enum TokenType {
+        /** A double-quoted field-name string (§5.3.1); the token text contains the unescaped content. */
         STRING,
+        /** A bracket-enclosed cardinality expression, e.g. {@code [0,1]} or {@code [2]}; text is the content inside brackets. */
         CARDINALITY,
-        LBRACE, RBRACE,
-        COLON, COMMA, QUESTION,
+        /** Opening brace token, {@code &#123;}. */
+        LBRACE,
+        /** Closing brace token, {@code &#125;}. */
+        RBRACE,
+        /** Colon {@code :} separating a field label from its type. */
+        COLON,
+        /** Comma {@code ,} separating fields within a record. */
+        COMMA,
+        /** Question mark {@code ?} marking a scalar type as nullable (§5.4). */
+        QUESTION,
+        /** The keyword {@code record}, introducing a record definition (§5.5). */
         RECORD,
+        /** The keyword {@code root}, declaring the root record name (§5.6). */
         ROOT,
+        /** An identifier: a record name, field type name, or scalar keyword (§5.3). */
         IDENT,
+        /** End-of-input sentinel; always the last token in the list returned by {@link #tokenizeAll()}. */
         EOF
     }
 
+    /**
+     * An individual token produced by {@link OsdLexer}.
+     *
+     * @param type the token category
+     * @param text the raw source text matched, or the unescaped string content for STRING tokens
+     * @param line 1-based source line number at the start of this token
+     * @param col  1-based source column number at the start of this token
+     */
     public record Token(TokenType type, String text, int line, int col) {}
 
     private static final Pattern IDENT_PATTERN = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*");
@@ -30,10 +64,21 @@ public class OsdLexer {
     private int line = 1;
     private int col = 1;
 
+    /**
+     * Constructs a lexer for the given OSD source text.
+     *
+     * @param source the OSD text to tokenize; {@code null} is treated as an empty string
+     */
     public OsdLexer(String source) {
         this.source = source != null ? source : "";
     }
 
+    /**
+     * Tokenizes the entire source, returning a list ending with a single {@link TokenType#EOF} token.
+     *
+     * @return the complete token list, never empty (always contains at least EOF)
+     * @throws OsdParseException if any lexical error is encountered
+     */
     public List<Token> tokenizeAll() {
         List<Token> tokens = new ArrayList<>();
         Token t;
@@ -44,6 +89,13 @@ public class OsdLexer {
         return tokens;
     }
 
+    /**
+     * Scans and returns the next token, advancing the lexer position.
+     * Whitespace, newlines, and {@code #}-to-end-of-line comments are skipped first.
+     *
+     * @return the next {@link Token}; {@link TokenType#EOF} at end of input
+     * @throws OsdParseException if no rule matches the current character
+     */
     public Token nextToken() {
         skipHSpaceCommentsAndNewlines();
 

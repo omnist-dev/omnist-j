@@ -4,11 +4,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+/**
+ * Conformance test harness entry point for the omnist-spec conformance suite.
+ * Runs Track 1 (CLI fixtures) and Track 2 (JSON vectors) against the vendored spec
+ * fixtures, printing a {@code Pass / Fail / Skip} summary and exiting with code 0 on
+ * full pass or 1 on any failure.
+ *
+ * <p>This class is excluded from the JaCoCo coverage gate (see pom.xml excludes) because
+ * its only purpose is to bootstrap external test infrastructure that cannot be exercised
+ * by the unit test suite.
+ */
 public final class Harness {
 
     private Harness() {}
 
+    /**
+     * Runs the full conformance suite and exits the process.
+     * Expects to be invoked from the repository root so that relative paths to
+     * {@code vendor/omnist-spec/conformance/fixtures} and {@code vendor/omnist-spec/test-suite}
+     * resolve correctly.
+     *
+     * @param args command-line arguments (currently unused)
+     */
     public static void main(String[] args) {
+
         try {
             System.out.println("Starting Conformance Harness...");
 

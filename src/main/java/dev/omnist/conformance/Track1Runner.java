@@ -24,6 +24,11 @@ import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Stream;
 
+/**
+ * Track 1 of the conformance harness: runs the compiled {@code omnist} CLI as a real
+ * subprocess against the fixture-based test suite (omnist-spec §8.5) and compares its
+ * stdout/stderr/exit-code against each fixture's expected result.
+ */
 public final class Track1Runner {
     private static final boolean DELIBERATELY_FAIL_COMPARISON = false;
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -36,6 +41,15 @@ public final class Track1Runner {
 
     private Track1Runner() {}
 
+    /**
+     * Runs every fixture under {@code fixturesDir} against the CLI jar built from
+     * {@code repoDir} and returns the tally.
+     *
+     * @param fixturesDir directory containing the Track 1 fixture files
+     * @param repoDir     the repo root, used to locate {@code target/omnist-j-*.jar}
+     * @return a 3-element array {@code {pass, fail, skip}}
+     * @throws Exception if a fixture cannot be read or the CLI subprocess cannot be launched
+     */
     public static int[] runTrack1(Path fixturesDir, Path repoDir) throws Exception {
         passCount = 0;
         failCount = 0;

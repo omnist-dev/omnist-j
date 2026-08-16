@@ -20,11 +20,30 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+/**
+ * Implements every {@code omnist} CLI command: {@code format}, {@code validate},
+ * {@code convert}, {@code schema} (with its {@code normalize}/{@code prune}/{@code extract}/
+ * {@code compatible-with}/{@code equivalent}/{@code is-empty}/{@code lint} subcommands),
+ * and {@code infer}. See {@code docs/02-cli-reference.md} for the full command reference
+ * with worked examples. This class carries all testable CLI logic; {@link CliMain} is
+ * just the JVM entry point that calls {@link #run} and exits with its status code.
+ */
 public final class Cli {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private Cli() {}
 
+    /**
+     * Parses and executes a single CLI invocation.
+     *
+     * @param args command-line arguments, exactly as passed to {@code main}
+     * @param out  stream for normal command output
+     * @param err  stream for error and usage messages
+     * @param in   stream read for {@code -} (stdin) input arguments
+     * @return the process exit code: {@code 0} on success, {@code 1} for a usage or
+     *         processing error, {@code 2} for specific commands' documented "failed
+     *         check" outcome (e.g. {@code validate} on a non-conforming document)
+     */
     public static int run(String[] args, PrintStream out, PrintStream err, InputStream in) {
         try {
             List<String> positionals = new ArrayList<>();

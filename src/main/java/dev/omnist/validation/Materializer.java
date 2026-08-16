@@ -10,6 +10,19 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Schema-driven coercion of a parsed {@link Document} into a fully-typed document (omnist-spec §8).
+ *
+ * <p>Given a document produced by any codec and a {@link Schema}, {@code Materializer} walks
+ * the document tree and applies type coercions where an exact-type match is not present:
+ * integral {@code double} values are narrowed to {@link dev.omnist.document.Scalar.IntegerScalar};
+ * {@code integer} values are widened to {@link dev.omnist.document.Scalar.NumberScalar};
+ * and ISO-8601 strings are parsed into the appropriate temporal scalar type.
+ * Structural violations (unexpected fields, cardinality mismatches, type mismatches) accumulate
+ * as {@link ValidationDiagnostic} records and are thrown together as a {@link ValidationException}.
+ *
+ * <p>This class is stateless; all behavior is via the static {@link #materialize} entry point.
+ */
 public final class Materializer {
 
     private static final Pattern ANCHORED_DATE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
@@ -18,7 +31,22 @@ public final class Materializer {
 
     private Materializer() {}
 
+    /**
+     * Applies schema-driven coercion to {@code node}, returning a fully-typed {@link Document}.
+     *
+     * <p>The root of {@code node} is matched against {@code schema.root()} and then recursively
+     * against each field's declared type. Structural violations and type mismatches are accumulated
+     * and thrown together as a single {@link ValidationException} at the end of the walk.
+     *
+     * @param node   the document to coerce; typically returned by a codec's {@code read} method
+     * @param schema the schema to validate and coerce against
+     * @return the coerced document tree; structurally identical to {@code node} with scalar values
+     *         possibly replaced by correctly-typed instances
+     * @throws ValidationException if any cardinality, field, or type constraint is violated
+     * @throws RuntimeException    if nesting depth or node count exceed hard limits (200 / 1,000,000)
+     */
     public static Document materialize(Document node, Schema schema) {
+
         List<ValidationDiagnostic> diagnostics = new ArrayList<>();
         int[] budget = new int[]{0};
         

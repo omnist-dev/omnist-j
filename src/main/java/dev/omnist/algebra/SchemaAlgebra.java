@@ -375,14 +375,55 @@ public final class SchemaAlgebra {
         return new Record(record.name(), newFields);
     }
 
+    /**
+     * Infers a schema from a list of sample documents (§6.10), rooted at {@code "Root"}
+     * with {@code any}-fallback disabled. Equivalent to
+     * {@code infer(samples, "Root", false)}.
+     *
+     * @param samples the documents to infer from; must not be empty
+     * @return the inferred schema
+     * @throws IllegalArgumentException if {@code samples} is empty, or if a field's
+     *         sample values mix incompatible scalar kinds and {@code allowAny} is disabled
+     */
     public static Schema infer(List<Document> samples) {
         return infer(samples, "Root", false);
     }
 
+    /**
+     * Infers a schema from a list of sample documents (§6.10).
+     * Equivalent to {@code inferWithReport(samples, rootName, allowAny).schema()};
+     * discards the {@link AnyFallback} report that would explain each {@code any}-typed
+     * field's cause.
+     *
+     * @param samples  the documents to infer from; must not be empty
+     * @param rootName the name to give the inferred root record
+     * @param allowAny if {@code true}, a field with sample values of more than one
+     *                 scalar kind is inferred as {@code any} instead of throwing
+     * @return the inferred schema
+     * @throws IllegalArgumentException if {@code samples} is empty, or if a field mixes
+     *         incompatible scalar kinds and {@code allowAny} is {@code false}
+     */
     public static Schema infer(List<Document> samples, String rootName, boolean allowAny) {
         return inferWithReport(samples, rootName, allowAny).schema();
     }
 
+    /**
+     * Infers a schema from a list of sample documents (§6.10), returning both the
+     * schema and a report of every field that fell back to {@code any} because its
+     * samples mixed incompatible scalar kinds.
+     *
+     * <p>Per §6.10, inference performs no normalization and does not use {@code any}
+     * by default — {@code any} is only ever produced when {@code allowAny} is {@code true}
+     * and a genuine kind conflict was found.
+     *
+     * @param samples  the documents to infer from; must not be empty
+     * @param rootName the name to give the inferred root record
+     * @param allowAny if {@code true}, a field with sample values of more than one
+     *                 scalar kind is inferred as {@code any} instead of throwing
+     * @return the inferred schema together with its {@link AnyFallback} report
+     * @throws IllegalArgumentException if {@code samples} is empty, or if a field mixes
+     *         incompatible scalar kinds and {@code allowAny} is {@code false}
+     */
     public static InferResult inferWithReport(List<Document> samples, String rootName, boolean allowAny) {
         if (samples.isEmpty()) {
             throw new IllegalArgumentException("cannot infer a schema from zero samples");
