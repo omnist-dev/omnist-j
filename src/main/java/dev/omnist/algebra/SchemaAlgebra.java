@@ -344,19 +344,13 @@ public final class SchemaAlgebra {
         stack.push(schema.root());
         while (!stack.isEmpty()) {
             String name = stack.pop();
-            if (seen.contains(name) || !schema.records().containsKey(name)) {
-                // JaCoCo artifact: manually traced this exact algorithm against a
-                // self-referencing schema and confirmed the continue is reached
-                // (seenContains=true on the second pop); the enclosing if's own
-                // compound-branch coverage also shows the true path taken. The
-                // bare continue's GOTO bytecode just doesn't register a hit.
-                continue;
-            }
-            seen.add(name);
-            Record rec = schema.records().get(name);
-            for (Field f : rec.fields()) {
-                if (f.type() instanceof Type.Ref ref) {
-                    stack.push(ref.name());
+            if (!seen.contains(name) && schema.records().containsKey(name)) {
+                seen.add(name);
+                Record rec = schema.records().get(name);
+                for (Field f : rec.fields()) {
+                    if (f.type() instanceof Type.Ref ref) {
+                        stack.push(ref.name());
+                    }
                 }
             }
         }
@@ -789,26 +783,21 @@ public final class SchemaAlgebra {
 
         while (!stack.isEmpty()) {
             String name = stack.pop();
-            if (seen.contains(name) || !schema.records().containsKey(name)) {
-                // JaCoCo artifact, same as reachablePlain's twin continue above: the
-                // enclosing self-cycle test (testPruneOptionalRefToUnsatisfiableAndCycles)
-                // pushes "Root" twice via the self-ref field, so this is genuinely reached
-                // on the second pop; the bare continue's GOTO just doesn't register a hit.
-                continue;
-            }
-            seen.add(name);
-            Record rec = schema.records().get(name);
+            if (!seen.contains(name) && schema.records().containsKey(name)) {
+                seen.add(name);
+                Record rec = schema.records().get(name);
 
-            List<Field> fieldsToFollow;
-            if (!rootOk && name.equals(schema.root())) {
-                fieldsToFollow = rec.fields();
-            } else {
-                fieldsToFollow = pruneRecord(rec, sat).fields();
-            }
+                List<Field> fieldsToFollow;
+                if (!rootOk && name.equals(schema.root())) {
+                    fieldsToFollow = rec.fields();
+                } else {
+                    fieldsToFollow = pruneRecord(rec, sat).fields();
+                }
 
-            for (Field f : fieldsToFollow) {
-                if (f.type() instanceof Type.Ref ref) {
-                    stack.push(ref.name());
+                for (Field f : fieldsToFollow) {
+                    if (f.type() instanceof Type.Ref ref) {
+                        stack.push(ref.name());
+                    }
                 }
             }
         }
