@@ -48,6 +48,17 @@ public class CliDocTest {
         root Root
         """;
 
+    private static final String ROOT_DEAD_ANY_SCHEMA = """
+        record Root {
+            "id": integer,
+            "x": any,
+        }
+        record Dead {
+            "x": string,
+        }
+        root Root
+        """;
+
     private File tempFile(String prefix, String suffix, String content) throws IOException {
         File file = File.createTempFile(prefix, suffix);
         file.deleteOnExit();
@@ -168,6 +179,15 @@ public class CliDocTest {
         int code = runCli(new String[]{"schema", "lint", "-"}, ROOT_DEAD_SCHEMA, null, stderr);
         assertTrue(code == 0 || code == 1);
         assertTrue(stderr.toString().contains("lint.unreachable-record"));
+    }
+
+    @Test
+    void testCliSchemaLintSeverityExample() {
+        StringBuilder stderr = new StringBuilder();
+        int code = runCli(new String[]{"schema", "lint", "-", "--severity", "warning"}, ROOT_DEAD_ANY_SCHEMA, null, stderr);
+        assertEquals(1, code);
+        assertTrue(stderr.toString().contains("WARNING"));
+        assertFalse(stderr.toString().contains("INFO"));
     }
 
     @Test

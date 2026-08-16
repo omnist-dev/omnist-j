@@ -113,11 +113,20 @@ $ omnist schema equivalent schema1.osd schema2.osd --result-format json
 ```
 
 ### 10. `schema lint`
-Runs static analysis lint rules against an OSD schema.
+Runs static analysis lint rules against an OSD schema. `--severity info|warning`
+sets the minimum finding severity to report (default `info`, i.e. everything);
+the exit code and `ok`/`--json` result reflect only the findings that pass
+this filter.
 
 <!-- test-backed: dev.omnist.cli.CliDocTest#testCliSchemaLintExample -->
 ```bash
 $ omnist schema lint schema.osd
+WARNING [lint.unreachable-record] at $: Unreachable record Dead
+```
+
+<!-- test-backed: dev.omnist.cli.CliDocTest#testCliSchemaLintSeverityExample -->
+```bash
+$ omnist schema lint schema.osd --severity warning
 WARNING [lint.unreachable-record] at $: Unreachable record Dead
 ```
 

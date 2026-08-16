@@ -48,8 +48,9 @@ public final class Cli {
      * @param allowAny     {@code --allow-any}: for {@code infer}, fall back to {@code any} on
      *                     conflicting scalar kinds instead of failing
      * @param outputPath   {@code -o}: write output to this path instead of stdout
-     * @param severity     {@code --severity}: parsed for forward compatibility but not yet
-     *                     read by any command
+     * @param severity     {@code --severity}: for {@code schema lint}, the minimum finding
+     *                     severity ({@code info} or {@code warning}) to report; {@code null}
+     *                     defaults to {@code info} (i.e. everything)
      */
     private record Options(
         boolean compact,
@@ -376,14 +377,24 @@ public final class Cli {
         return equiv ? 0 : 1;
     }
 
-    /** {@code omnist schema lint <schema> [--json]}: prints every {@code lint()} finding (§6.11). */
+    private static final Map<String, Integer> SEVERITY_ORDER = Map.of("info", 0, "warning", 1);
+
+    /**
+     * {@code omnist schema lint <schema> [--json] [--severity info|warning]}: prints every
+     * {@code lint()} finding (§6.11) at or above {@code --severity}'s threshold (default
+     * {@code info}, i.e. everything).
+     */
     private static int runSchemaLint(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
         if (positionals.size() < 3) {
             err.println("Missing schema input file");
             return 2;
         }
         Schema s = OsdReader.read(readInput(positionals.get(2), in));
-        List<LintFinding> findings = SchemaAlgebra.lint(s);
+        String severityArg = opts.severity() == null ? "info" : opts.severity();
+        int threshold = SEVERITY_ORDER.getOrDefault(severityArg, 0);
+        List<LintFinding> findings = SchemaAlgebra.lint(s).stream()
+            .filter(lf -> SEVERITY_ORDER.getOrDefault(lf.severity(), 1) >= threshold)
+            .toList();
 
         boolean ok = true;
         for (LintFinding lf : findings) {
