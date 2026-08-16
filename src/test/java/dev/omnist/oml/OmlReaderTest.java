@@ -265,4 +265,18 @@ class OmlReaderTest {
         assertInstanceOf(Node.class, doc2);
         assertEquals("says \"\"hi\"\" there", ((Scalar.StringScalar) ((Node) doc2).edges().get(0).target()).value());
     }
+
+    @Test
+    @DisplayName("testCharacterization6_UnterminatedArrayReachesEofSilently: parseArrayElements' while-loop " +
+                 "condition is the only thing that stops it at EOF -- there's no explicit unterminated-array " +
+                 "error, so a missing closing ']' currently produces edges without ever signaling a parse " +
+                 "error. Characterizing existing behavior, not asserting it's the intended long-term contract " +
+                 "-- see the follow-up task filed for this codec's array-termination handling.")
+    void testCharacterization6_UnterminatedArrayReachesEofSilently() {
+        Document doc = OmlReader.read("a: [1, 2");
+        Node node = (Node) doc;
+        assertEquals(2, node.edges().size());
+        assertEquals(new Scalar.IntegerScalar(java.math.BigInteger.valueOf(1)), node.edges().get(0).target());
+        assertEquals(new Scalar.IntegerScalar(java.math.BigInteger.valueOf(2)), node.edges().get(1).target());
+    }
 }

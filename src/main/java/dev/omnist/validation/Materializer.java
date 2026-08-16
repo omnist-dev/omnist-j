@@ -214,6 +214,11 @@ public final class Materializer {
             return TimeValue.of(t, java.time.ZoneOffset.UTC);
         }
         int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
+        // text.indexOf(':') < signPos is always true whenever signPos > 0: this
+        // method is only ever called with text ANCHORED_TIME already matched,
+        // whose mandatory "HH:MM" prefix puts the first ':' at index 2, while a
+        // +/-HH:MM offset suffix can't start before index 5 -- same reasoning as
+        // OmlLexer.parseTimeValue's twin check.
         if (signPos > 0 && text.indexOf(':') < signPos) {
             java.time.LocalTime t = java.time.LocalTime.parse(text.substring(0, signPos));
             java.time.ZoneOffset offset = java.time.ZoneOffset.of(text.substring(signPos));
