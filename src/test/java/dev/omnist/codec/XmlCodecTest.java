@@ -164,6 +164,13 @@ public class XmlCodecTest {
     }
 
     @Test
+    @DisplayName("read: whitespace-only text alongside a child element is not mixed content")
+    void testReadWhitespaceOnlyTextBesideChildDoesNotThrow() {
+        Document doc = XmlCodec.read("<root>\n  <a>1</a>\n</root>");
+        assertNotNull(doc);
+    }
+
+    @Test
     @DisplayName("read: leaf text collection skips comment nodes (neither TEXT_NODE nor CDATA_SECTION_NODE)")
     void testReadLeafTextSkipsCommentNodes() {
         // Exercises all three outcomes of the TEXT_NODE || CDATA_SECTION_NODE
@@ -228,6 +235,48 @@ public class XmlCodecTest {
     }
 
     @Test
+    @DisplayName("read: a BOOLEAN-kind schema field whose text is neither \"true\" nor \"false\" stays a string")
+    void testReadPretypeBooleanKindNeitherTrueNorFalse() {
+        Schema schema = OsdReader.read("record Root { \"flag\": boolean } root Root\n");
+        Document doc = XmlCodec.read("<root><flag>maybe</flag></root>", schema);
+        Node root = (Node) doc;
+        Node node = (Node) root.edges().get(0).target();
+        assertEquals(new StringScalar("maybe"), node.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("read: a STRING-kind schema field falls through xmlPretype's boolean/integer/number checks")
+    void testReadPretypeStringKindFallsThroughAllChecks() {
+        Schema schema = OsdReader.read("record Root { \"s\": string } root Root\n");
+        Document doc = XmlCodec.read("<root><s>hello</s></root>", schema);
+        Node root = (Node) doc;
+        Node node = (Node) root.edges().get(0).target();
+        assertEquals(new StringScalar("hello"), node.edges().get(0).target());
+    }
+
+    @Test
+    @DisplayName("read: a Scalar-typed schema field whose XML content is actually nested elements, not text")
+    void testReadPretypeScalarFieldWithNonStringContent() {
+        // "n" is schema-typed as a scalar (integer), but the actual XML element has
+        // child elements, not text -- xmlToNode returns a List<Object[]> for it, not
+        // a String, so xmlPretype's Type.Scalar branch's "node instanceof String" is false.
+        Schema schema = OsdReader.read("record Root { \"n\": integer } root Root\n");
+        Document doc = XmlCodec.read("<root><n><unexpected>1</unexpected></n></root>", schema);
+        assertNotNull(doc);
+    }
+
+    @Test
+    @DisplayName("read: a Record-typed schema field whose XML content is actually leaf text, not nested elements")
+    void testReadPretypeRecordFieldWithNonListContent() {
+        // "inner" is schema-typed as a record, but the actual XML element is a leaf
+        // with plain text content -- xmlToNode returns a String for it, not a
+        // List<Object[]>, so xmlPretype's Record branch's "node instanceof List" is false.
+        Schema schema = OsdReader.read("record Inner { \"x\": integer } record Root { \"inner\": Inner } root Root\n");
+        Document doc = XmlCodec.read("<root><inner>just text</inner></root>", schema);
+        assertNotNull(doc);
+    }
+
+    @Test
     @DisplayName("read: a Ref field pointing at an undefined record resolves to null, falling through unpretyped")
     void testReadPretypeRefToUndefinedRecord() {
         // Bypasses OsdReader's own root-reference validation to construct a
@@ -280,12 +329,15 @@ public class XmlCodecTest {
             new Edge("t", new TimeScalar(dev.omnist.document.TimeValue.of(java.time.LocalTime.of(10, 0), java.time.ZoneOffset.UTC))),
             new Edge("dt", new DateTimeScalar(dev.omnist.document.DateTimeValue.of(java.time.LocalDateTime.of(2024, 1, 1, 10, 0), java.time.ZoneOffset.UTC))),
             new Edge("n", new IntegerScalar(BigInteger.valueOf(42))),
-            new Edge("f", new NumberScalar(3.14))
+            new Edge("f", new NumberScalar(3.14)),
+            new Edge("bFalse", new BooleanScalar(false))
         )))));
         String xml = XmlCodec.write(doc);
         assertTrue(xml.contains("2024-01-01"));
         assertTrue(xml.contains("42"));
         assertTrue(xml.contains("3.14"));
+        // xmlText's boolean ternary's "false" side: elsewhere only ever written as true.
+        assertTrue(xml.contains("<bFalse>false</bFalse>"));
     }
 
     @Test
@@ -350,5 +402,14 @@ public class XmlCodecTest {
         Node digitLabel = new Node(List.of(new Edge("123", new StringScalar("v"))));
         String xml2 = XmlCodec.write(digitLabel);
         assertTrue(xml2.contains("<_123"));
+
+        // An empty label: replaceAll can never shrink a non-empty string to
+        // empty (it's a 1:1 char substitution), so safe.isEmpty() can only be
+        // true when the original label was itself empty -- xmlName's isEmpty()
+        // short-circuit, distinct from the "123" case above (non-empty but
+        // XML_NAME-non-matching).
+        Node emptyLabel = new Node(List.of(new Edge("", new StringScalar("v"))));
+        String xml3 = XmlCodec.write(emptyLabel);
+        assertTrue(xml3.contains("<_>") || xml3.contains("<_ "));
     }
 }
