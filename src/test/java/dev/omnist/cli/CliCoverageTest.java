@@ -176,9 +176,8 @@ class CliCoverageTest {
         int code = execute(new String[]{"schema"}, null, out, err);
         assertEquals(2, code);
 
-        // unknown schema subcommand: falls through every equals() check
-        // (including lint's, exercising its false branch) with no dedicated
-        // "unknown subcommand" handling -- ends up at the outer "Unknown command" fallback.
+        // unknown schema subcommand: hits runSchema's own switch default case,
+        // printing "Unknown command: schema bogus-subcommand" and returning 2.
         out.reset(); err.reset();
         code = execute(new String[]{"schema", "bogus-subcommand", s1.toString()}, null, out, err);
         assertEquals(2, code);

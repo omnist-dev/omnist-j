@@ -34,6 +34,37 @@ public final class Cli {
     private Cli() {}
 
     /**
+     * Parsed flags shared across every subcommand. Not every command reads every
+     * field — each command's own {@code run*} method documents which ones it uses.
+     *
+     * @param compact      {@code --compact}: write in compact form where the target format supports it
+     * @param fromFormat   {@code --from}: input format name; {@code null} defaults to {@code oml}
+     * @param toFormat     {@code --to}: output format name; {@code null} defaults to {@code oml}
+     * @param schemaPath   {@code --schema}: path (or {@code -} for stdin) to an OSD schema file
+     * @param keepLabels   {@code --keep}: comma-separated record names, for {@code schema extract}
+     * @param resultFormat {@code --result-format}: when {@code "json"}, boolean-result subcommands
+     *                     print a JSON object instead of relying solely on the exit code
+     * @param json         {@code --json}: emit machine-readable JSON error/result payloads on stdout
+     * @param allowAny     {@code --allow-any}: for {@code infer}, fall back to {@code any} on
+     *                     conflicting scalar kinds instead of failing
+     * @param outputPath   {@code -o}: write output to this path instead of stdout
+     * @param severity     {@code --severity}: parsed for forward compatibility but not yet
+     *                     read by any command
+     */
+    private record Options(
+        boolean compact,
+        String fromFormat,
+        String toFormat,
+        String schemaPath,
+        String keepLabels,
+        String resultFormat,
+        boolean json,
+        boolean allowAny,
+        String outputPath,
+        String severity
+    ) {}
+
+    /**
      * Parses and executes a single CLI invocation.
      *
      * @param args command-line arguments, exactly as passed to {@code main}
@@ -106,252 +137,306 @@ public final class Cli {
                 return 2;
             }
 
+            Options opts = new Options(compact, fromFormat, toFormat, schemaPath, keepLabels,
+                resultFormat, json, allowAny, outputPath, severity);
             String cmd = positionals.get(0);
 
-            if (cmd.equals("format")) {
-                if (positionals.size() < 2) {
-                    err.println("Missing format input file");
-                    return 2;
+            return switch (cmd) {
+                case "format" -> runFormat(positionals, opts, out, err, in);
+                case "validate" -> runValidate(positionals, opts, out, err, in);
+                case "convert" -> runConvert(positionals, opts, out, err, in);
+                case "schema" -> runSchema(positionals, opts, out, err, in);
+                case "infer" -> runInfer(positionals, opts, out, err, in);
+                default -> {
+                    err.println("Unknown command: " + cmd);
+                    yield 2;
                 }
-                String content = readInput(positionals.get(1), in);
-                Document doc = readDocument(fromFormat, content, null);
-                String formatted = writeDocument(toFormat, doc, compact);
-                writeOutput(outputPath, formatted, out);
-                return 0;
-            }
-
-            if (cmd.equals("validate")) {
-                if (positionals.size() < 2) {
-                    err.println("Missing validate input file");
-                    return 2;
-                }
-                if (schemaPath == null) {
-                    err.println("Missing --schema parameter");
-                    return 2;
-                }
-                Schema schema = OsdReader.read(readInput(schemaPath, in));
-                Document doc = readDocument(fromFormat, readInput(positionals.get(1), in), schema);
-                ValidationResult res = Validator.validate(doc, schema);
-
-                if (json) {
-                    if (res.isValid()) {
-                        out.println("{\"ok\":true}");
-                        return 0;
-                    } else {
-                        List<JsonError> errors = new ArrayList<>();
-                        for (ValidationDiagnostic d : res.diagnostics()) {
-                            errors.add(new JsonError(d.path(), d.code(), d.message()));
-                        }
-                        out.println(MAPPER.writeValueAsString(new JsonResponse(false, "Validation failed", errors)));
-                        return 1;
-                    }
-                } else {
-                    if (res.isValid()) {
-                        return 0;
-                    } else {
-                        for (ValidationDiagnostic d : res.diagnostics()) {
-                            err.println(d.path() + " [" + d.code() + "]: " + d.message());
-                        }
-                        return 1;
-                    }
-                }
-            }
-
-            if (cmd.equals("convert")) {
-                if (positionals.size() < 2) {
-                    err.println("Missing convert input file");
-                    return 2;
-                }
-                if (schemaPath == null) {
-                    err.println("Missing --schema parameter");
-                    return 2;
-                }
-                Schema schema = OsdReader.read(readInput(schemaPath, in));
-                Document doc = readDocument(fromFormat, readInput(positionals.get(1), in), schema);
-
-                try {
-                    Document materialized = Materializer.materialize(doc, schema);
-                    String result = writeDocument(toFormat, materialized, compact);
-                    writeOutput(outputPath, result, out);
-                    return 0;
-                } catch (ValidationException ex) {
-                    if (json) {
-                        List<JsonError> errors = new ArrayList<>();
-                        for (ValidationDiagnostic d : ex.getResult().diagnostics()) {
-                            errors.add(new JsonError(d.path(), d.code(), d.message()));
-                        }
-                        out.println(MAPPER.writeValueAsString(new JsonResponse(false, "Materialization failed", errors)));
-                    } else {
-                        for (ValidationDiagnostic d : ex.getResult().diagnostics()) {
-                            err.println(d.path() + " [" + d.code() + "]: " + d.message());
-                        }
-                    }
-                    return 2;
-                }
-            }
-
-            if (cmd.equals("schema")) {
-                if (positionals.size() < 2) {
-                    err.println("Missing schema subcommand");
-                    return 2;
-                }
-                String subcmd = positionals.get(1);
-
-                if (subcmd.equals("normalize")) {
-                    if (positionals.size() < 3) {
-                        err.println("Missing schema input file");
-                        return 2;
-                    }
-                    Schema s = OsdReader.read(readInput(positionals.get(2), in));
-                    Schema normalized = SchemaAlgebra.normalize(s);
-                    writeOutput(outputPath, writeOsd(normalized, compact), out);
-                    return 0;
-                }
-
-                if (subcmd.equals("prune")) {
-                    if (positionals.size() < 3) {
-                        err.println("Missing schema input file");
-                        return 2;
-                    }
-                    Schema s = OsdReader.read(readInput(positionals.get(2), in));
-                    Schema pruned = SchemaAlgebra.prune(s);
-                    writeOutput(outputPath, writeOsd(pruned, compact), out);
-                    return 0;
-                }
-
-                if (subcmd.equals("extract")) {
-                    if (positionals.size() < 3) {
-                        err.println("Missing schema input file");
-                        return 2;
-                    }
-                    if (keepLabels == null) {
-                        err.println("Missing --keep labels parameter");
-                        return 2;
-                    }
-                    Schema s = OsdReader.read(readInput(positionals.get(2), in));
-                    Set<String> keep = new LinkedHashSet<>(Arrays.asList(keepLabels.split(",")));
-                    try {
-                        Schema extracted = SchemaAlgebra.extract(s, keep);
-                        writeOutput(outputPath, writeOsd(extracted, compact), out);
-                        return 0;
-                    } catch (IllegalArgumentException ex) {
-                        if (json) {
-                            out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError("$", "algebra.extract-invalidates-root", ex.getMessage())))));
-                        } else {
-                            err.println(ex.getMessage());
-                        }
-                        return 1;
-                    }
-                }
-
-                if (subcmd.equals("is-empty")) {
-                    if (positionals.size() < 3) {
-                        err.println("Missing schema input file");
-                        return 2;
-                    }
-                    Schema s = OsdReader.read(readInput(positionals.get(2), in));
-                    boolean empty = SchemaAlgebra.isEmpty(s);
-                    if ("json".equals(resultFormat)) {
-                        out.println("{\"empty\":" + empty + "}");
-                    }
-                    return empty ? 0 : 1;
-                }
-
-                if (subcmd.equals("compatible-with")) {
-                    if (positionals.size() < 4) {
-                        err.println("Missing schema input files");
-                        return 2;
-                    }
-                    Schema a = OsdReader.read(readInput(positionals.get(2), in));
-                    Schema b = OsdReader.read(readInput(positionals.get(3), in));
-                    boolean comp = SchemaAlgebra.compatibleWith(a, b);
-                    if ("json".equals(resultFormat)) {
-                        out.println("{\"compatible\":" + comp + "}");
-                    }
-                    return comp ? 0 : 1;
-                }
-
-                if (subcmd.equals("equivalent")) {
-                    if (positionals.size() < 4) {
-                        err.println("Missing schema input files");
-                        return 2;
-                    }
-                    Schema a = OsdReader.read(readInput(positionals.get(2), in));
-                    Schema b = OsdReader.read(readInput(positionals.get(3), in));
-                    boolean equiv = SchemaAlgebra.equivalent(a, b);
-                    if ("json".equals(resultFormat)) {
-                        out.println("{\"equivalent\":" + equiv + "}");
-                    }
-                    return equiv ? 0 : 1;
-                }
-
-                if (subcmd.equals("lint")) {
-                    if (positionals.size() < 3) {
-                        err.println("Missing schema input file");
-                        return 2;
-                    }
-                    Schema s = OsdReader.read(readInput(positionals.get(2), in));
-                    List<LintFinding> findings = SchemaAlgebra.lint(s);
-
-                    boolean ok = true;
-                    for (LintFinding lf : findings) {
-                        if (lf.severity().equals("warning")) {
-                            ok = false;
-                        }
-                    }
-
-                    if (json) {
-                        out.println(MAPPER.writeValueAsString(new LintResponse(ok, findings)));
-                    } else {
-                        for (LintFinding lf : findings) {
-                            err.println(lf.severity().toUpperCase() + " [" + lf.code() + "] at " + lf.location() + ": " + lf.message());
-                        }
-                    }
-
-                    return ok ? 0 : 1;
-                }
-            }
-
-            if (cmd.equals("infer")) {
-                if (positionals.size() < 2) {
-                    err.println("Missing input samples");
-                    return 2;
-                }
-
-                List<Document> samples = new ArrayList<>();
-                for (int idx = 1; idx < positionals.size(); idx++) {
-                    samples.add(readDocument(fromFormat, readInput(positionals.get(idx), in), null));
-                }
-
-                try {
-                    InferResult res = SchemaAlgebra.inferWithReport(samples, "R", allowAny);
-                    // res.fallbacks() is always non-null (inferWithReport builds it via
-                    // List.copyOf), so only allowAny and emptiness are real conditions.
-                    if (allowAny && !res.fallbacks().isEmpty()) {
-                        err.println("opened " + res.fallbacks().size() + " field(s) as `any`:");
-                        for (AnyFallback fb : res.fallbacks()) {
-                            err.println("  " + fb.location() + " — " + fb.reason());
-                        }
-                    }
-                    writeOutput(outputPath, writeOsd(res.schema(), compact), out);
-                    return 0;
-                } catch (Exception ex) {
-                    if (json) {
-                        String code = getInferErrorCode(ex.getMessage());
-                        out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError("$", code, ex.getMessage())))));
-                    } else {
-                        err.println(ex.getMessage());
-                    }
-                    return 2;
-                }
-            }
-
-            err.println("Unknown command: " + cmd);
-            return 2;
+            };
 
         } catch (Exception ex) {
             err.println("Error: " + ex.getMessage());
             ex.printStackTrace(err);
+            return 2;
+        }
+    }
+
+    /**
+     * {@code omnist format <input> [--from FORMAT] [--to FORMAT] [--compact] [-o OUTPUT]}:
+     * reads a document in one format and re-emits it in another with no validation.
+     */
+    private static int runFormat(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 2) {
+            err.println("Missing format input file");
+            return 2;
+        }
+        String content = readInput(positionals.get(1), in);
+        Document doc = readDocument(opts.fromFormat(), content, null);
+        String formatted = writeDocument(opts.toFormat(), doc, opts.compact());
+        writeOutput(opts.outputPath(), formatted, out);
+        return 0;
+    }
+
+    /**
+     * {@code omnist validate <input> --schema SCHEMA [--json]}: checks a document
+     * against a schema and reports every diagnostic on failure.
+     */
+    private static int runValidate(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 2) {
+            err.println("Missing validate input file");
+            return 2;
+        }
+        if (opts.schemaPath() == null) {
+            err.println("Missing --schema parameter");
+            return 2;
+        }
+        Schema schema = OsdReader.read(readInput(opts.schemaPath(), in));
+        Document doc = readDocument(opts.fromFormat(), readInput(positionals.get(1), in), schema);
+        ValidationResult res = Validator.validate(doc, schema);
+
+        if (opts.json()) {
+            if (res.isValid()) {
+                out.println("{\"ok\":true}");
+                return 0;
+            } else {
+                List<JsonError> errors = new ArrayList<>();
+                for (ValidationDiagnostic d : res.diagnostics()) {
+                    errors.add(new JsonError(d.path(), d.code(), d.message()));
+                }
+                out.println(MAPPER.writeValueAsString(new JsonResponse(false, "Validation failed", errors)));
+                return 1;
+            }
+        } else {
+            if (res.isValid()) {
+                return 0;
+            } else {
+                for (ValidationDiagnostic d : res.diagnostics()) {
+                    err.println(d.path() + " [" + d.code() + "]: " + d.message());
+                }
+                return 1;
+            }
+        }
+    }
+
+    /**
+     * {@code omnist convert <input> --schema SCHEMA [--to FORMAT] [--json]}: validates
+     * and materializes a document against a schema, then re-emits it in another format.
+     */
+    private static int runConvert(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 2) {
+            err.println("Missing convert input file");
+            return 2;
+        }
+        if (opts.schemaPath() == null) {
+            err.println("Missing --schema parameter");
+            return 2;
+        }
+        Schema schema = OsdReader.read(readInput(opts.schemaPath(), in));
+        Document doc = readDocument(opts.fromFormat(), readInput(positionals.get(1), in), schema);
+
+        try {
+            Document materialized = Materializer.materialize(doc, schema);
+            String result = writeDocument(opts.toFormat(), materialized, opts.compact());
+            writeOutput(opts.outputPath(), result, out);
+            return 0;
+        } catch (ValidationException ex) {
+            if (opts.json()) {
+                List<JsonError> errors = new ArrayList<>();
+                for (ValidationDiagnostic d : ex.getResult().diagnostics()) {
+                    errors.add(new JsonError(d.path(), d.code(), d.message()));
+                }
+                out.println(MAPPER.writeValueAsString(new JsonResponse(false, "Materialization failed", errors)));
+            } else {
+                for (ValidationDiagnostic d : ex.getResult().diagnostics()) {
+                    err.println(d.path() + " [" + d.code() + "]: " + d.message());
+                }
+            }
+            return 2;
+        }
+    }
+
+    /**
+     * {@code omnist schema <subcommand> ...}: dispatches to one of the seven
+     * Schema Algebra subcommands (§6). Unknown subcommands and missing arguments
+     * fall through to the same "Unknown command"/{@code 2} handling as an
+     * unrecognized top-level command.
+     */
+    private static int runSchema(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 2) {
+            err.println("Missing schema subcommand");
+            return 2;
+        }
+        String subcmd = positionals.get(1);
+
+        return switch (subcmd) {
+            case "normalize" -> runSchemaNormalize(positionals, opts, out, err, in);
+            case "prune" -> runSchemaPrune(positionals, opts, out, err, in);
+            case "extract" -> runSchemaExtract(positionals, opts, out, err, in);
+            case "is-empty" -> runSchemaIsEmpty(positionals, opts, out, err, in);
+            case "compatible-with" -> runSchemaCompatibleWith(positionals, opts, out, err, in);
+            case "equivalent" -> runSchemaEquivalent(positionals, opts, out, err, in);
+            case "lint" -> runSchemaLint(positionals, opts, out, err, in);
+            default -> {
+                err.println("Unknown command: schema " + subcmd);
+                yield 2;
+            }
+        };
+    }
+
+    /** {@code omnist schema normalize <schema>}: writes the schema's {@code normalize()} result (§6.8). */
+    private static int runSchemaNormalize(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 3) {
+            err.println("Missing schema input file");
+            return 2;
+        }
+        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Schema normalized = SchemaAlgebra.normalize(s);
+        writeOutput(opts.outputPath(), writeOsd(normalized, opts.compact()), out);
+        return 0;
+    }
+
+    /** {@code omnist schema prune <schema>}: writes the schema's {@code prune()} result (§6.5). */
+    private static int runSchemaPrune(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 3) {
+            err.println("Missing schema input file");
+            return 2;
+        }
+        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Schema pruned = SchemaAlgebra.prune(s);
+        writeOutput(opts.outputPath(), writeOsd(pruned, opts.compact()), out);
+        return 0;
+    }
+
+    /** {@code omnist schema extract <schema> --keep A,B,C}: writes the schema's {@code extract()} result (§6.9). */
+    private static int runSchemaExtract(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 3) {
+            err.println("Missing schema input file");
+            return 2;
+        }
+        if (opts.keepLabels() == null) {
+            err.println("Missing --keep labels parameter");
+            return 2;
+        }
+        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Set<String> keep = new LinkedHashSet<>(Arrays.asList(opts.keepLabels().split(",")));
+        try {
+            Schema extracted = SchemaAlgebra.extract(s, keep);
+            writeOutput(opts.outputPath(), writeOsd(extracted, opts.compact()), out);
+            return 0;
+        } catch (IllegalArgumentException ex) {
+            if (opts.json()) {
+                out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError("$", "algebra.extract-invalidates-root", ex.getMessage())))));
+            } else {
+                err.println(ex.getMessage());
+            }
+            return 1;
+        }
+    }
+
+    /** {@code omnist schema is-empty <schema>}: exits {@code 0} iff {@code is_empty()} is true (§6.4). */
+    private static int runSchemaIsEmpty(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 3) {
+            err.println("Missing schema input file");
+            return 2;
+        }
+        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        boolean empty = SchemaAlgebra.isEmpty(s);
+        if ("json".equals(opts.resultFormat())) {
+            out.println("{\"empty\":" + empty + "}");
+        }
+        return empty ? 0 : 1;
+    }
+
+    /** {@code omnist schema compatible-with <a> <b>}: exits {@code 0} iff {@code compatible_with(a, b)} is true (§6.6). */
+    private static int runSchemaCompatibleWith(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 4) {
+            err.println("Missing schema input files");
+            return 2;
+        }
+        Schema a = OsdReader.read(readInput(positionals.get(2), in));
+        Schema b = OsdReader.read(readInput(positionals.get(3), in));
+        boolean comp = SchemaAlgebra.compatibleWith(a, b);
+        if ("json".equals(opts.resultFormat())) {
+            out.println("{\"compatible\":" + comp + "}");
+        }
+        return comp ? 0 : 1;
+    }
+
+    /** {@code omnist schema equivalent <a> <b>}: exits {@code 0} iff {@code equivalent(a, b)} is true (§6.7). */
+    private static int runSchemaEquivalent(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 4) {
+            err.println("Missing schema input files");
+            return 2;
+        }
+        Schema a = OsdReader.read(readInput(positionals.get(2), in));
+        Schema b = OsdReader.read(readInput(positionals.get(3), in));
+        boolean equiv = SchemaAlgebra.equivalent(a, b);
+        if ("json".equals(opts.resultFormat())) {
+            out.println("{\"equivalent\":" + equiv + "}");
+        }
+        return equiv ? 0 : 1;
+    }
+
+    /** {@code omnist schema lint <schema> [--json]}: prints every {@code lint()} finding (§6.11). */
+    private static int runSchemaLint(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 3) {
+            err.println("Missing schema input file");
+            return 2;
+        }
+        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        List<LintFinding> findings = SchemaAlgebra.lint(s);
+
+        boolean ok = true;
+        for (LintFinding lf : findings) {
+            if (lf.severity().equals("warning")) {
+                ok = false;
+            }
+        }
+
+        if (opts.json()) {
+            out.println(MAPPER.writeValueAsString(new LintResponse(ok, findings)));
+        } else {
+            for (LintFinding lf : findings) {
+                err.println(lf.severity().toUpperCase() + " [" + lf.code() + "] at " + lf.location() + ": " + lf.message());
+            }
+        }
+
+        return ok ? 0 : 1;
+    }
+
+    /**
+     * {@code omnist infer <sample>... [--allow-any] [--json]}: writes the OSD schema
+     * inferred from one or more sample documents (§6.10).
+     */
+    private static int runInfer(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
+        if (positionals.size() < 2) {
+            err.println("Missing input samples");
+            return 2;
+        }
+
+        List<Document> samples = new ArrayList<>();
+        for (int idx = 1; idx < positionals.size(); idx++) {
+            samples.add(readDocument(opts.fromFormat(), readInput(positionals.get(idx), in), null));
+        }
+
+        try {
+            InferResult res = SchemaAlgebra.inferWithReport(samples, "R", opts.allowAny());
+            // res.fallbacks() is always non-null (inferWithReport builds it via
+            // List.copyOf), so only allowAny and emptiness are real conditions.
+            if (opts.allowAny() && !res.fallbacks().isEmpty()) {
+                err.println("opened " + res.fallbacks().size() + " field(s) as `any`:");
+                for (AnyFallback fb : res.fallbacks()) {
+                    err.println("  " + fb.location() + " — " + fb.reason());
+                }
+            }
+            writeOutput(opts.outputPath(), writeOsd(res.schema(), opts.compact()), out);
+            return 0;
+        } catch (Exception ex) {
+            if (opts.json()) {
+                String code = getInferErrorCode(ex.getMessage());
+                out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError("$", code, ex.getMessage())))));
+            } else {
+                err.println(ex.getMessage());
+            }
             return 2;
         }
     }
