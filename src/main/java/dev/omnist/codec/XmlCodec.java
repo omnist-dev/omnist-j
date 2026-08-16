@@ -60,9 +60,21 @@ public final class XmlCodec {
     /**
      * Parses XML text into a {@link Document}, optionally with schema guidance.
      *
+     * <p>Unlike the other three format codecs (whose {@code read(text, schema)}
+     * overload ignores {@code schema} entirely, or in JsonCodec's case accepts it
+     * without acting on it — schema-driven coercion there happens in a later
+     * {@link dev.omnist.validation.Materializer} stage instead), XML text is
+     * inherently ambiguous about scalar kind: every attribute and element value is
+     * just a string until something says otherwise. When {@code schema} is
+     * non-{@code null}, its root record's field types are used to pre-resolve
+     * strings that look like booleans/integers/numbers into the matching Java type
+     * before the document is built, so a later validate/materialize call sees a
+     * typed value rather than a string it would otherwise have to coerce blind.
+     *
      * @param text   the XML text; must not be {@code null}
-     * @param schema currently unused by this codec's read path; accepted for API symmetry
-     *               with the other format codecs
+     * @param schema if non-{@code null}, guides scalar-kind resolution for
+     *               ambiguous string content as described above; if {@code null},
+     *               every scalar is read as a plain string
      * @return the parsed document
      * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
      */
