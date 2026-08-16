@@ -44,11 +44,19 @@ public final class JsonCodec {
     }
 
     /**
-     * Parses JSON text into a {@link Document}, optionally with schema guidance.
+     * Parses JSON text into a {@link Document}.
+     *
+     * <p>The {@code schema} parameter is intentionally unused here: JSON's own
+     * grammar already distinguishes strings/numbers/booleans natively, so there is
+     * no scalar-kind ambiguity for a schema to resolve at parse time (unlike
+     * {@link XmlCodec#read(String, dev.omnist.schema.Schema)}, where every value
+     * is a string until schema-guided pre-typing runs). Schema-driven coercion of
+     * an already-typed value (e.g. a JSON string into a schema's {@code date}
+     * field) is a separate concern handled by a later
+     * {@link dev.omnist.validation.Materializer} call, not by this method.
      *
      * @param text   the JSON text; must not be {@code null}
-     * @param schema if non-{@code null}, the document is accepted as-is after parsing
-     *               (schema-driven coercion is handled by a subsequent {@link dev.omnist.validation.Materializer} call)
+     * @param schema accepted for call-site symmetry with the other format codecs; has no effect
      * @return the parsed document
      * @throws RuntimeException if the JSON is syntactically invalid, or if the root value is an array,
      *         or if nesting depth exceeds 200, or if node count exceeds 1,000,000
@@ -58,11 +66,6 @@ public final class JsonCodec {
             Object raw = MAPPER.readValue(text, Object.class);
             int[] budget = new int[]{0};
             Document doc = buildNode(raw, "$", 0, budget);
-            if (schema != null) {
-                // Since materialize is a separate stage and not implemented yet,
-                // we just return the parsed doc.
-                return doc;
-            }
             return doc;
         } catch (IOException e) {
             throw new RuntimeException("invalid JSON: " + e.getMessage(), e);
