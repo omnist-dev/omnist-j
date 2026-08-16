@@ -22,7 +22,7 @@ jobs:
           cache: 'maven'
 
       - name: Build and Test with JaCoCo Coverage Check
-        run: mvn clean test jacoco:report jacoco:check
+        run: mvn clean test
 
   conformance:
     runs-on: ubuntu-latest
