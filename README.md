@@ -28,7 +28,7 @@ For workflow details and engineering constraints, see [`docs/workflow-playbook.m
 
 ## Status
 
-**`v0.0.2-alpha`.**
+**`v0.1.0-alpha`.**
 
 - **Conformance Harness**: **181 / 181 (100%) PASS** across Track 1 CLI fixtures & Track 2 JSON test vectors.
 - **Unit & Fuzz Testing**: **553 tests passing**, 0 failures — JUnit unit/integration tests plus jqwik property-based and fuzz tests, zero crashes.
