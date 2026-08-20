@@ -1,13 +1,13 @@
 package dev.omnist.algebra;
 
 /**
- * Structured exception thrown when a schema algebra or inference operation fails (omnist-spec ?6).
+ * Structured exception thrown when a schema algebra or inference operation fails (omnist-spec §6).
  *
  * <p>Callers that need to surface algebra/inference errors should inspect:
  * <ul>
- *   <li>{@link #getPath()} ? target schema element path where the error occurred (e.g. {@code "$"} or {@code "MyRecord.myField"})</li>
- *   <li>{@link #getCode()} ? machine-readable error code (e.g. {@code algebra.extract-invalidates-root}, {@code algebra.infer-mixed-shape})</li>
- *   <li>{@link #getMessage()} ? human-readable message explaining the violation</li>
+ *   <li>{@link #getPath()} — target schema element path where the error occurred (e.g. {@code "$"} or {@code "MyRecord.myField"})</li>
+ *   <li>{@link #getCode()} — machine-readable error code (e.g. {@code algebra.extract-invalidates-root}, {@code algebra.infer-mixed-shape})</li>
+ *   <li>{@link #getMessage()} — human-readable message explaining the violation</li>
  * </ul>
  */
 public class AlgebraException extends IllegalArgumentException {

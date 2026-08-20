@@ -2,13 +2,13 @@ package dev.omnist.document;
 
 /**
  * Structured exception thrown when a document fails to parse, violates safety limits,
- * or contains invalid/unsupported structures across format codecs (omnist-spec ?7, ?8).
+ * or contains invalid/unsupported structures across format codecs (omnist-spec §7, §8).
  *
  * <p>Callers that need to surface document parse errors should inspect:
  * <ul>
- *   <li>{@link #getPath()} ? JSONPath-style document path where the error was detected (e.g. {@code "$"} or {@code "$.a[0].b"})</li>
- *   <li>{@link #getCode()} ? machine-readable error code (e.g. {@code document.limit.depth}, {@code document.unlabeled-element})</li>
- *   <li>{@link #getMessage()} ? human-readable message explaining the violation</li>
+ *   <li>{@link #getPath()} — JSONPath-style document path where the error was detected (e.g. {@code "$"} or {@code "$.a[0].b"})</li>
+ *   <li>{@link #getCode()} — machine-readable error code (e.g. {@code document.limit.depth}, {@code document.unlabeled-element})</li>
+ *   <li>{@link #getMessage()} — human-readable message explaining the violation</li>
  * </ul>
  */
 public class DocumentParseException extends RuntimeException {
