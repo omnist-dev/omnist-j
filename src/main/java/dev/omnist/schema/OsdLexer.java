@@ -64,6 +64,8 @@ public class OsdLexer {
     private int line = 1;
     private int col = 1;
 
+    private final Matcher identMatcher = IDENT_PATTERN.matcher("");
+
     /**
      * Constructs a lexer for the given OSD source text.
      *
@@ -129,9 +131,7 @@ public class OsdLexer {
         }
 
         // Rule 4: IDENT / Keywords
-        String remaining = source.substring(pos);
-        Matcher identMatcher = IDENT_PATTERN.matcher(remaining);
-        if (identMatcher.find()) {
+        if (identMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = identMatcher.group();
             advance(text.length());
             if ("record".equals(text)) {
