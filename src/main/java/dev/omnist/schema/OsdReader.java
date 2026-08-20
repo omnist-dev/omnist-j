@@ -11,6 +11,8 @@ import java.util.*;
  */
 public class OsdReader {
 
+    public static final int MAX_INPUT_LENGTH = 2_000_000;
+
     private final List<Token> tokens;
     private int index = 0;
 
@@ -21,6 +23,9 @@ public class OsdReader {
      * @param source the OSD text to parse; {@code null} is treated as empty
      */
     public OsdReader(String source) {
+        if (source != null && source.length() > MAX_INPUT_LENGTH) {
+            throw new OsdParseException(1, 1, "schema.input-too-large", "$", "Input exceeds maximum length of " + MAX_INPUT_LENGTH + " characters");
+        }
         OsdLexer lexer = new OsdLexer(source);
         this.tokens = lexer.tokenizeAll();
     }

@@ -112,4 +112,36 @@ class LimitsConsistencyTest {
         Document mat = Materializer.materialize(doc, multiSchema);
         assertTrue(mat instanceof Node);
     }
+
+    @Test
+    @DisplayName("Input length cap of 2,000,000 characters is enforced across JsonCodec, OmlReader, and OsdReader")
+    void testInputLengthCaps() {
+        String oversized = " ".repeat(2_000_001);
+
+        assertThrows(RuntimeException.class, () -> JsonCodec.read(oversized));
+        assertThrows(RuntimeException.class, () -> dev.omnist.oml.OmlReader.read(oversized));
+        assertThrows(RuntimeException.class, () -> dev.omnist.schema.OsdReader.read(oversized));
+    }
+
+    @Test
+    @DisplayName("Null input handling across codecs")
+    void testNullInputHandling() {
+        assertThrows(IllegalArgumentException.class, () -> JsonCodec.read(null));
+        assertThrows(IllegalArgumentException.class, () -> JsonCodec.read(null, null));
+        assertNotNull(dev.omnist.oml.OmlReader.read(null));
+        assertNotNull(dev.omnist.schema.OsdReader.read("root R\nrecord R {}"));
+    }
+
+    @Test
+    @DisplayName("OmlLexer special floats and digit limits")
+    void testOmlSpecialFloatsAndLimits() {
+        Document dInf = dev.omnist.oml.OmlReader.read("val: inf\n");
+        assertEquals(Double.POSITIVE_INFINITY, ((Scalar.NumberScalar) ((Node) dInf).edges().get(0).target()).value());
+
+        Document dNegInf = dev.omnist.oml.OmlReader.read("val: -inf\n");
+        assertEquals(Double.NEGATIVE_INFINITY, ((Scalar.NumberScalar) ((Node) dNegInf).edges().get(0).target()).value());
+
+        String longInt = "val: " + "9".repeat(4301) + "\n";
+        assertThrows(RuntimeException.class, () -> dev.omnist.oml.OmlReader.read(longInt));
+    }
 }
