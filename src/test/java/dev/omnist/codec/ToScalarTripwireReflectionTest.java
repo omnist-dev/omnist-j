@@ -14,15 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Reflection-based tests for JsonCodec/YamlCodec/TomlCodec's toScalar()
- * Float/BigDecimal (and YamlCodec's java.util.Date) branches. Verified
- * empirically earlier this session that the real Jackson/SnakeYAML/tomlj
- * parsers, as configured by these codecs, never actually produce these
- * Java types -- only Long/Double (and LocalDate/DateTimeValue for YAML).
- * These branches are defensive against a library-configuration change, not
- * reachable through any real input. Reflection proves the branch logic
- * itself is correct without claiming real-world reachability -- distinct
- * from the peekToken()/toMap() cases, which reflection proved were
- * reachable through a genuine (if contrived) call sequence.
+ * Float/BigDecimal (and YamlCodec's java.util.Date) branches.
  */
 class ToScalarTripwireReflectionTest {
 
@@ -38,17 +30,21 @@ class ToScalarTripwireReflectionTest {
     }
 
     @Test
-    @DisplayName("JsonCodec.toScalar: Float and BigDecimal branches")
+    @DisplayName("JsonCodec.toScalar: Float, BigDecimal, and BigInteger digit limit checks")
     void jsonCodecFloatAndBigDecimal() throws Exception {
         assertEquals(new NumberScalar(3.5), invokeToScalar(JsonCodec.class, 3.5f));
         assertEquals(new NumberScalar(3.5), invokeToScalar(JsonCodec.class, new BigDecimal("3.5")));
-        // Exact integer-valued BigDecimal takes the toBigIntegerExact() success path
         Value exact = invokeToScalar(JsonCodec.class, new BigDecimal("42"));
         assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(42)), exact);
+
+        BigInteger bigPos = new BigInteger("9".repeat(4301));
+        BigInteger bigNeg = new BigInteger("-" + "9".repeat(4301));
+        assertThrows(RuntimeException.class, () -> invokeToScalar(JsonCodec.class, bigPos));
+        assertThrows(RuntimeException.class, () -> invokeToScalar(JsonCodec.class, bigNeg));
     }
 
     @Test
-    @DisplayName("YamlCodec.toScalar: Float, BigDecimal (both branches), and java.util.Date branches")
+    @DisplayName("YamlCodec.toScalar: Float, BigDecimal, Date, and BigInteger digit limit checks")
     void yamlCodecFloatBigDecimalAndDate() throws Exception {
         assertEquals(new NumberScalar(3.5), invokeToScalar(YamlCodec.class, 3.5f));
         assertEquals(new NumberScalar(3.5), invokeToScalar(YamlCodec.class, new BigDecimal("3.5")));
@@ -56,6 +52,11 @@ class ToScalarTripwireReflectionTest {
         assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(42)), exact);
         Value fromDate = invokeToScalar(YamlCodec.class, new java.util.Date(0));
         assertInstanceOf(dev.omnist.document.Scalar.DateTimeScalar.class, fromDate);
+
+        BigInteger bigPos = new BigInteger("9".repeat(4301));
+        BigInteger bigNeg = new BigInteger("-" + "9".repeat(4301));
+        assertThrows(RuntimeException.class, () -> invokeToScalar(YamlCodec.class, bigPos));
+        assertThrows(RuntimeException.class, () -> invokeToScalar(YamlCodec.class, bigNeg));
     }
 
     @Test
@@ -67,6 +68,11 @@ class ToScalarTripwireReflectionTest {
         assertEquals(new NumberScalar(3.5), invokeToScalar(TomlCodec.class, new BigDecimal("3.5")));
         Value exact = invokeToScalar(TomlCodec.class, new BigDecimal("42"));
         assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(42)), exact);
+
+        BigInteger bigPos = new BigInteger("9".repeat(4301));
+        BigInteger bigNeg = new BigInteger("-" + "9".repeat(4301));
+        assertThrows(RuntimeException.class, () -> invokeToScalar(TomlCodec.class, bigPos));
+        assertThrows(RuntimeException.class, () -> invokeToScalar(TomlCodec.class, bigNeg));
     }
 
     @Test
@@ -79,13 +85,13 @@ class ToScalarTripwireReflectionTest {
     }
 
     @Test
-    @DisplayName("TomlCodec.toScalar: value == null (TOML has no null literal; tomlj never produces one, but kept defensively)")
+    @DisplayName("TomlCodec.toScalar: value == null")
     void tomlCodecNullValue() throws Exception {
         assertEquals(Value.NULL, invokeToScalar(TomlCodec.class, null));
     }
 
     @Test
-    @DisplayName("TomlCodec.buildNode: budget guard and object-key-not-string (tomlj always produces String keys)")
+    @DisplayName("TomlCodec.buildNode: budget guard and object-key-not-string")
     void tomlCodecBuildNodeBudgetAndKeyGuards() throws Exception {
         Method buildNode = TomlCodec.class.getDeclaredMethod(
             "buildNode", Object.class, String.class, int.class, int[].class);
@@ -93,7 +99,7 @@ class ToScalarTripwireReflectionTest {
 
         int[] overBudget = new int[]{1_000_001};
         InvocationTargetException budgetThrown = assertThrows(InvocationTargetException.class,
-            () -> buildNode.invoke(null, "any value", "$", 0, overBudget));
+            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, overBudget));
         assertTrue(budgetThrown.getCause().getMessage().contains("too many nodes materialized"));
 
         java.util.Map<Object, Object> badMap = new java.util.LinkedHashMap<>();

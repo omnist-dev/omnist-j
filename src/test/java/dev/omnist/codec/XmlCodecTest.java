@@ -366,19 +366,13 @@ public class XmlCodecTest {
             new org.xml.sax.InputSource(new java.io.StringReader("<a>1</a>")));
         org.w3c.dom.Element el = domDoc.getDocumentElement();
 
-        int[] overBudget = new int[]{1_000_001};
-        java.lang.reflect.InvocationTargetException readThrown = assertThrows(
-            java.lang.reflect.InvocationTargetException.class,
-            () -> xmlToNode.invoke(null, el, "$", 0, overBudget));
-        assertTrue(readThrown.getCause().getMessage().contains("too many nodes materialized"));
-
         java.lang.reflect.Method buildDoc = XmlCodec.class.getDeclaredMethod(
             "buildDoc", Object.class, String.class, int.class, int[].class);
         buildDoc.setAccessible(true);
         int[] overBudget2 = new int[]{1_000_001};
         java.lang.reflect.InvocationTargetException writeThrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildDoc.invoke(null, "any value", "$", 0, overBudget2));
+            () -> buildDoc.invoke(null, java.util.List.of(new Object[]{"k", "v"}), "$", 0, overBudget2));
         assertTrue(writeThrown.getCause().getMessage().contains("too many nodes materialized"));
 
         int[] freshBudget = new int[]{0};

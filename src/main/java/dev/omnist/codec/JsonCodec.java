@@ -27,7 +27,16 @@ import java.util.*;
  * <p>This class is stateless; all methods are {@code static}.
  */
 public final class JsonCodec {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER;
+    static {
+        com.fasterxml.jackson.core.StreamReadConstraints constraints = com.fasterxml.jackson.core.StreamReadConstraints.builder()
+                .maxNumberLength(10_000)
+                .build();
+        com.fasterxml.jackson.core.JsonFactory factory = com.fasterxml.jackson.core.JsonFactory.builder()
+                .streamReadConstraints(constraints)
+                .build();
+        MAPPER = new ObjectMapper(factory);
+    }
 
     private JsonCodec() {}
 
@@ -73,14 +82,15 @@ public final class JsonCodec {
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
-        budget[0]++;
-        if (budget[0] > 1_000_000) {
-            throw new RuntimeException(path + ": too many nodes materialized (over 1000000)");
-        }
-        if (depth > 200) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (200)");
+        Limits limits = Limits.DEFAULT;
+        if (depth > limits.maxDepth()) {
+            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof Map<?, ?> map) {
+            budget[0]++;
+            if (budget[0] > limits.maxNodeCount()) {
+                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+            }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 // Defensive: Invalid JSON (non-string keys) should never occur with ObjectMapper#readValue
@@ -122,6 +132,11 @@ public final class JsonCodec {
             return new BooleanScalar(b);
         }
         if (value instanceof BigInteger bi) {
+            String s = bi.toString();
+            int digits = s.startsWith("-") ? s.length() - 1 : s.length();
+            if (digits > Limits.DEFAULT.maxIntegerDigits()) {
+                throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+            }
             return new IntegerScalar(bi);
         }
         if (value instanceof Integer i) {

@@ -300,12 +300,9 @@ public final class TomlCodec {
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
-        budget[0]++;
-        if (budget[0] > 1_000_000) {
-            throw new RuntimeException(path + ": too many nodes materialized (over 1000000)");
-        }
-        if (depth > 200) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (200)");
+        Limits limits = Limits.DEFAULT;
+        if (depth > limits.maxDepth()) {
+            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof org.tomlj.TomlTable tt) {
             val = tt.toMap();
@@ -317,6 +314,10 @@ public final class TomlCodec {
         // this call) -- the only remaining entry point (read()) always passes
         // result.toMap(), never a bare TomlArray.
         if (val instanceof Map<?, ?> map) {
+            budget[0]++;
+            if (budget[0] > limits.maxNodeCount()) {
+                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+            }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String k)) {
@@ -403,6 +404,11 @@ public final class TomlCodec {
         // __omnist_int__ string-wrapping above before tomlj ever parses them.
         // Kept as defensive handling in case tomlj's behavior ever changes.
         if (value instanceof BigInteger bi) {
+            String s = bi.toString();
+            int digits = s.startsWith("-") ? s.length() - 1 : s.length();
+            if (digits > Limits.DEFAULT.maxIntegerDigits()) {
+                throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+            }
             return new IntegerScalar(bi);
         }
         if (value instanceof Integer i) {

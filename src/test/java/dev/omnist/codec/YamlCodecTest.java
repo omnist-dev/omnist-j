@@ -229,7 +229,7 @@ public class YamlCodecTest {
         int[] overBudget = new int[]{1_000_001};
         java.lang.reflect.InvocationTargetException budgetThrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildNode.invoke(null, "any value", "$", 0, overBudget));
+            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, overBudget));
         assertTrue(budgetThrown.getCause().getMessage().contains("too many nodes materialized"));
 
         int[] freshBudget = new int[]{0};
