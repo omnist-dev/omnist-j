@@ -16,6 +16,8 @@ import java.util.Set;
  */
 public class OmlReader {
 
+    public static final int MAX_INPUT_LENGTH = 2_000_000;
+
     private static final Set<String> RESERVED_WORDS = Set.of("null", "true", "false");
 
     private final List<Token> tokens;
@@ -34,6 +36,9 @@ public class OmlReader {
      *               {@code null} defaults to {@link Limits#DEFAULT}
      */
     public OmlReader(String source, Limits limits) {
+        if (source != null && source.length() > MAX_INPUT_LENGTH) {
+            throw new OmlParseException(1, 1, "parse.input-too-large", "Input exceeds maximum length of " + MAX_INPUT_LENGTH + " characters");
+        }
         this.limits = limits != null ? limits : Limits.DEFAULT;
         OmlLexer lexer = new OmlLexer(source, this.limits);
         this.tokens = lexer.tokenizeAll();

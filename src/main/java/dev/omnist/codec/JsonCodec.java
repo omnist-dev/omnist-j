@@ -27,6 +27,8 @@ import java.util.*;
  * <p>This class is stateless; all methods are {@code static}.
  */
 public final class JsonCodec {
+    public static final int MAX_INPUT_LENGTH = 2_000_000;
+
     private static final ObjectMapper MAPPER;
     static {
         com.fasterxml.jackson.core.StreamReadConstraints constraints = com.fasterxml.jackson.core.StreamReadConstraints.builder()
@@ -71,6 +73,12 @@ public final class JsonCodec {
      *         or if nesting depth exceeds 200, or if node count exceeds 1,000,000
      */
     public static Document read(String text, Schema schema) {
+        if (text == null) {
+            throw new IllegalArgumentException("input text cannot be null");
+        }
+        if (text.length() > MAX_INPUT_LENGTH) {
+            throw new RuntimeException("invalid JSON: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+        }
         try {
             Object raw = MAPPER.readValue(text, Object.class);
             int[] budget = new int[]{0};
