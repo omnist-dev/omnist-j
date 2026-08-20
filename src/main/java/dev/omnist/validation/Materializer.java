@@ -171,7 +171,10 @@ public final class Materializer {
         // 3. number <- integer
         if (targetKind == dev.omnist.schema.ScalarKind.NUMBER && valueKind == dev.omnist.document.ScalarKind.INTEGER) {
             BigInteger bi = ((IntegerScalar) value).value();
-            return new NumberScalar(bi.doubleValue());
+            double d = bi.doubleValue();
+            if (!Double.isInfinite(d) && new java.math.BigDecimal(d).compareTo(new java.math.BigDecimal(bi)) == 0) {
+                return new NumberScalar(d);
+            }
         }
 
         // 4. date/time/datetime <- string

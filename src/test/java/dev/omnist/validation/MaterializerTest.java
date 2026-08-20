@@ -231,4 +231,42 @@ public class MaterializerTest {
         assertInstanceOf(RuntimeException.class, thrown.getCause());
         assertTrue(thrown.getCause().getMessage().contains("too many nodes materialized"));
     }
+
+    @Test
+    @DisplayName("Issue #41: BigInteger to double conversion tests exact binary64 representability")
+    void testBigIntegerToDoubleExactness() {
+        Schema schema = OsdReader.read("record R { \"n\": number }\nroot R\n");
+
+        // 2^53 - 1 is exact
+        BigInteger bi2pow53Minus1 = BigInteger.valueOf(9007199254740991L);
+        Node doc1 = new Node(List.of(new Edge("n", new IntegerScalar(bi2pow53Minus1))));
+        Document out1 = Materializer.materialize(doc1, schema);
+        assertEquals(9007199254740991.0, ((NumberScalar) ((Node) out1).edges().get(0).target()).value());
+
+        // 2^53 is exact
+        BigInteger bi2pow53 = BigInteger.valueOf(9007199254740992L);
+        Node doc2 = new Node(List.of(new Edge("n", new IntegerScalar(bi2pow53))));
+        Document out2 = Materializer.materialize(doc2, schema);
+        assertEquals(9007199254740992.0, ((NumberScalar) ((Node) out2).edges().get(0).target()).value());
+
+        // 2^53 + 1 is inexact in binary64 -> emits materialize.inexact-conversion
+        BigInteger bi2pow53Plus1 = BigInteger.valueOf(9007199254740993L);
+        Node doc3 = new Node(List.of(new Edge("n", new IntegerScalar(bi2pow53Plus1))));
+        ValidationException ex3 = assertThrows(ValidationException.class, () -> Materializer.materialize(doc3, schema));
+        assertEquals(1, ex3.getResult().diagnostics().size());
+        assertEquals("materialize.inexact-conversion", ex3.getResult().diagnostics().get(0).code());
+
+        // Max finite double is exact
+        BigInteger biMaxDouble = new java.math.BigDecimal(Double.MAX_VALUE).toBigInteger();
+        Node docMax = new Node(List.of(new Edge("n", new IntegerScalar(biMaxDouble))));
+        Document outMax = Materializer.materialize(docMax, schema);
+        assertEquals(Double.MAX_VALUE, ((NumberScalar) ((Node) outMax).edges().get(0).target()).value());
+
+        // Overflow value (> Double.MAX_VALUE) is inexact
+        BigInteger biOverflow = biMaxDouble.multiply(BigInteger.valueOf(2));
+        Node docOver = new Node(List.of(new Edge("n", new IntegerScalar(biOverflow))));
+        ValidationException exOver = assertThrows(ValidationException.class, () -> Materializer.materialize(docOver, schema));
+        assertEquals(1, exOver.getResult().diagnostics().size());
+        assertEquals("materialize.inexact-conversion", exOver.getResult().diagnostics().get(0).code());
+    }
 }
