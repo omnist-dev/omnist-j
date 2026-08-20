@@ -78,7 +78,7 @@ class ValidatorTest {
         assertFalse(res.isValid());
         assertEquals(3, res.diagnostics().size());
 
-        assertEquals("$.item", res.diagnostics().get(0).path(), "1st occurrence must have no bracket index");
+        assertEquals("$.item[0]", res.diagnostics().get(0).path(), "1st occurrence of repeated label must have [0] index");
         assertEquals("validate.type-mismatch", res.diagnostics().get(0).code());
 
         assertEquals("$.item[1]", res.diagnostics().get(1).path(), "2nd occurrence must have index [1]");

@@ -99,14 +99,16 @@ public final class Materializer {
         }
 
         List<Edge> edges = new ArrayList<>();
-        Map<String, Integer> counts = new HashMap<>();
+        Map<String, Integer> totals = dev.omnist.document.PathUtils.countLabels(n);
+        Map<String, Integer> seen = new HashMap<>();
 
         for (Edge edge : n.edges()) {
             String label = edge.label();
-            int i = counts.getOrDefault(label, 0);
-            counts.put(label, i + 1);
+            int i = seen.getOrDefault(label, 0);
+            seen.put(label, i + 1);
+            int total = totals.getOrDefault(label, 1);
 
-            String childPath = path + "." + label + (i > 0 ? "[" + i + "]" : "");
+            String childPath = dev.omnist.document.PathUtils.childPath(path, label, i, total);
             Field f = fieldMap.get(label);
 
             if (f == null) {
@@ -119,7 +121,7 @@ public final class Materializer {
         }
 
         for (Field f : record.fields()) {
-            int c = counts.getOrDefault(f.label(), 0);
+            int c = totals.getOrDefault(f.label(), 0);
             if (c < f.min() || (f.max() != null && c > f.max())) {
                 String boundStr = f.max() == null ? "unbounded" : String.valueOf(f.max());
                 diagnostics.add(new ValidationDiagnostic(path, "validate.cardinality",
