@@ -13,7 +13,7 @@ public class OmlWriter {
 
     private OmlWriter() {}
 
-    private static final Pattern IDENT_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
+    private static final Pattern IDENT_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_-]*$");
 
     /**
      * Serializes a {@link Document} to canonical indented OML text (omnist-spec §4 and §9.5).

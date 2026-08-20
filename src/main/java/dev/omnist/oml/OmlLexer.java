@@ -86,7 +86,7 @@ public class OmlLexer {
     private static final Pattern DATETIME_PATTERN = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,6})?)?(Z|[-+]\\d{2}:\\d{2})?");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("^-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?|^-?\\d+[eE][-+]?\\d+");
     private static final Pattern INTEGER_PATTERN = Pattern.compile("^-?\\d+");
-    private static final Pattern IDENT_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+");
+    private static final Pattern IDENT_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_-]*");
 
     private final String source;
     private final Limits limits;

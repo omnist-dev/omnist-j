@@ -133,4 +133,41 @@ class OmlWriterTest {
         assertTrue(canonical.contains("{}"));
         assertEquals(doc, OmlReader.read(canonical));
     }
+
+    @Test
+    @DisplayName("Issue #42: labels starting with digits or hyphens write quoted and round-trip correctly")
+    void testDigitAndHyphenFirstLabelsWriteQuoted() {
+        List<String> labelsToTest = List.of("1abc", "-foo", "123", "-", "-1", "0", "0xyz", "_valid", "valid_1", "true", "nan", "inf", "null");
+        for (String label : labelsToTest) {
+            Node doc = new Node(List.of(new Edge(label, new Scalar.IntegerScalar(BigInteger.valueOf(42)))));
+            String written = OmlWriter.write(doc);
+            if (label.equals("_valid") || label.equals("valid_1")) {
+                assertTrue(written.contains(label + ": 42"), "Expected bare label for " + label + ", got: " + written);
+            } else {
+                assertTrue(written.contains("\"" + label + "\": 42"), "Expected quoted label for " + label + ", got: " + written);
+            }
+            Document roundtripped = OmlReader.read(written);
+            assertEquals(doc, roundtripped, "Round-trip failed for label: " + label);
+        }
+    }
+
+    @Test
+    @DisplayName("Property-style roundtrip test: read(write(doc)).equals(doc) over many label variations")
+    void testPropertyStyleLabelRoundTrip() {
+        String[] prefixes = {"", "a", "_", "1", "-", "Z", "9", "-a", "1_"};
+        String[] middles = {"", "abc", "123", "-_-", "true", "null", "nan", "inf", "false"};
+        String[] suffixes = {"", "x", "0", "_", "-", ":", " "};
+
+        for (String p : prefixes) {
+            for (String m : middles) {
+                for (String s : suffixes) {
+                    String label = p + m + s;
+                    Node doc = new Node(List.of(new Edge(label, new Scalar.StringScalar("val"))));
+                    String written = OmlWriter.write(doc);
+                    Document readBack = OmlReader.read(written);
+                    assertEquals(doc, readBack, "Round-trip failed for label: [" + label + "]");
+                }
+            }
+        }
+    }
 }
