@@ -216,35 +216,10 @@ public final class Materializer {
     }
 
     private static TimeValue parseTimeValue(String text) {
-        if (text.endsWith("Z")) {
-            java.time.LocalTime t = java.time.LocalTime.parse(text.substring(0, text.length() - 1));
-            return TimeValue.of(t, java.time.ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        // text.indexOf(':') < signPos is always true whenever signPos > 0: this
-        // method is only ever called with text ANCHORED_TIME already matched,
-        // whose mandatory "HH:MM" prefix puts the first ':' at index 2, while a
-        // +/-HH:MM offset suffix can't start before index 5 -- same reasoning as
-        // OmlLexer.parseTimeValue's twin check.
-        if (signPos > 0 && text.indexOf(':') < signPos) {
-            java.time.LocalTime t = java.time.LocalTime.parse(text.substring(0, signPos));
-            java.time.ZoneOffset offset = java.time.ZoneOffset.of(text.substring(signPos));
-            return TimeValue.of(t, offset);
-        }
-        return TimeValue.of(java.time.LocalTime.parse(text));
+        return TimeValue.parse(text);
     }
 
     private static DateTimeValue parseDateTimeValue(String text) {
-        if (text.endsWith("Z")) {
-            java.time.LocalDateTime dt = java.time.LocalDateTime.parse(text.substring(0, text.length() - 1));
-            return DateTimeValue.of(dt, java.time.ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        if (signPos > 10) {
-            java.time.LocalDateTime dt = java.time.LocalDateTime.parse(text.substring(0, signPos));
-            java.time.ZoneOffset offset = java.time.ZoneOffset.of(text.substring(signPos));
-            return DateTimeValue.of(dt, offset);
-        }
-        return DateTimeValue.of(java.time.LocalDateTime.parse(text));
+        return DateTimeValue.parse(text);
     }
 }

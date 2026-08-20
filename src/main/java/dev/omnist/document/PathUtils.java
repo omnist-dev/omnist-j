@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Shared utilities for constructing canonical document paths in diagnostics and report adjustments (omnist-spec ?8).
+ * Shared utilities for constructing canonical document paths in diagnostics and report adjustments (omnist-spec §8).
  */
 public final class PathUtils {
 
@@ -43,5 +43,42 @@ public final class PathUtils {
             return base + "[" + index + "]";
         }
         return base;
+    }
+
+    /**
+     * Groups repeated child edges into lists or single values for JSON, YAML, and TOML serialization.
+     * Preserves the first-seen insertion order of edge labels.
+     *
+     * @param node the prepared tree node or scalar value
+     * @return the grouped data structure (Maps/Lists/Scalars)
+     */
+    public static Object groupEdges(Object node) {
+        return groupEdges(node, 0);
+    }
+
+    private static Object groupEdges(Object node, int depth) {
+        if (!(node instanceof java.util.List<?> list)) {
+            return node;
+        }
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        for (Object item : list) {
+            Object[] edge = (Object[]) item;
+            String label = (String) edge[0];
+            counts.put(label, counts.getOrDefault(label, 0) + 1);
+        }
+        java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+        for (Object item : list) {
+            Object[] edge = (Object[]) item;
+            String label = (String) edge[0];
+            Object child = groupEdges(edge[1], depth + 1);
+            if (counts.get(label) > 1) {
+                @SuppressWarnings("unchecked")
+                java.util.List<Object> targetList = (java.util.List<Object>) out.computeIfAbsent(label, k -> new java.util.ArrayList<>());
+                targetList.add(child);
+            } else {
+                out.put(label, child);
+            }
+        }
+        return out;
     }
 }

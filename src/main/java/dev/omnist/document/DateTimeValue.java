@@ -59,4 +59,27 @@ public record DateTimeValue(LocalDateTime dateTime, ZoneOffset offset) {
         return sb.toString();
     }
 
+    /**
+     * Parses an ISO-8601 date-time string into a {@link DateTimeValue}.
+     * Supports un-offset local date-times (e.g. {@code "2024-01-01T12:00:00"}), UTC 'Z' (e.g. {@code "2024-01-01T12:00:00Z"}),
+     * and numeric offsets (e.g. {@code "2024-01-01T12:00:00+02:00"}).
+     *
+     * @param text the ISO-8601 date-time string to parse; must not be {@code null}
+     * @return the parsed {@link DateTimeValue}
+     */
+    public static DateTimeValue parse(String text) {
+        Objects.requireNonNull(text, "text must not be null");
+        if (text.endsWith("Z") || text.endsWith("z")) {
+            LocalDateTime dt = LocalDateTime.parse(text.substring(0, text.length() - 1));
+            return DateTimeValue.of(dt, ZoneOffset.UTC);
+        }
+        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
+        if (signPos > 10) {
+            LocalDateTime dt = LocalDateTime.parse(text.substring(0, signPos));
+            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
+            return DateTimeValue.of(dt, offset);
+        }
+        return DateTimeValue.of(LocalDateTime.parse(text));
+    }
+
 }
