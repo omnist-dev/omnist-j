@@ -344,4 +344,32 @@ public class TomlCodecTest {
         Document doc = TomlCodec.read(toml);
         assertTrue(doc instanceof Node);
     }
+
+    @Test
+    @DisplayName("Issue #43: TOML writer escapes forbidden control characters in values and labels")
+    void testTomlWriterEscapesControlCharacters() {
+        // Test all C0 control characters (0..31) and DEL (127)
+        for (int i = 0; i <= 31; i++) {
+            char c = (char) i;
+            String val = "pre" + c + "post";
+            String label = "k" + c + "key";
+            Node doc = new Node(List.of(new Edge(label, new StringScalar(val))));
+            String written = TomlCodec.write(doc);
+            
+            // Check that unescaped raw control characters (other than tab/newline/cr) are not present literally
+            if (i != 9 && i != 10 && i != 13) {
+                assertFalse(written.contains(String.valueOf(c)), "Written TOML should not contain literal control byte " + i);
+            }
+            Document readBack = TomlCodec.read(written);
+            assertEquals(doc, readBack, "Round-trip failed for control byte " + i);
+        }
+
+        // Test DEL (127)
+        char del = (char) 127;
+        Node delDoc = new Node(List.of(new Edge("del_" + del, new StringScalar("val_" + del))));
+        String delWritten = TomlCodec.write(delDoc);
+        assertFalse(delWritten.contains(String.valueOf(del)));
+        Document delReadBack = TomlCodec.read(delWritten);
+        assertEquals(delDoc, delReadBack);
+    }
 }
