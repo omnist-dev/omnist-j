@@ -61,7 +61,7 @@ public final class Materializer {
     private static Document materializeType(Document node, Schema schema, Type type, String path, int depth, int[] budget, List<ValidationDiagnostic> diagnostics) {
         Limits limits = Limits.DEFAULT;
         if (depth > limits.maxDepth()) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
 
         Object d = resolveType(schema, type);
@@ -92,7 +92,7 @@ public final class Materializer {
         Limits limits = Limits.DEFAULT;
         budget[0]++;
         if (budget[0] > limits.maxNodeCount()) {
-            throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+            throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
         }
 
         Map<String, Field> fieldMap = new HashMap<>();

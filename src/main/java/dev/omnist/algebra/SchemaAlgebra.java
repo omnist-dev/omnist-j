@@ -251,7 +251,7 @@ public final class SchemaAlgebra {
         }
 
         if (invalidated.contains(schema.root())) {
-            throw new IllegalArgumentException("removing label " + firstBadLabel + " deletes a mandatory field of " + firstBadRecord);
+            throw new AlgebraException(firstBadRecord, "algebra.extract-invalidates-root", "removing label " + firstBadLabel + " deletes a mandatory field of " + firstBadRecord);
         }
 
         Map<String, Record> newEnv = new LinkedHashMap<>();
@@ -420,12 +420,12 @@ public final class SchemaAlgebra {
      */
     public static InferResult inferWithReport(List<Document> samples, String rootName, boolean allowAny) {
         if (samples.isEmpty()) {
-            throw new IllegalArgumentException("cannot infer a schema from zero samples");
+            throw new AlgebraException("$", "algebra.infer-no-samples", "cannot infer a schema from zero samples");
         }
         List<Node> nodes = new ArrayList<>();
         for (Document d : samples) {
             if (!(d instanceof Node n)) {
-                throw new IllegalArgumentException("infer expects object (record) samples at the root");
+                throw new AlgebraException("$", "algebra.infer-scalar-root", "infer expects object (record) samples at the root");
             }
             nodes.add(n);
         }
@@ -442,7 +442,7 @@ public final class SchemaAlgebra {
     private static void inferRecord(List<Node> nodes, String name, Map<String, Record> env,
                                     Set<String> used, boolean allowAny, List<AnyFallback> fallbacks, int depth) {
         if (depth > 100) {
-            throw new IllegalArgumentException("nesting exceeds the maximum depth (100)");
+            throw new AlgebraException(name, "document.limit.depth", "nesting exceeds the maximum depth (100)");
         }
         used.add(name);
 
@@ -526,7 +526,7 @@ public final class SchemaAlgebra {
                 fallbacks.add(new AnyFallback(recordName + "." + label, "mixes objects and values"));
                 return Type.Any.INSTANCE;
             }
-            throw new IllegalArgumentException(recordName + "." + label + ": mixes objects and values; cannot infer one type");
+            throw new AlgebraException(recordName + "." + label, "algebra.infer-mixed-shape", recordName + "." + label + ": mixes objects and values; cannot infer one type");
         }
 
         Set<ScalarKind> kinds = new LinkedHashSet<>();
@@ -562,7 +562,7 @@ public final class SchemaAlgebra {
                 fallbacks.add(new AnyFallback(recordName + "." + label, "values of more than one scalar kind (" + joined + ")"));
                 return Type.Any.INSTANCE;
             }
-            throw new IllegalArgumentException(recordName + "." + label + ": has values of more than one scalar kind (" + joined + ")");
+            throw new AlgebraException(recordName + "." + label, "algebra.infer-conflicting-scalars", recordName + "." + label + ": has values of more than one scalar kind (" + joined + ")");
         }
 
         return new Type.Scalar(kinds.iterator().next(), nullSeen);

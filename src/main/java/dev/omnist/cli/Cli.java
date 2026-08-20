@@ -324,8 +324,10 @@ public final class Cli {
             writeOutput(opts.outputPath(), writeOsd(extracted, opts.compact()), out);
             return 0;
         } catch (IllegalArgumentException ex) {
+            String path = (ex instanceof dev.omnist.algebra.AlgebraException ae) ? ae.getPath() : "$";
+            String code = (ex instanceof dev.omnist.algebra.AlgebraException ae) ? ae.getCode() : "algebra.extract-invalidates-root";
             if (opts.json()) {
-                out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError("$", "algebra.extract-invalidates-root", ex.getMessage())))));
+                out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(), List.of(new JsonError(path, code, ex.getMessage())))));
             } else {
                 err.println(ex.getMessage());
             }

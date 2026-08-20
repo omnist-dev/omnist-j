@@ -777,6 +777,12 @@ public final class Track2Runner {
     }
 
     private static List<JsonDiagnostic> extractParserDiagnostics(Throwable ex) {
+        if (ex instanceof dev.omnist.document.DocumentParseException dpe) {
+            return List.of(new JsonDiagnostic(dpe.getPath(), dpe.getCode()));
+        }
+        if (ex instanceof dev.omnist.algebra.AlgebraException ae) {
+            return List.of(new JsonDiagnostic(ae.getPath(), ae.getCode()));
+        }
         if (ex instanceof OmlParseException ope) {
             return List.of(new JsonDiagnostic(ope.getPath(), ope.getCode()));
         }

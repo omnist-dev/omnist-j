@@ -130,7 +130,7 @@ public final class YamlCodec {
             throw new IllegalArgumentException("input text cannot be null");
         }
         if (text.length() > MAX_INPUT_LENGTH) {
-            throw new RuntimeException("invalid YAML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+            throw new DocumentParseException("$", "document.parse-error", "invalid YAML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
         }
 
         LoaderOptions loaderOptions = new LoaderOptions();
@@ -139,14 +139,21 @@ public final class YamlCodec {
         DumperOptions dumperOptions = new DumperOptions();
         Yaml yaml = new Yaml(constructor, new Representer(dumperOptions), dumperOptions, loaderOptions, resolver);
 
-        Iterable<Object> docs = yaml.loadAll(text);
-        Iterator<Object> it = docs.iterator();
-        if (!it.hasNext()) {
-            throw new RuntimeException("no document found");
-        }
-        Object raw = it.next();
-        if (it.hasNext()) {
-            throw new RuntimeException("expected a single document in the stream but found another document");
+        Object raw;
+        try {
+            Iterable<Object> docs = yaml.loadAll(text);
+            Iterator<Object> it = docs.iterator();
+            if (!it.hasNext()) {
+                throw new DocumentParseException("$", "document.parse-error", "no document found");
+            }
+            raw = it.next();
+            if (it.hasNext()) {
+                throw new DocumentParseException("$", "document.parse-error", "expected a single document in the stream but found another document");
+            }
+        } catch (DocumentParseException dpe) {
+            throw dpe;
+        } catch (Exception e) {
+            throw new DocumentParseException("$", "document.parse-error", "invalid YAML: " + e.getMessage(), e);
         }
 
         int[] budget = new int[]{0};
@@ -156,17 +163,17 @@ public final class YamlCodec {
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
         Limits limits = Limits.DEFAULT;
         if (depth > limits.maxDepth()) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof Map<?, ?> map) {
             budget[0]++;
             if (budget[0] > limits.maxNodeCount()) {
-                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+                throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
             }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String k)) {
-                    throw new RuntimeException(path + ": object key " + entry.getKey() + " is not a string (unlabeled element in key position)");
+                    throw new DocumentParseException(path, "document.unlabeled-element", path + ": object key " + entry.getKey() + " is not a string (unlabeled element in key position)");
                 }
                 Object v = entry.getValue();
                 String kp = path.equals("$") ? "$." + k : path + "." + k;
@@ -174,7 +181,7 @@ public final class YamlCodec {
                     for (int i = 0; i < list.size(); i++) {
                         Object item = list.get(i);
                         if (item instanceof List<?>) {
-                            throw new RuntimeException(kp + "[" + i + "]: an array of arrays has no labeled-edge form");
+                            throw new DocumentParseException(kp + "[" + i + "]", "document.unlabeled-element", kp + "[" + i + "]: an array of arrays has no labeled-edge form");
                         }
                         Document child = buildNode(item, kp + "[" + i + "]", depth + 2, budget);
                         edges.add(new Edge(k, (Target) child));
@@ -187,7 +194,7 @@ public final class YamlCodec {
             return new dev.omnist.document.Node(edges);
         }
         if (val instanceof List<?>) {
-            throw new RuntimeException(path + ": a bare array has no labeled-edge form (arrays appear only as a repeated field)");
+            throw new DocumentParseException(path, "document.unlabeled-element", path + ": a bare array has no labeled-edge form (arrays appear only as a repeated field)");
         }
         return toScalar(val);
     }
@@ -212,7 +219,7 @@ public final class YamlCodec {
             String s = bi.toString();
             int digits = s.startsWith("-") ? s.length() - 1 : s.length();
             if (digits > Limits.DEFAULT.maxIntegerDigits()) {
-                throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+                throw new DocumentParseException("$", "document.limit.int-digits", "document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
             }
             return new IntegerScalar(bi);
         }
