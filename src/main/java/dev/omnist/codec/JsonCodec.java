@@ -77,7 +77,7 @@ public final class JsonCodec {
             throw new IllegalArgumentException("input text cannot be null");
         }
         if (text.length() > MAX_INPUT_LENGTH) {
-            throw new RuntimeException("invalid JSON: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+            throw new DocumentParseException("$", "document.parse-error", "invalid JSON: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
         }
         try {
             Object raw = MAPPER.readValue(text, Object.class);
@@ -85,25 +85,25 @@ public final class JsonCodec {
             Document doc = buildNode(raw, "$", 0, budget);
             return doc;
         } catch (IOException e) {
-            throw new RuntimeException("invalid JSON: " + e.getMessage(), e);
+            throw new DocumentParseException("$", "document.parse-error", "invalid JSON: " + e.getMessage(), e);
         }
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
         Limits limits = Limits.DEFAULT;
         if (depth > limits.maxDepth()) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof Map<?, ?> map) {
             budget[0]++;
             if (budget[0] > limits.maxNodeCount()) {
-                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+                throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
             }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 // Defensive: Invalid JSON (non-string keys) should never occur with ObjectMapper#readValue
                 if (!(entry.getKey() instanceof String k)) {
-                    throw new RuntimeException(path + ": object key " + entry.getKey() + " is not a string");
+                    throw new DocumentParseException(path, "document.unlabeled-element", path + ": object key " + entry.getKey() + " is not a string");
                 }
                 Object v = entry.getValue();
                 String kp = path.equals("$") ? "$." + k : path + "." + k;
@@ -111,7 +111,7 @@ public final class JsonCodec {
                     for (int i = 0; i < list.size(); i++) {
                         Object item = list.get(i);
                         if (item instanceof List<?>) {
-                            throw new RuntimeException(kp + "[" + i + "]: an array of arrays has no labeled-edge form");
+                            throw new DocumentParseException(kp + "[" + i + "]", "document.unlabeled-element", kp + "[" + i + "]: an array of arrays has no labeled-edge form");
                         }
                         Document child = buildNode(item, kp + "[" + i + "]", depth + 2, budget);
                         edges.add(new Edge(k, (Target) child));
@@ -124,7 +124,7 @@ public final class JsonCodec {
             return new Node(edges);
         }
         if (val instanceof List<?>) {
-            throw new RuntimeException(path + ": a bare array has no labeled-edge form (arrays appear only as a repeated field)");
+            throw new DocumentParseException(path, "document.unlabeled-element", path + ": a bare array has no labeled-edge form (arrays appear only as a repeated field)");
         }
         return toScalar(val);
     }
@@ -143,7 +143,7 @@ public final class JsonCodec {
             String s = bi.toString();
             int digits = s.startsWith("-") ? s.length() - 1 : s.length();
             if (digits > Limits.DEFAULT.maxIntegerDigits()) {
-                throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+                throw new DocumentParseException("$", "document.limit.int-digits", "document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
             }
             return new IntegerScalar(bi);
         }

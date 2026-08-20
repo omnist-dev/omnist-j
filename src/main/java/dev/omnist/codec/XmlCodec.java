@@ -83,7 +83,7 @@ public final class XmlCodec {
             throw new IllegalArgumentException("input text cannot be null");
         }
         if (text.length() > MAX_INPUT_LENGTH) {
-            throw new RuntimeException("invalid XML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+            throw new DocumentParseException("$", "document.parse-error", "invalid XML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
         }
 
         org.w3c.dom.Element rootElem;
@@ -104,7 +104,7 @@ public final class XmlCodec {
             org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(is);
             rootElem = requireRootElement(domDoc);
         } catch (Exception e) {
-            throw new RuntimeException("invalid XML: " + e.getMessage(), e);
+            throw new DocumentParseException("$", "document.parse-error", "invalid XML: " + e.getMessage(), e);
         }
 
         int[] budget = new int[]{0};
@@ -139,7 +139,7 @@ public final class XmlCodec {
     private static org.w3c.dom.Element requireRootElement(org.w3c.dom.Document domDoc) {
         org.w3c.dom.Element rootElem = domDoc.getDocumentElement();
         if (rootElem == null) {
-            throw new RuntimeException("no document element found");
+            throw new DocumentParseException("$", "document.parse-error", "no document element found");
         }
         return rootElem;
     }
@@ -147,7 +147,7 @@ public final class XmlCodec {
     private static Object xmlToNode(org.w3c.dom.Element elem, String path, int depth, int[] budget) {
         Limits limits = Limits.DEFAULT;
         if (depth > limits.maxDepth()) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
 
         List<org.w3c.dom.Element> childElements = new ArrayList<>();
@@ -176,7 +176,7 @@ public final class XmlCodec {
                     // never null) character data -- kept as defensive handling for the
                     // nullable-Object-returning Node.getNodeValue() signature itself.
                     if (text != null && !text.trim().isEmpty()) {
-                        throw new RuntimeException(path + ": mixed content (text alongside child elements) is outside the data-XML profile");
+                        throw new DocumentParseException(path, "document.unlabeled-element", path + ": mixed content (text alongside child elements) is outside the data-XML profile");
                     }
                 }
             }
@@ -225,7 +225,7 @@ public final class XmlCodec {
                     if (XML_INT_RE.matcher(s).matches()) {
                         String clean = s.startsWith("-") ? s.substring(1) : s;
                         if (clean.length() > Limits.DEFAULT.maxIntegerDigits()) {
-                            throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + clean.length() + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+                            throw new DocumentParseException("$", "document.limit.int-digits", "document.limit.int-digits: Integer literal digit count (" + clean.length() + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
                         }
                         return new BigInteger(s);
                     }
@@ -274,7 +274,7 @@ public final class XmlCodec {
         if (val instanceof List<?> list) {
             budget[0]++;
             if (budget[0] > limits.maxNodeCount()) {
-                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+                throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
             }
             List<Edge> edges = new ArrayList<>();
             for (Object item : list) {

@@ -112,7 +112,7 @@ public final class TomlCodec {
                     if (isHex(token) || isOctal(token) || isBinary(token) || isDecimal(token)) {
                         int digitCount = countDigits(token);
                         if (digitCount > 4300) {
-                            throw new RuntimeException("Integer exceeds maximum digit limit of 4300");
+                            throw new DocumentParseException("$", "document.limit.int-digits", "Integer exceeds maximum digit limit of 4300");
                         }
                         if (digitCount > 18) {
                             sb.append("\"__omnist_int__").append(token).append("\"");
@@ -264,7 +264,7 @@ public final class TomlCodec {
             throw new IllegalArgumentException("input text cannot be null");
         }
         if (text.length() > MAX_INPUT_LENGTH) {
-            throw new RuntimeException("invalid TOML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
+            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
         }
 
         String preprocessed;
@@ -273,7 +273,7 @@ public final class TomlCodec {
             preprocessed = preprocessToml(text);
             result = Toml.parse(preprocessed);
         } catch (Exception | AssertionError e) {
-            throw new RuntimeException("invalid TOML: " + e.getMessage(), e);
+            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: " + e.getMessage(), e);
         }
         return documentFromParseResult(result);
     }
@@ -287,12 +287,12 @@ public final class TomlCodec {
     // through the real Toml.parse() path.
     private static Document documentFromParseResult(TomlParseResult result) {
         if (result.hasErrors()) {
-            throw new RuntimeException("invalid TOML: " + result.errors().get(0).toString());
+            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: " + result.errors().get(0).toString());
         }
 
         Map<String, Object> raw = result.toMap();
         if (raw == null) {
-            throw new RuntimeException("invalid TOML: no document found");
+            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: no document found");
         }
 
         int[] budget = new int[]{0};
@@ -302,7 +302,7 @@ public final class TomlCodec {
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
         Limits limits = Limits.DEFAULT;
         if (depth > limits.maxDepth()) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof org.tomlj.TomlTable tt) {
             val = tt.toMap();
@@ -316,12 +316,12 @@ public final class TomlCodec {
         if (val instanceof Map<?, ?> map) {
             budget[0]++;
             if (budget[0] > limits.maxNodeCount()) {
-                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+                throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
             }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String k)) {
-                    throw new RuntimeException(path + ": object key " + entry.getKey() + " is not a string");
+                    throw new DocumentParseException(path, "document.unlabeled-element", path + ": object key " + entry.getKey() + " is not a string");
                 }
                 Object v = entry.getValue();
                 if (v instanceof org.tomlj.TomlArray ta) {
@@ -338,7 +338,7 @@ public final class TomlCodec {
                             item = ta2.toList();
                         }
                         if (item instanceof List<?>) {
-                            throw new RuntimeException(kp + "[" + i + "]: an array of arrays has no labeled-edge form");
+                            throw new DocumentParseException(kp + "[" + i + "]", "document.unlabeled-element", kp + "[" + i + "]: an array of arrays has no labeled-edge form");
                         }
                         Document child = buildNode(item, kp + "[" + i + "]", depth + 2, budget);
                         edges.add(new Edge(k, (Target) child));
@@ -407,7 +407,7 @@ public final class TomlCodec {
             String s = bi.toString();
             int digits = s.startsWith("-") ? s.length() - 1 : s.length();
             if (digits > Limits.DEFAULT.maxIntegerDigits()) {
-                throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+                throw new DocumentParseException("$", "document.limit.int-digits", "document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
             }
             return new IntegerScalar(bi);
         }
