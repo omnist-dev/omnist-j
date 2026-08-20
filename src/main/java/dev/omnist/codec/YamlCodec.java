@@ -80,18 +80,7 @@ public final class YamlCodec {
     }
 
     private static DateTimeValue parseDateTimeValue(String text) {
-        text = text.replace(' ', 'T');
-        if (text.endsWith("Z") || text.endsWith("z")) {
-            LocalDateTime dt = LocalDateTime.parse(text.substring(0, text.length() - 1));
-            return DateTimeValue.of(dt, ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        if (signPos > 10) {
-            LocalDateTime dt = LocalDateTime.parse(text.substring(0, signPos));
-            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
-            return DateTimeValue.of(dt, offset);
-        }
-        return DateTimeValue.of(LocalDateTime.parse(text));
+        return DateTimeValue.parse(text.replace(' ', 'T'));
     }
 
     /** Maximum accepted input length in characters, guarding against oversized YAML input. */
