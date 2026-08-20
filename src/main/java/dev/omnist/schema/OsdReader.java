@@ -121,6 +121,7 @@ public class OsdReader {
         consumeToken(); // consume '{'
 
         List<Field> fields = new ArrayList<>();
+        java.util.Set<String> seenLabels = new java.util.HashSet<>();
         while (peekType() != TokenType.EOF && peekType() != TokenType.RBRACE) {
             Token labelTok = peekToken();
 
@@ -130,7 +131,7 @@ public class OsdReader {
             consumeToken(); // consume field label string
             String label = labelTok.text();
 
-            if (fields.stream().anyMatch(f -> f.label().equals(label))) {
+            if (!seenLabels.add(label)) {
                 throw new OsdParseException(labelTok.line(), labelTok.col(), "schema.duplicate-field", recordName, "Duplicate field label '" + label + "' in record '" + recordName + "'");
             }
 

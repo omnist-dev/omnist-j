@@ -94,6 +94,13 @@ public class OmlLexer {
     private int line = 1;
     private int col = 1;
 
+    private final Matcher dtMatcher = DATETIME_PATTERN.matcher("");
+    private final Matcher dateMatcher = DATE_PATTERN.matcher("");
+    private final Matcher timeMatcher = TIME_PATTERN.matcher("");
+    private final Matcher numMatcher = NUMBER_PATTERN.matcher("");
+    private final Matcher intMatcher = INTEGER_PATTERN.matcher("");
+    private final Matcher identMatcher = IDENT_PATTERN.matcher("");
+
     /**
      * Constructs a lexer for the given OML source text.
      *
@@ -187,11 +194,8 @@ public class OmlLexer {
             case ',' -> { consumeChar(); return new Token(TokenType.COMMA, ",", null, startLine, startCol); }
         }
 
-        String remaining = source.substring(pos);
-
         // Rule 3: DATETIME
-        Matcher dtMatcher = DATETIME_PATTERN.matcher(remaining);
-        if (dtMatcher.find()) {
+        if (dtMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = dtMatcher.group();
             try {
                 DateTimeValue dtVal = parseDateTimeValue(text);
@@ -201,16 +205,14 @@ public class OmlLexer {
         }
 
         // Rule 4: DATE (only when not followed by T plus a TIME-shaped lookahead)
-        Matcher dateMatcher = DATE_PATTERN.matcher(remaining);
-        if (dateMatcher.find()) {
+        if (dateMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String dateText = dateMatcher.group();
             int dateLen = dateText.length();
             boolean isDateTimeLookahead = false;
 
-            if (remaining.length() > dateLen && remaining.charAt(dateLen) == 'T') {
-                String afterT = remaining.substring(dateLen + 1);
-                Matcher timeLookahead = TIME_PATTERN.matcher(afterT);
-                if (timeLookahead.find()) {
+            if (pos + dateLen < source.length() && source.charAt(pos + dateLen) == 'T') {
+                int afterT = pos + dateLen + 1;
+                if (timeMatcher.reset(source).region(afterT, source.length()).lookingAt()) {
                     isDateTimeLookahead = true;
                 }
             }
@@ -225,8 +227,7 @@ public class OmlLexer {
         }
 
         // Rule 5: TIME
-        Matcher timeMatcher = TIME_PATTERN.matcher(remaining);
-        if (timeMatcher.find()) {
+        if (timeMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = timeMatcher.group();
             try {
                 TimeValue tVal = parseTimeValue(text);
@@ -236,8 +237,7 @@ public class OmlLexer {
         }
 
         // Rule 6: NUMBER (decimal or exponent form)
-        Matcher numMatcher = NUMBER_PATTERN.matcher(remaining);
-        if (numMatcher.find()) {
+        if (numMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = numMatcher.group();
             try {
                 double d = Double.parseDouble(text);
@@ -252,22 +252,21 @@ public class OmlLexer {
         }
 
         // Rule 7: Reserved float spellings nan, inf, -inf (emitted as NUMBER)
-        if (isReservedFloatWord("nan", remaining)) {
+        if (isReservedFloatWord("nan", pos)) {
             advance(3);
             return new Token(TokenType.NUMBER, "nan", Double.NaN, startLine, startCol);
         }
-        if (isReservedFloatWord("inf", remaining)) {
+        if (isReservedFloatWord("inf", pos)) {
             advance(3);
             return new Token(TokenType.NUMBER, "inf", Double.POSITIVE_INFINITY, startLine, startCol);
         }
-        if (isReservedFloatWord("-inf", remaining)) {
+        if (isReservedFloatWord("-inf", pos)) {
             advance(4);
             return new Token(TokenType.NUMBER, "-inf", Double.NEGATIVE_INFINITY, startLine, startCol);
         }
 
         // Rule 8: INTEGER (maxIntegerDigits limit enforced here)
-        Matcher intMatcher = INTEGER_PATTERN.matcher(remaining);
-        if (intMatcher.find()) {
+        if (intMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = intMatcher.group();
             int digits = text.startsWith("-") ? text.length() - 1 : text.length();
             if (digits > limits.maxIntegerDigits()) {
@@ -288,8 +287,7 @@ public class OmlLexer {
         }
 
         // Rule 9: IDENT
-        Matcher identMatcher = IDENT_PATTERN.matcher(remaining);
-        if (identMatcher.find()) {
+        if (identMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = identMatcher.group();
             advance(text.length());
             return new Token(TokenType.IDENT, text, text, startLine, startCol);
@@ -298,11 +296,11 @@ public class OmlLexer {
         throw error("parse.unexpected-token", "Unexpected character: '" + c + "'", startLine, startCol);
     }
 
-    private boolean isReservedFloatWord(String target, String remaining) {
-        if (!remaining.startsWith(target)) return false;
+    private boolean isReservedFloatWord(String target, int offset) {
+        if (!source.startsWith(target, offset)) return false;
         int len = target.length();
-        if (remaining.length() == len) return true;
-        char next = remaining.charAt(len);
+        if (source.length() == offset + len) return true;
+        char next = source.charAt(offset + len);
         return !isIdentContinuationChar(next);
     }
 
