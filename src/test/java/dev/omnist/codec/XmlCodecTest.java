@@ -412,4 +412,29 @@ public class XmlCodecTest {
         String xml3 = XmlCodec.write(emptyLabel);
         assertTrue(xml3.contains("<_>") || xml3.contains("<_ "));
     }
+
+    @Test
+    @DisplayName("Issue #40: write escapes &, <, > in scalar text and does not inject markup")
+    void testXmlWriterEscapesMetacharacters() {
+        Node injectionDoc = new Node(List.of(new Edge("root", new StringScalar("<admin>true</admin>"))));
+        String xml = XmlCodec.write(injectionDoc);
+        assertTrue(xml.contains("&lt;admin&gt;true&lt;/admin&gt;"), "XML should contain escaped markup: " + xml);
+        assertFalse(xml.contains("<admin>"), "XML should not contain raw injected tag: " + xml);
+
+        Document roundtripped = XmlCodec.read(xml);
+        assertTrue(roundtripped instanceof Node);
+        Node roundNode = (Node) roundtripped;
+        assertEquals(1, roundNode.edges().size());
+        assertEquals("root", roundNode.edges().get(0).label());
+        assertEquals("<admin>true</admin>", ((StringScalar) roundNode.edges().get(0).target()).value());
+
+        // Adversarial metacharacters roundtrip
+        String adversarial = "<>&\"'\u0000\t\n<&amp;>";
+        Node advDoc = new Node(List.of(new Edge("root", new StringScalar(adversarial))));
+        String advXml = XmlCodec.write(advDoc);
+        Document advRound = XmlCodec.read(advXml);
+        // Note: \u0000 is replaced by \uFFFD by xmlSanitize
+        String expected = "<>&\"'\uFFFD\t\n<&amp;>";
+        assertEquals(expected, ((StringScalar) ((Node) advRound).edges().get(0).target()).value());
+    }
 }

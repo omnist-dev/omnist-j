@@ -378,7 +378,20 @@ public final class XmlCodec {
     }
 
     private static String xmlSanitize(String text) {
-        return XML_ILLEGAL_CHAR.matcher(text).replaceAll("\uFFFD");
+        String clean = XML_ILLEGAL_CHAR.matcher(text).replaceAll("\uFFFD");
+        StringBuilder sb = new StringBuilder(clean.length() + 16);
+        for (int i = 0; i < clean.length(); i++) {
+            char c = clean.charAt(i);
+            switch (c) {
+                case '&' -> sb.append("&amp;");
+                case '<' -> sb.append("&lt;");
+                case '>' -> sb.append("&gt;");
+                case '"' -> sb.append("&quot;");
+                case '\'' -> sb.append("&apos;");
+                default -> sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     private static String xmlText(Object v) {
