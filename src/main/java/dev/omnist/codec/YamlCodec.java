@@ -154,14 +154,15 @@ public final class YamlCodec {
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
-        budget[0]++;
-        if (budget[0] > 1_000_000) {
-            throw new RuntimeException(path + ": too many nodes materialized (over 1000000)");
-        }
-        if (depth > 200) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (200)");
+        Limits limits = Limits.DEFAULT;
+        if (depth > limits.maxDepth()) {
+            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof Map<?, ?> map) {
+            budget[0]++;
+            if (budget[0] > limits.maxNodeCount()) {
+                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+            }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String k)) {
@@ -208,6 +209,11 @@ public final class YamlCodec {
             return new DateTimeScalar(dtv);
         }
         if (value instanceof BigInteger bi) {
+            String s = bi.toString();
+            int digits = s.startsWith("-") ? s.length() - 1 : s.length();
+            if (digits > Limits.DEFAULT.maxIntegerDigits()) {
+                throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+            }
             return new IntegerScalar(bi);
         }
         if (value instanceof Integer i) {

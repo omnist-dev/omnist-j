@@ -145,12 +145,9 @@ public final class XmlCodec {
     }
 
     private static Object xmlToNode(org.w3c.dom.Element elem, String path, int depth, int[] budget) {
-        budget[0]++;
-        if (budget[0] > 1_000_000) {
-            throw new RuntimeException(path + ": too many nodes materialized (over 1000000)");
-        }
-        if (depth > 200) {
-            throw new RuntimeException(path + ": nesting exceeds the maximum depth (200)");
+        Limits limits = Limits.DEFAULT;
+        if (depth > limits.maxDepth()) {
+            throw new RuntimeException(path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
 
         List<org.w3c.dom.Element> childElements = new ArrayList<>();
@@ -226,6 +223,10 @@ public final class XmlCodec {
                     if ("false".equals(s)) return Boolean.FALSE;
                 } else if (scalar.kind() == ScalarKind.INTEGER) {
                     if (XML_INT_RE.matcher(s).matches()) {
+                        String clean = s.startsWith("-") ? s.substring(1) : s;
+                        if (clean.length() > Limits.DEFAULT.maxIntegerDigits()) {
+                            throw new RuntimeException("document.limit.int-digits: Integer literal digit count (" + clean.length() + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+                        }
                         return new BigInteger(s);
                     }
                 } else if (scalar.kind() == ScalarKind.NUMBER) {
@@ -265,15 +266,16 @@ public final class XmlCodec {
     }
 
     private static Document buildDoc(Object val, String path, int depth, int[] budget) {
-        budget[0]++;
-        if (budget[0] > 1_000_000) {
-            throw new RuntimeException(path + ": too many nodes materialized (over 1000000)");
-        }
+        Limits limits = Limits.DEFAULT;
         // No depth guard here: read() only reaches buildDoc after xmlToNode has
         // already walked the DOM tree that this List/Object[] structure mirrors
         // 1:1 (one xmlToNode level per buildDoc level) and thrown if any depth
         // exceeded 200, so that bound is already established.
         if (val instanceof List<?> list) {
+            budget[0]++;
+            if (budget[0] > limits.maxNodeCount()) {
+                throw new RuntimeException(path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+            }
             List<Edge> edges = new ArrayList<>();
             for (Object item : list) {
                 Object[] edge = (Object[]) item;

@@ -183,7 +183,7 @@ public class JsonCodecTest {
 
         java.lang.reflect.InvocationTargetException thrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildNode.invoke(null, "any value", "$", 0, budget));
+            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, budget));
         assertInstanceOf(RuntimeException.class, thrown.getCause());
         assertTrue(thrown.getCause().getMessage().contains("too many nodes materialized"));
     }
