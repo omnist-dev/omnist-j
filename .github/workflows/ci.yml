@@ -40,3 +40,13 @@ jobs:
 
       - name: Run Conformance Harness
         run: ./run-conformance
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v1.9.2
+        with:
+          scan-args: |-
+            --lockfile=pom.xml

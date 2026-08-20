@@ -13,7 +13,7 @@ public class OmlWriter {
 
     private OmlWriter() {}
 
-    private static final Pattern IDENT_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_-]*$");
+    
 
     /**
      * Serializes a {@link Document} to canonical indented OML text (omnist-spec §4 and §9.5).
@@ -142,7 +142,7 @@ public class OmlWriter {
         // label is never Java null (Edge's constructor enforces a non-null
         // label) and IDENT_PATTERN already requires at least one character,
         // so an explicit empty-string check would be redundant.
-        if (!IDENT_PATTERN.matcher(label).matches()) return false;
+        if (!OmlLexer.IDENT_PATTERN.matcher(label).matches()) return false;
         return switch (label) {
             case "null", "true", "false", "nan", "inf" -> false;
             default -> true;
