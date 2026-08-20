@@ -55,15 +55,17 @@ public class Validator {
             fieldMap.put(f.label(), f);
         }
 
-        Map<String, Integer> counts = new HashMap<>();
+        Map<String, Integer> totals = dev.omnist.document.PathUtils.countLabels(node);
+        Map<String, Integer> seen = new HashMap<>();
 
         // 1. Closedness & Edge Matching in edge order (§3.6.1)
         for (Edge edge : node.edges()) {
             String label = edge.label();
-            int i = counts.getOrDefault(label, 0);
-            counts.put(label, i + 1);
+            int i = seen.getOrDefault(label, 0);
+            seen.put(label, i + 1);
+            int total = totals.getOrDefault(label, 1);
 
-            String childPath = path + "." + label + (i > 0 ? "[" + i + "]" : "");
+            String childPath = dev.omnist.document.PathUtils.childPath(path, label, i, total);
             Field f = fieldMap.get(label);
 
             if (f == null) {
@@ -76,7 +78,7 @@ public class Validator {
 
         // 2. Cardinality Check for all declared fields (§3.6)
         for (Field f : record.fields()) {
-            int c = counts.getOrDefault(f.label(), 0);
+            int c = totals.getOrDefault(f.label(), 0);
             if (c < f.min() || (f.max() != null && c > f.max())) {
                 String boundStr = f.max() == null ? "unbounded" : String.valueOf(f.max());
                 // Path is the parent node path (§3.6)

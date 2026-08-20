@@ -459,15 +459,14 @@ public final class XmlCodec {
                         "warning");
                 return;
             }
-            Map<String, Integer> counts = new HashMap<>();
+            Map<String, Integer> totals = dev.omnist.document.PathUtils.countLabels(node);
+            Map<String, Integer> seen = new HashMap<>();
             for (Edge edge : node.edges()) {
                 String label = edge.label();
-                int i = counts.getOrDefault(label, 0);
-                counts.put(label, i + 1);
-                String p = path.equals("$") ? "$." + label : path + "." + label;
-                if (i > 0) {
-                    p = p + "[" + i + "]";
-                }
+                int i = seen.getOrDefault(label, 0);
+                seen.put(label, i + 1);
+                int total = totals.getOrDefault(label, 1);
+                String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
                 if (!XML_NAME.matcher(label).matches()) {
                     rep.add(p, "format.key-sanitized",
                             "label '" + label + "' isn't a valid XML name; written sanitized",
