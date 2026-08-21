@@ -141,11 +141,16 @@ public class JsonCodecTest {
     }
 
     @Test
-    @DisplayName("write: indent produces pretty-printed output")
+    @DisplayName("write: indent produces pretty-printed output with requested indent width")
     void testWriteWithIndent() {
         Document doc = new Node(List.of(new Edge("a", new IntegerScalar(BigInteger.ONE))));
-        String pretty = JsonCodec.write(doc, 2, false, null);
-        assertTrue(pretty.contains("\n"));
+        String pretty2 = JsonCodec.write(doc, 2, false, null);
+        assertTrue(pretty2.contains("\n"));
+        assertTrue(pretty2.contains("  \"a\""));
+
+        String pretty4 = JsonCodec.write(doc, 4, false, null);
+        assertTrue(pretty4.contains("\n"));
+        assertTrue(pretty4.contains("    \"a\""));
     }
 
     @Test
