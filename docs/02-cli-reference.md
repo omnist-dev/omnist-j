@@ -20,9 +20,6 @@ omnist <command> [subcommand] [options]
 
 ---
 
-
----
-
 ## Global Options
 
 - `--compact`: write output in compact single-line form where supported.

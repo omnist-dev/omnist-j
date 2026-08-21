@@ -133,7 +133,7 @@ public final class YamlCodec {
      *             followed by {@link dev.omnist.validation.Materializer#materialize(Document, Schema)}
      *             if schema-driven coercion is required.
      */
-    @Deprecated(since = "0.1.0", forRemoval = true)
+    @Deprecated(since = "0.1.0-alpha", forRemoval = true)
     public static Document read(String text, Schema schema) {
         return read(text);
     }
