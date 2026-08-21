@@ -60,7 +60,7 @@ class CliCoverageTest {
     void testUnknownCommandAndOptions() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
-        int code = execute(new String[]{"foobar", "--unknown-flag"}, null, out, err);
+        int code = execute(new String[]{"foobar"}, null, out, err);
         assertEquals(2, code);
         assertTrue(err.toString(StandardCharsets.UTF_8).contains("Unknown command: foobar"));
     }
@@ -325,7 +325,8 @@ class CliCoverageTest {
         for (String flag : new String[]{"-o", "--from", "--to", "--schema", "--keep", "--result-format", "--severity"}) {
             out.reset(); err.reset();
             int code = execute(new String[]{"format", "-", flag}, "a: 1\n", out, err);
-            assertEquals(0, code, "flag " + flag + " at end should be ignored, not crash");
+            assertEquals(2, code, "flag " + flag + " at end without value should be rejected");
+            assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: " + flag));
         }
     }
 
@@ -481,4 +482,82 @@ class CliCoverageTest {
         assertEquals("document.parse-error", Cli.getInferErrorCode(null));
         assertEquals("document.parse-error", Cli.getInferErrorCode("some unrelated message"));
     }
+
+    @Test
+    void testUnrecognizedOption() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int code = execute(new String[]{"format", "-", "--unknown-flag"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Unrecognized option: --unknown-flag"));
+    }
+
+    @Test
+    void testMissingOptionValue() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int code = execute(new String[]{"format", "-", "--to"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: --to"));
+
+        err.reset();
+        code = execute(new String[]{"format", "-", "-o"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: -o"));
+
+        err.reset();
+        code = execute(new String[]{"format", "-", "--from"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: --from"));
+
+        err.reset();
+        code = execute(new String[]{"validate", "-", "--schema"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: --schema"));
+
+        err.reset();
+        code = execute(new String[]{"schema", "extract", "-", "--keep"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: --keep"));
+
+        err.reset();
+        code = execute(new String[]{"schema", "is-empty", "-", "--result-format"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: --result-format"));
+
+        err.reset();
+        code = execute(new String[]{"schema", "lint", "-", "--severity"}, "", out, err);
+        assertEquals(2, code);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("Missing value for option: --severity"));
+    }
+
+    @Test
+    void testDebugFlagGateStackTrace() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+
+        // Default: No debug flag -> only error message, no Java stack trace
+        int code = execute(new String[]{"format", "non_existent_file.oml"}, "", out, err);
+        assertEquals(2, code);
+        String errStr = err.toString(StandardCharsets.UTF_8);
+        assertTrue(errStr.contains("Error:"));
+        assertFalse(errStr.contains("	at dev.omnist.cli.Cli"));
+
+        // With --debug -> prints stack trace
+        err.reset();
+        code = execute(new String[]{"format", "non_existent_file.oml", "--debug"}, "", out, err);
+        assertEquals(2, code);
+        String errDebug = err.toString(StandardCharsets.UTF_8);
+        assertTrue(errDebug.contains("Error:"));
+        assertTrue(errDebug.contains("	at dev.omnist.cli.Cli"));
+
+        // With -v -> prints stack trace
+        err.reset();
+        code = execute(new String[]{"format", "non_existent_file.oml", "-v"}, "", out, err);
+        assertEquals(2, code);
+        String errV = err.toString(StandardCharsets.UTF_8);
+        assertTrue(errV.contains("Error:"));
+        assertTrue(errV.contains("	at dev.omnist.cli.Cli"));
+    }
+
 }

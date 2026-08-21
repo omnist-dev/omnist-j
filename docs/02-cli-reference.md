@@ -20,6 +20,16 @@ omnist <command> [subcommand] [options]
 
 ---
 
+
+---
+
+## Global Options
+
+- `--compact`: write output in compact single-line form where supported.
+- `-o <file>`: write output to a file instead of standard output.
+- `--debug`, `-v`: enable verbose debug error output including JVM stack traces.
+- `--json`: format errors and boolean results as machine-readable JSON.
+
 ## Commands & Subcommands
 
 ### 1. `format`
