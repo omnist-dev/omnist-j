@@ -43,36 +43,14 @@ public final class JsonCodec {
     private JsonCodec() {}
 
     /**
-     * Parses JSON text into a {@link Document} without schema guidance.
-     * Equivalent to {@code read(text, null)}.
-     *
-     * @param text the JSON text; must not be {@code null}
-     * @return the parsed document
-     * @throws RuntimeException if the JSON is syntactically invalid or structurally unsupported
-     */
-    public static Document read(String text) {
-        return read(text, null);
-    }
-
-    /**
      * Parses JSON text into a {@link Document}.
      *
-     * <p>The {@code schema} parameter is intentionally unused here: JSON's own
-     * grammar already distinguishes strings/numbers/booleans natively, so there is
-     * no scalar-kind ambiguity for a schema to resolve at parse time (unlike
-     * {@link XmlCodec#read(String, dev.omnist.schema.Schema)}, where every value
-     * is a string until schema-guided pre-typing runs). Schema-driven coercion of
-     * an already-typed value (e.g. a JSON string into a schema's {@code date}
-     * field) is a separate concern handled by a later
-     * {@link dev.omnist.validation.Materializer} call, not by this method.
-     *
-     * @param text   the JSON text; must not be {@code null}
-     * @param schema accepted for call-site symmetry with the other format codecs; has no effect
+     * @param text the JSON text; must not be {@code null}
      * @return the parsed document
      * @throws RuntimeException if the JSON is syntactically invalid, or if the root value is an array,
      *         or if nesting depth exceeds 200, or if node count exceeds 1,000,000
      */
-    public static Document read(String text, Schema schema) {
+    public static Document read(String text) {
         if (text == null) {
             throw new IllegalArgumentException("input text cannot be null");
         }
@@ -87,6 +65,16 @@ public final class JsonCodec {
         } catch (IOException e) {
             throw new DocumentParseException("$", "document.parse-error", "invalid JSON: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * @deprecated The {@code schema} parameter is ignored for JSON. Use {@link #read(String)}
+     *             followed by {@link dev.omnist.validation.Materializer#materialize(Document, Schema)}
+     *             if schema-driven coercion is required.
+     */
+    @Deprecated(since = "0.1.0", forRemoval = true)
+    public static Document read(String text, Schema schema) {
+        return read(text);
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
