@@ -372,4 +372,13 @@ public class TomlCodecTest {
         Document delReadBack = TomlCodec.read(delWritten);
         assertEquals(delDoc, delReadBack);
     }
+
+    @Test
+    @DisplayName("read: deprecated read(text, schema) overload delegates to read(text)")
+    @SuppressWarnings("deprecation")
+    void testDeprecatedReadWithSchema() {
+        Document doc = TomlCodec.read("a = 1\n", null);
+        assertNotNull(doc);
+    }
+
 }

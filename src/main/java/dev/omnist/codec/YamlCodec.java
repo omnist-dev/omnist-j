@@ -87,34 +87,13 @@ public final class YamlCodec {
     public static final int MAX_INPUT_LENGTH = 2_000_000;
 
     /**
-     * Parses YAML text into a {@link Document} without schema guidance.
-     * Equivalent to {@code read(text, null)}.
+     * Parses YAML text into a {@link Document}.
      *
      * @param text the YAML text; must not be {@code null}
      * @return the parsed document
      * @throws RuntimeException if the YAML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
      */
     public static Document read(String text) {
-        return read(text, null);
-    }
-
-    /**
-     * Parses YAML text into a {@link Document}.
-     *
-     * <p>The {@code schema} parameter is intentionally unused here: YAML's own
-     * grammar already distinguishes strings/integers/numbers/booleans/temporal
-     * values natively (via its resolvers), so there is no scalar-kind ambiguity
-     * for a schema to resolve (unlike {@link XmlCodec#read(String, dev.omnist.schema.Schema)},
-     * where every value is a string until schema-guided pre-typing runs). The
-     * parameter exists only so callers can invoke every format codec through the
-     * same two-argument shape without special-casing YAML.
-     *
-     * @param text   the YAML text; must not be {@code null}
-     * @param schema accepted for call-site symmetry with the other format codecs; has no effect
-     * @return the parsed document
-     * @throws RuntimeException if the YAML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
-     */
-    public static Document read(String text, Schema schema) {
         if (text == null) {
             throw new IllegalArgumentException("input text cannot be null");
         }
@@ -147,6 +126,16 @@ public final class YamlCodec {
 
         int[] budget = new int[]{0};
         return buildNode(raw, "$", 0, budget);
+    }
+
+    /**
+     * @deprecated The {@code schema} parameter is ignored for YAML. Use {@link #read(String)}
+     *             followed by {@link dev.omnist.validation.Materializer#materialize(Document, Schema)}
+     *             if schema-driven coercion is required.
+     */
+    @Deprecated(since = "0.1.0", forRemoval = true)
+    public static Document read(String text, Schema schema) {
+        return read(text);
     }
 
     private static Document buildNode(Object val, String path, int depth, int[] budget) {
