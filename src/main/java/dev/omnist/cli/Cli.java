@@ -62,7 +62,8 @@ public final class Cli {
         boolean json,
         boolean allowAny,
         String outputPath,
-        String severity
+        String severity,
+        boolean debug
     ) {}
 
     /**
@@ -77,6 +78,7 @@ public final class Cli {
      *         check" outcome (e.g. {@code validate} on a non-conforming document)
      */
     public static int run(String[] args, PrintStream out, PrintStream err, InputStream in) {
+        boolean debug = false;
         try {
             List<String> positionals = new ArrayList<>();
             boolean compact = false;
@@ -94,40 +96,57 @@ public final class Cli {
                 String arg = args[i];
                 if (arg.equals("--compact")) {
                     compact = true;
+                } else if (arg.equals("--debug") || arg.equals("-v")) {
+                    debug = true;
                 } else if (arg.equals("-o")) {
-                    if (i + 1 < args.length) {
-                        outputPath = args[++i];
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
                     }
+                    outputPath = args[++i];
                 } else if (arg.equals("--from")) {
-                    if (i + 1 < args.length) {
-                        fromFormat = args[++i];
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
                     }
+                    fromFormat = args[++i];
                 } else if (arg.equals("--to")) {
-                    if (i + 1 < args.length) {
-                        toFormat = args[++i];
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
                     }
+                    toFormat = args[++i];
                 } else if (arg.equals("--schema")) {
-                    if (i + 1 < args.length) {
-                        schemaPath = args[++i];
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
                     }
+                    schemaPath = args[++i];
                 } else if (arg.equals("--keep")) {
-                    if (i + 1 < args.length) {
-                        keepLabels = args[++i];
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
                     }
+                    keepLabels = args[++i];
                 } else if (arg.equals("--result-format")) {
-                    if (i + 1 < args.length) {
-                        resultFormat = args[++i];
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
                     }
+                    resultFormat = args[++i];
                 } else if (arg.equals("--json")) {
                     json = true;
                 } else if (arg.equals("--allow-any")) {
                     allowAny = true;
                 } else if (arg.equals("--severity")) {
-                    if (i + 1 < args.length) {
-                        severity = args[++i];
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
                     }
+                    severity = args[++i];
                 } else if (arg.startsWith("-") && !arg.equals("-")) {
-                    // Ignore or skip unrecognized options
+                    err.println("Unrecognized option: " + arg);
+                    return 2;
                 } else {
                     positionals.add(arg);
                 }
@@ -139,7 +158,7 @@ public final class Cli {
             }
 
             Options opts = new Options(compact, fromFormat, toFormat, schemaPath, keepLabels,
-                resultFormat, json, allowAny, outputPath, severity);
+                resultFormat, json, allowAny, outputPath, severity, debug);
             String cmd = positionals.get(0);
 
             return switch (cmd) {
@@ -156,7 +175,9 @@ public final class Cli {
 
         } catch (Exception ex) {
             err.println("Error: " + ex.getMessage());
-            ex.printStackTrace(err);
+            if (debug) {
+                ex.printStackTrace(err);
+            }
             return 2;
         }
     }
