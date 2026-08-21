@@ -214,7 +214,11 @@ public final class JsonCodec {
         Object grouped = dev.omnist.document.PathUtils.groupEdges(prepared);
         try {
             if (indent != null && indent > 0) {
-                return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(grouped);
+                com.fasterxml.jackson.core.util.DefaultPrettyPrinter printer = new com.fasterxml.jackson.core.util.DefaultPrettyPrinter();
+                com.fasterxml.jackson.core.util.DefaultIndenter indenter = new com.fasterxml.jackson.core.util.DefaultIndenter(" ".repeat(indent), com.fasterxml.jackson.core.util.DefaultIndenter.SYS_LF);
+                printer.indentObjectsWith(indenter);
+                printer.indentArraysWith(indenter);
+                return MAPPER.writer(printer).writeValueAsString(grouped);
             } else {
                 return MAPPER.writeValueAsString(grouped);
             }
