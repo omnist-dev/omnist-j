@@ -176,4 +176,28 @@ class OsdReaderTest {
         // Unknown type reference
         assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"a\": NonExistent } root R"));
     }
+
+    @Test
+    @DisplayName("OsdLexer lexical error paths produce normative parse.* codes")
+    void testLexerNormativeParseCodes() {
+        // Line 146: Unexpected character -> parse.unexpected-token
+        OsdParseException ex1 = assertThrows(OsdParseException.class, () -> OsdReader.read("record R { @ } root R"));
+        assertEquals("parse.unexpected-token", ex1.getCode());
+        assertEquals("$", ex1.getPath());
+
+        // Line 174: Unterminated escape in string -> parse.unterminated-string
+        OsdParseException ex2 = assertThrows(OsdParseException.class, () -> new OsdLexer("\"abc\\").tokenizeAll());
+        assertEquals("parse.unterminated-string", ex2.getCode());
+        assertEquals("$", ex2.getPath());
+
+        // Line 183: Unterminated double-quoted string -> parse.unterminated-string
+        OsdParseException ex3 = assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"unclosed: string } root R"));
+        assertEquals("parse.unterminated-string", ex3.getCode());
+        assertEquals("$", ex3.getPath());
+
+        // Line 196: Unterminated bracket in cardinality -> parse.unexpected-token
+        OsdParseException ex4 = assertThrows(OsdParseException.class, () -> new OsdLexer("record R { \"a\" [1,2").tokenizeAll());
+        assertEquals("parse.unexpected-token", ex4.getCode());
+        assertEquals("$", ex4.getPath());
+    }
 }

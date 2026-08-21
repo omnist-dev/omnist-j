@@ -143,7 +143,7 @@ public class OsdLexer {
             return new Token(TokenType.IDENT, text, startLine, startCol);
         }
 
-        throw new OsdParseException(startLine, startCol, "Unexpected character: '" + c + "'");
+        throw new OsdParseException(startLine, startCol, "parse.unexpected-token", "$", "Unexpected character: '" + c + "'");
     }
 
     private void skipHSpaceCommentsAndNewlines() {
@@ -171,7 +171,7 @@ public class OsdLexer {
             }
             if (c == '\\') {
                 if (pos >= source.length()) {
-                    throw new OsdParseException(line, col, "Unterminated escape in string");
+                    throw new OsdParseException(line, col, "parse.unterminated-string", "$", "Unterminated escape in string");
                 }
                 char esc = consumeChar();
                 // OSD §5.3.1: replaces every \X with single character X (no named-escape table)
@@ -180,7 +180,7 @@ public class OsdLexer {
                 sb.append(c);
             }
         }
-        throw new OsdParseException(startLine, startCol, "Unterminated double-quoted string");
+        throw new OsdParseException(startLine, startCol, "parse.unterminated-string", "$", "Unterminated double-quoted string");
     }
 
     private String parseBracketText(int startLine, int startCol) {
@@ -193,7 +193,7 @@ public class OsdLexer {
             }
             sb.append(c);
         }
-        throw new OsdParseException(startLine, startCol, "Unterminated bracket ']' in cardinality");
+        throw new OsdParseException(startLine, startCol, "parse.unexpected-token", "$", "Unterminated bracket ']' in cardinality");
     }
 
     private char consumeChar() {
