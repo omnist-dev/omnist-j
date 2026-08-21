@@ -471,7 +471,7 @@ public final class TomlCodec {
         Document stripped = stripNulls(node, "$", rep, 0);
         Object prepared = prepareToml(stripped, "$", 0, strict);
         @SuppressWarnings("unchecked")
-        Map<String, Object> grouped = (Map<String, Object>) grouped(prepared, 0);
+        Map<String, Object> grouped = (Map<String, Object>) dev.omnist.document.PathUtils.groupEdges(prepared);
 
         StringBuilder sb = new StringBuilder();
         writeTable("", grouped, sb);
@@ -675,31 +675,4 @@ public final class TomlCodec {
         }
     }
 
-    private static Object grouped(Object node, int depth) {
-        // No depth guard here: grouped()'s tree mirrors prepareToml's output,
-        // which mirrors the stripped document already bounded by stripNulls.
-        if (!(node instanceof List<?> list)) {
-            return node;
-        }
-        Map<String, Integer> counts = new HashMap<>();
-        for (Object item : list) {
-            Object[] edge = (Object[]) item;
-            String label = (String) edge[0];
-            counts.put(label, counts.getOrDefault(label, 0) + 1);
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        for (Object item : list) {
-            Object[] edge = (Object[]) item;
-            String label = (String) edge[0];
-            Object child = grouped(edge[1], depth + 1);
-            if (counts.get(label) > 1) {
-                @SuppressWarnings("unchecked")
-                List<Object> targetList = (List<Object>) out.computeIfAbsent(label, k -> new ArrayList<>());
-                targetList.add(child);
-            } else {
-                out.put(label, child);
-            }
-        }
-        return out;
-    }
 }

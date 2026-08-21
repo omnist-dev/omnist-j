@@ -80,18 +80,7 @@ public final class YamlCodec {
     }
 
     private static DateTimeValue parseDateTimeValue(String text) {
-        text = text.replace(' ', 'T');
-        if (text.endsWith("Z") || text.endsWith("z")) {
-            LocalDateTime dt = LocalDateTime.parse(text.substring(0, text.length() - 1));
-            return DateTimeValue.of(dt, ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        if (signPos > 10) {
-            LocalDateTime dt = LocalDateTime.parse(text.substring(0, signPos));
-            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
-            return DateTimeValue.of(dt, offset);
-        }
-        return DateTimeValue.of(LocalDateTime.parse(text));
+        return DateTimeValue.parse(text.replace(' ', 'T'));
     }
 
     /** Maximum accepted input length in characters, guarding against oversized YAML input. */
@@ -282,7 +271,7 @@ public final class YamlCodec {
             throw new WriteException(rep.toString(), rep);
         }
         Object prepared = prepareYaml(node, "$", 0, strict);
-        Object grouped = grouped(prepared, 0);
+        Object grouped = dev.omnist.document.PathUtils.groupEdges(prepared);
 
         DumperOptions dumperOptions = new DumperOptions();
         dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
@@ -370,34 +359,6 @@ public final class YamlCodec {
             TimeScalar time = (TimeScalar) doc;
             return time.value().format();
         }
-    }
-
-    private static Object grouped(Object node, int depth) {
-        // No depth guard here: grouped()'s tree mirrors prepareYaml's output,
-        // which mirrors the original document already bounded by check().
-        if (!(node instanceof List<?> list)) {
-            return node;
-        }
-        Map<String, Integer> counts = new HashMap<>();
-        for (Object item : list) {
-            Object[] edge = (Object[]) item;
-            String label = (String) edge[0];
-            counts.put(label, counts.getOrDefault(label, 0) + 1);
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        for (Object item : list) {
-            Object[] edge = (Object[]) item;
-            String label = (String) edge[0];
-            Object child = grouped(edge[1], depth + 1);
-            if (counts.get(label) > 1) {
-                @SuppressWarnings("unchecked")
-                List<Object> targetList = (List<Object>) out.computeIfAbsent(label, k -> new ArrayList<>());
-                targetList.add(child);
-            } else {
-                out.put(label, child);
-            }
-        }
-        return out;
     }
 
     private static class CustomRepresenter extends Representer {

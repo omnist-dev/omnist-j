@@ -907,52 +907,32 @@ public final class Track2Runner {
     }
 
     private static DateTimeValue parseDateTimeValue(String text) {
-        if (text.endsWith("Z") || text.endsWith("z")) {
-            java.time.LocalDateTime dt = java.time.LocalDateTime.parse(text.substring(0, text.length() - 1));
-            return DateTimeValue.of(dt, ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        if (signPos > 10) {
-            java.time.LocalDateTime dt = java.time.LocalDateTime.parse(text.substring(0, signPos));
-            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
-            return DateTimeValue.of(dt, offset);
-        }
-        return DateTimeValue.of(java.time.LocalDateTime.parse(text));
+        return dev.omnist.document.DateTimeValue.parse(text);
     }
 
-    private static TimeValue parseTimeValue(String text) {
-        if (text.endsWith("Z") || text.endsWith("z")) {
-            java.time.LocalTime t = java.time.LocalTime.parse(text.substring(0, text.length() - 1));
-            return TimeValue.of(t, ZoneOffset.UTC);
-        }
-        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
-        if (signPos > 0 && text.indexOf(':') < signPos) {
-            java.time.LocalTime t = java.time.LocalTime.parse(text.substring(0, signPos));
-            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
-            return TimeValue.of(t, offset);
-        }
-        return TimeValue.of(java.time.LocalTime.parse(text));
+    private static dev.omnist.document.TimeValue parseTimeValue(String text) {
+        return dev.omnist.document.TimeValue.parse(text);
     }
 
-    private static boolean isEquivalentDoc(Document a, Document b) {
+    private static boolean isEquivalentDoc(dev.omnist.document.Document a, dev.omnist.document.Document b) {
         if (a.equals(b)) return true;
         if (a instanceof dev.omnist.document.Node na && b instanceof dev.omnist.document.Node nb) {
             if (na.edges().size() != nb.edges().size()) return false;
-            Map<String, List<Target>> mapA = new HashMap<>();
-            for (Edge e : na.edges()) {
-                mapA.computeIfAbsent(e.label(), k -> new ArrayList<>()).add(e.target());
+            java.util.Map<String, java.util.List<dev.omnist.document.Target>> mapA = new java.util.HashMap<>();
+            for (dev.omnist.document.Edge e : na.edges()) {
+                mapA.computeIfAbsent(e.label(), k -> new java.util.ArrayList<>()).add(e.target());
             }
-            Map<String, List<Target>> mapB = new HashMap<>();
-            for (Edge e : nb.edges()) {
-                mapB.computeIfAbsent(e.label(), k -> new ArrayList<>()).add(e.target());
+            java.util.Map<String, java.util.List<dev.omnist.document.Target>> mapB = new java.util.HashMap<>();
+            for (dev.omnist.document.Edge e : nb.edges()) {
+                mapB.computeIfAbsent(e.label(), k -> new java.util.ArrayList<>()).add(e.target());
             }
             if (!mapA.keySet().equals(mapB.keySet())) return false;
             for (String k : mapA.keySet()) {
-                List<Target> listA = mapA.get(k);
-                List<Target> listB = mapB.get(k);
+                java.util.List<dev.omnist.document.Target> listA = mapA.get(k);
+                java.util.List<dev.omnist.document.Target> listB = mapB.get(k);
                 if (listA.size() != listB.size()) return false;
                 for (int i = 0; i < listA.size(); i++) {
-                    if (!isEquivalentDoc((Document) listA.get(i), (Document) listB.get(i))) {
+                    if (!isEquivalentDoc((dev.omnist.document.Document) listA.get(i), (dev.omnist.document.Document) listB.get(i))) {
                         return false;
                     }
                 }
@@ -961,4 +941,5 @@ public final class Track2Runner {
         }
         return false;
     }
+
 }

@@ -211,7 +211,7 @@ public final class JsonCodec {
             throw new WriteException(rep.toString(), rep);
         }
         Object prepared = prepareJson(node, "$", 0, strict);
-        Object grouped = grouped(prepared, 0);
+        Object grouped = dev.omnist.document.PathUtils.groupEdges(prepared);
         try {
             if (indent != null && indent > 0) {
                 return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(grouped);
@@ -306,31 +306,4 @@ public final class JsonCodec {
         }
     }
 
-    private static Object grouped(Object node, int depth) {
-        // No depth guard here: grouped()'s tree mirrors prepareJson's output,
-        // which mirrors the original document already bounded by check().
-        if (!(node instanceof List<?> list)) {
-            return node;
-        }
-        Map<String, Integer> counts = new HashMap<>();
-        for (Object item : list) {
-            Object[] edge = (Object[]) item;
-            String label = (String) edge[0];
-            counts.put(label, counts.getOrDefault(label, 0) + 1);
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        for (Object item : list) {
-            Object[] edge = (Object[]) item;
-            String label = (String) edge[0];
-            Object child = grouped(edge[1], depth + 1);
-            if (counts.get(label) > 1) {
-                @SuppressWarnings("unchecked")
-                List<Object> targetList = (List<Object>) out.computeIfAbsent(label, k -> new ArrayList<>());
-                targetList.add(child);
-            } else {
-                out.put(label, child);
-            }
-        }
-        return out;
-    }
 }

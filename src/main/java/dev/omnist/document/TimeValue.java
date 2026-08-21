@@ -58,4 +58,27 @@ public record TimeValue(LocalTime time, ZoneOffset offset) {
         }
         return sb.toString();
     }
+    /**
+     * Parses an ISO-8601 time string into a {@link TimeValue}.
+     * Supports un-offset local times (e.g. {@code "12:00:00"}), UTC 'Z' (e.g. {@code "12:00:00Z"}),
+     * and numeric offsets (e.g. {@code "12:00:00+02:00"}).
+     *
+     * @param text the ISO-8601 time string to parse; must not be {@code null}
+     * @return the parsed {@link TimeValue}
+     */
+    public static TimeValue parse(String text) {
+        Objects.requireNonNull(text, "text must not be null");
+        if (text.endsWith("Z") || text.endsWith("z")) {
+            LocalTime t = LocalTime.parse(text.substring(0, text.length() - 1));
+            return TimeValue.of(t, ZoneOffset.UTC);
+        }
+        int signPos = Math.max(text.lastIndexOf('+'), text.lastIndexOf('-'));
+        if (signPos > 0 && text.indexOf(':') < signPos) {
+            LocalTime t = LocalTime.parse(text.substring(0, signPos));
+            ZoneOffset offset = ZoneOffset.of(text.substring(signPos));
+            return TimeValue.of(t, offset);
+        }
+        return TimeValue.of(LocalTime.parse(text));
+    }
+
 }
