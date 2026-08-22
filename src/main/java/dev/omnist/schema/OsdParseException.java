@@ -43,17 +43,7 @@ public class OsdParseException extends RuntimeException {
         this.path = path;
     }
 
-    /**
-     * Constructs a parse exception with default code {@code schema.parse-error} and path {@code "$"}.
-     * Convenience constructor for generic lexical errors from {@link OsdLexer}.
-     *
-     * @param line    1-based line number where the error was detected
-     * @param column  1-based column number where the error was detected
-     * @param message human-readable description of the error
-     */
-    public OsdParseException(int line, int column, String message) {
-        this(line, column, "schema.parse-error", "$", message);
-    }
+
 
     /**
      * Returns the 1-based line number in the OSD source where the error was detected.

@@ -73,13 +73,8 @@ class FinalCoverageTest {
         OsdParseException ex = new OsdParseException(5, 10, "code", "path", "msg");
         assertEquals(5, ex.getLine());
         assertEquals(10, ex.getColumn());
-    }
-
-    @Test
-    void osdParseException_threeArgGetters() {
-        OsdParseException ex = new OsdParseException(3, 7, "short msg");
-        assertEquals(3, ex.getLine());
-        assertEquals(7, ex.getColumn());
+        assertEquals("code", ex.getCode());
+        assertEquals("path", ex.getPath());
     }
 
     // ==========================================================================
