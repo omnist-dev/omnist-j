@@ -187,22 +187,25 @@ The conformance runner will be integrated early (right after OML lands) rather t
 
 ## 6. Sharp edges (carried forward from predecessor sibling ports)
 
-- Pinned expected pass/fail/skip counts in conformance tests go stale whenever genuine bugs are resolved — update them explicitly with clean runner output.
+- Pinned expected pass/fail/skip counts in conformance tests go stale whenever genuine bugs are resolved — update them explicitly with clean runner output. `./run-conformance` must report `Pass: 181, Fail: 0, Skip: 0` before any change is considered done.
 - Avoid masking exit codes in shell pipelines (e.g. check exit codes without relying on piped commands that lose the primary exit status).
 - Use `git worktree` per parallel branch if working across concurrent workspaces.
 - Check package visibility reachability before locking down package structures.
+- `FuzzTest.java` runs property-based/fuzz coverage across every format reader at 10,000 iterations per property (7 properties, 70,000 total) — keep this running and passing, don't reduce iteration counts to speed up CI.
 
 ---
 
-## 7. Doc-example verification gate (planned)
+## 7. Doc-example verification gate (implemented)
 
-Every fenced code block in `docs/*.md` will require an HTML-comment marker directly above the block:
+Every fenced code block in `docs/*.md` requires an HTML-comment marker directly above the block:
 
-- `<!-- verified-by: path/to/TestOrExample.java::testMethod -->` — a backing Java test asserts the literal content of the block.
-- `<!-- doc-illustrative -->` — the block is non-runnable or conceptual code.
+- `<!-- test-backed: dev.omnist.SomeTest#someMethod -->` — a backing JUnit test asserts the literal content of the block. `DocTest.java` and `CliDocTest.java` carry these for `docs/00-guide.md`, `docs/01-api-reference.md`, and `docs/02-cli-reference.md`.
+- `<!-- doc-illustrative -->` — the block is non-runnable or conceptual code, exempt from the check.
+
+`DocTest.java` also runs a reflection-based safeguard: it verifies every class and method referenced in `docs/01-api-reference.md` actually exists with a matching signature. `mvn clean test` fails if documentation references a stale or non-existent method — this is a real, enforced CI gate, not aspirational.
 
 ---
 
 ## 8. Documentation synchronization rule
 
-If a change touches a public API surface, a documented number, or an external-state claim, the documentation describing it MUST be updated in the **same PR** — never left as a follow-up task.
+If a change touches a public API surface, a documented number, or an external-state claim, the documentation describing it MUST be updated in the **same PR** — never left as a follow-up task. Concretely: any PR or commit that adds, modifies, renames, or deprecates a public API class/method in `dev.omnist.*` or a CLI subcommand/flag in `dev.omnist.cli.Cli` MUST update `docs/01-api-reference.md` and/or `docs/02-cli-reference.md` in that same commit — the reflection safeguard in §7 above is the mechanical backstop for this, not a substitute for actually doing it.
