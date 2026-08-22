@@ -200,4 +200,13 @@ class OsdReaderTest {
         assertEquals("parse.unexpected-token", ex4.getCode());
         assertEquals("$", ex4.getPath());
     }
+
+    @Test
+    @DisplayName("OSD strings forbid literal control characters below U+0020 (issue #72, matching OML's existing rule)")
+    void testOsdStringForbidsLiteralControlCharacter() {
+        String withControlChar = "record R { \"a\": \"xy\" } root R";
+        OsdParseException ex = assertThrows(OsdParseException.class, () -> OsdReader.read(withControlChar));
+        assertEquals("parse.control-character", ex.getCode());
+        assertEquals("$", ex.getPath());
+    }
 }
