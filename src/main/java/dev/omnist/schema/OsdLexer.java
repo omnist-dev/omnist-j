@@ -169,6 +169,9 @@ public class OsdLexer {
             if (c == '"') {
                 return sb.toString();
             }
+            if (c < 0x20) {
+                throw new OsdParseException(startLine, startCol, "parse.control-character", "$", "Control characters below U+0020 are forbidden in strings");
+            }
             if (c == '\\') {
                 if (pos >= source.length()) {
                     throw new OsdParseException(line, col, "parse.unterminated-string", "$", "Unterminated escape in string");
