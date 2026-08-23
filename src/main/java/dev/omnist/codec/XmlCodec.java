@@ -23,9 +23,10 @@ import java.util.regex.Pattern;
  * becomes the sole top-level edge; child elements become nested edges, preserving
  * repeated-element order (this is the one codec where cross-label interleaving both
  * reads and writes faithfully — every other codec's writer groups same-label edges).
- * Attribute and namespace-prefix information is discarded on read, silently per
- * omnist-spec §9.4 D-3 (no diagnostic is emitted for this — it's a spec-mandated
- * lossy conversion, not an oversight).
+ * Attribute and namespace-prefix information is discarded on read; each drop is
+ * reported via {@code format.attribute-dropped}/{@code format.namespace-dropped}
+ * (omnist-spec §8.3.8, closing §9.4 D-3) when a {@link WriteReport} is supplied
+ * to {@link #read(String, Schema, WriteReport)}.
  *
  * <p><b>Writing</b>: scalar leaves are stringified per XML's own type rules
  * ({@link #XML_INT_RE}/{@link #XML_NUM_RE}); a leaf label that isn't a legal XML
@@ -54,7 +55,7 @@ public final class XmlCodec {
      * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
      */
     public static Document read(String text) {
-        return read(text, null);
+        return read(text, null, null);
     }
 
     /**
@@ -79,6 +80,28 @@ public final class XmlCodec {
      * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
      */
     public static Document read(String text, Schema schema) {
+        return read(text, schema, null);
+    }
+
+    /**
+     * Parses XML text into a {@link Document}, optionally with schema guidance and a
+     * read-side diagnostic report.
+     *
+     * <p>Unlike write-side {@code format.*} adjustments, XML read never fails or coerces
+     * because of a read-side adjustment; {@code report}, when non-{@code null}, simply
+     * accumulates a warning for each lossy conversion the read had to make (omnist-spec
+     * Sec8.3.8's {@code format.attribute-dropped} and {@code format.namespace-dropped}):
+     * an element's attributes have no Document representation and are discarded, and a
+     * namespace-prefixed tag ({@code <ns:b>}) is read as its local name ({@code b}),
+     * discarding the prefix and any namespace binding.
+     *
+     * @param text   the XML text; must not be {@code null}
+     * @param schema if non-{@code null}, guides scalar-kind resolution as described above
+     * @param report if non-{@code null}, every read-side adjustment is appended here
+     * @return the parsed document
+     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     */
+    public static Document read(String text, Schema schema, WriteReport report) {
         if (text == null) {
             throw new IllegalArgumentException("input text cannot be null");
         }
@@ -89,7 +112,7 @@ public final class XmlCodec {
         org.w3c.dom.Element rootElem;
         try {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            dbf.setNamespaceAware(true);
+            dbf.setNamespaceAware(false);
             dbf.setCoalescing(true);
 
             // Secure configuration to block XXE / DTD expansion
@@ -108,8 +131,12 @@ public final class XmlCodec {
         }
 
         int[] budget = new int[]{0};
+        WriteReport rep = new WriteReport();
         String rootLabel = localName(rootElem);
-        Object rootContent = xmlToNode(rootElem, "$", 0, budget);
+        Object rootContent = xmlToNode(rootElem, "$", "$." + rootLabel, 0, budget, rep);
+        if (report != null) {
+            report.addAll(rep.adjustments());
+        }
 
         if (schema != null) {
             Object rootType = schema.records().get(schema.root());
@@ -144,10 +171,29 @@ public final class XmlCodec {
         return rootElem;
     }
 
-    private static Object xmlToNode(org.w3c.dom.Element elem, String path, int depth, int[] budget) {
+    private static Object xmlToNode(org.w3c.dom.Element elem, String path, String docPath, int depth, int[] budget, WriteReport rep) {
         Limits limits = Limits.DEFAULT;
         if (depth > limits.maxDepth()) {
             throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+        }
+
+        int prefixColon = elem.getTagName().indexOf(':');
+        if (prefixColon >= 0) {
+            rep.add(docPath, "format.namespace-dropped",
+                    "namespace prefix '" + elem.getTagName().substring(0, prefixColon) + "' discarded on read; element read as local name '" + localName(elem) + "' with no namespace binding",
+                    "warning");
+        }
+        org.w3c.dom.NamedNodeMap attrs = elem.getAttributes();
+        for (int i = 0; i < attrs.getLength(); i++) {
+            org.w3c.dom.Attr attr = (org.w3c.dom.Attr) attrs.item(i);
+            String attrName = attr.getName();
+            if (attrName.equals("xmlns") || attrName.startsWith("xmlns:")) {
+                continue;
+            }
+            rep.add(docPath, "format.attribute-dropped",
+                    "attribute discarded on read (no Document path can represent an XML attribute)",
+                    "warning");
+            break;
         }
 
         List<org.w3c.dom.Element> childElements = new ArrayList<>();
@@ -184,7 +230,7 @@ public final class XmlCodec {
             List<Object[]> edges = new ArrayList<>();
             for (org.w3c.dom.Element c : childElements) {
                 String localName = localName(c);
-                Object childNode = xmlToNode(c, path + "." + localName, depth + 1, budget);
+                Object childNode = xmlToNode(c, path + "." + localName, docPath + "." + localName, depth + 1, budget, rep);
                 edges.add(new Object[]{localName, childNode});
             }
             return edges;
@@ -201,10 +247,10 @@ public final class XmlCodec {
     }
 
     private static String localName(org.w3c.dom.Element el) {
-        String name = el.getLocalName();
-        if (name == null) {
-            name = el.getTagName();
-        }
+        // The DocumentBuilderFactory is deliberately non-namespace-aware (see #read),
+        // so getLocalName() always returns null here -- getTagName() (the raw,
+        // possibly-prefixed tag text) is the only source, with any prefix stripped below.
+        String name = el.getTagName();
         int colon = name.indexOf(':');
         if (colon >= 0) {
             name = name.substring(colon + 1);

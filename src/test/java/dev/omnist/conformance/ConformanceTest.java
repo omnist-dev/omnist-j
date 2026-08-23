@@ -34,7 +34,7 @@ class ConformanceTest {
         int[] results = Track2Runner.runTrack2(testSuitePath);
         assertNotNull(results);
         assertEquals(3, results.length);
-        assertEquals(153, results[0], "Track 2 should pass all 153 real JSON test vectors");
+        assertEquals(155, results[0], "Track 2 should pass all 155 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
         assertEquals(0, results[2], "Track 2 should have 0 skips");
     }

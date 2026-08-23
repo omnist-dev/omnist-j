@@ -143,8 +143,9 @@ public final class Track2Runner {
 
         Document actualDoc = null;
         Throwable thrown = null;
+        WriteReport readReport = new WriteReport();
         try {
-            actualDoc = parseFormat(text, format, limits);
+            actualDoc = parseFormat(text, format, limits, readReport);
         } catch (Throwable ex) {
             thrown = ex;
         }
@@ -156,6 +157,9 @@ public final class Track2Runner {
             Document expectedDoc = decodeJsonDoc(expect.get("document"));
             if (!actualDoc.equals(expectedDoc) && !isEquivalentDoc(actualDoc, expectedDoc)) {
                 throw new RuntimeException("Parsed document does not match expected document");
+            }
+            if (expect.has("diagnostics")) {
+                compareDiagnostics(readReport.adjustments(), expect.get("diagnostics"));
             }
             passCount++;
             System.out.println("    [PASS] parse:" + input.get("text").asText().replace("\n", "\\n"));
@@ -844,6 +848,10 @@ public final class Track2Runner {
     }
 
     private static Document parseFormat(String text, String format, dev.omnist.document.Limits limits) throws Exception {
+        return parseFormat(text, format, limits, null);
+    }
+
+    private static Document parseFormat(String text, String format, dev.omnist.document.Limits limits, WriteReport report) throws Exception {
         if ("oml".equalsIgnoreCase(format)) {
             return dev.omnist.oml.OmlReader.read(text, limits);
         } else if ("json".equalsIgnoreCase(format)) {
@@ -853,7 +861,7 @@ public final class Track2Runner {
         } else if ("toml".equalsIgnoreCase(format)) {
             return dev.omnist.codec.TomlCodec.read(text);
         } else if ("xml".equalsIgnoreCase(format)) {
-            return dev.omnist.codec.XmlCodec.read(text);
+            return dev.omnist.codec.XmlCodec.read(text, null, report);
         } else {
             throw new IllegalArgumentException("Unknown format: " + format);
         }

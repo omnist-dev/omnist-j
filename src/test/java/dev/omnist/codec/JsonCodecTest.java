@@ -231,4 +231,38 @@ public class JsonCodecTest {
         String json = JsonCodec.write(doc, null, true, null);
         assertNotNull(json);
     }
+
+    @Test
+    @DisplayName("Issue #84 (D-3): cross-label edge interleaving lost by grouping is reported via format.interleaving-lost at $")
+    void testInterleavingLostDiagnostic() {
+        Document doc = new Node(List.of(
+            new Edge("m", new StringScalar("A")),
+            new Edge("x", new StringScalar("X")),
+            new Edge("m", new StringScalar("B"))
+        ));
+        WriteReport report = new WriteReport();
+        JsonCodec.write(doc, null, false, report);
+
+        assertEquals(1, report.adjustments().stream().filter(a -> a.code().equals("format.interleaving-lost")).count());
+        WriteAdjustment adj = report.adjustments().stream()
+            .filter(a -> a.code().equals("format.interleaving-lost"))
+            .findFirst().orElseThrow();
+        assertEquals("$", adj.path());
+        assertEquals("warning", adj.severity());
+    }
+
+    @Test
+    @DisplayName("Issue #84 (D-3): a contiguous repeat of the same label does NOT fire format.interleaving-lost")
+    void testContiguousRepeatDoesNotFireInterleavingLost() {
+        Document doc = new Node(List.of(
+            new Edge("m", new StringScalar("A")),
+            new Edge("m", new StringScalar("B")),
+            new Edge("x", new StringScalar("X"))
+        ));
+        WriteReport report = new WriteReport();
+        JsonCodec.write(doc, null, false, report);
+
+        assertTrue(report.adjustments().stream().noneMatch(a -> a.code().equals("format.interleaving-lost")),
+            "unexpected interleaving-lost for a contiguous repeat: " + report);
+    }
 }

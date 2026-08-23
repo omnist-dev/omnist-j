@@ -593,15 +593,25 @@ public final class TomlCodec {
         if (!(node instanceof dev.omnist.document.Node)) {
             return rep;
         }
-        stripNulls(node, "$", rep, 0);
+        stripNulls(node, "$", rep, 0, new boolean[]{false});
         return rep;
     }
 
     private static Document stripNulls(Document doc, String path, WriteReport rep, int depth) {
+        return stripNulls(doc, path, rep, depth, new boolean[]{false});
+    }
+
+    private static Document stripNulls(Document doc, String path, WriteReport rep, int depth, boolean[] interleavingFound) {
         if (depth > 200) {
             throw new WriteException("nesting exceeds the maximum depth (200)");
         }
         if (doc instanceof dev.omnist.document.Node node) {
+            if (!interleavingFound[0] && dev.omnist.document.PathUtils.hasInterleavedLabels(node)) {
+                rep.add("$", "format.interleaving-lost",
+                        "cross-label edge interleaving cannot be represented; grouping same-label edges together lost the original relative order",
+                        "warning");
+                interleavingFound[0] = true;
+            }
             List<Edge> edges = new ArrayList<>();
             Map<String, Integer> totals = dev.omnist.document.PathUtils.countLabels(node);
             Map<String, Integer> seen = new HashMap<>();
@@ -616,7 +626,7 @@ public final class TomlCodec {
                     rep.add(p, "format.null-unrepresentable", "null value dropped (TOML has no null)", "warning");
                     continue;
                 }
-                edges.add(new Edge(label, (Target) stripNulls(child, p, rep, depth + 1)));
+                edges.add(new Edge(label, (Target) stripNulls(child, p, rep, depth + 1, interleavingFound)));
             }
             return new dev.omnist.document.Node(edges);
         }

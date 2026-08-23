@@ -282,15 +282,21 @@ public final class YamlCodec {
      */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
-        scanYaml(node, "$", 0, rep);
+        scanYaml(node, "$", 0, rep, new boolean[]{false});
         return rep;
     }
 
-    private static void scanYaml(Document doc, String path, int depth, WriteReport rep) {
+    private static void scanYaml(Document doc, String path, int depth, WriteReport rep, boolean[] interleavingFound) {
         if (depth > 200) {
             throw new WriteException("nesting exceeds the maximum depth (200)");
         }
         if (doc instanceof dev.omnist.document.Node node) {
+            if (!interleavingFound[0] && dev.omnist.document.PathUtils.hasInterleavedLabels(node)) {
+                rep.add("$", "format.interleaving-lost",
+                        "cross-label edge interleaving cannot be represented; grouping same-label edges together lost the original relative order",
+                        "warning");
+                interleavingFound[0] = true;
+            }
             Map<String, Integer> totals = dev.omnist.document.PathUtils.countLabels(node);
             Map<String, Integer> seen = new HashMap<>();
             for (Edge edge : node.edges()) {
@@ -302,7 +308,7 @@ public final class YamlCodec {
                 seen.put(label, i + 1);
                 int total = totals.getOrDefault(label, 1);
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
-                scanYaml((Document) edge.target(), p, depth + 1, rep);
+                scanYaml((Document) edge.target(), p, depth + 1, rep, interleavingFound);
             }
         } else if (doc instanceof Scalar s) {
             if (s instanceof TimeScalar) {
