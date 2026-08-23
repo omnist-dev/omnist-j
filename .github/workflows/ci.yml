@@ -50,3 +50,39 @@ jobs:
         with:
           scan-args: |-
             --lockfile=pom.xml
+
+  auto-tag:
+    # Only on a real push to main (never on PRs, where pushing a tag would be
+    # both wrong and impossible with a read-only PR token). Tagging here only
+    # starts release.yml's verify job and its own redundant test run -- the
+    # actual `mvn deploy -Prelease` still waits on manual approval in the
+    # central-publish environment, so this can't publish anything by itself.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test-and-coverage, conformance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Tag if pom.xml version is new
+        run: |
+          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          TAG="v$VERSION"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists, nothing to do."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi

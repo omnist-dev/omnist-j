@@ -240,9 +240,6 @@ If a change touches a public API surface, a documented number, or an external-st
 
    Delete `private-key.asc` locally once it's in GitHub Secrets — it shouldn't be left sitting on disk, committed, or shared anywhere else.
 
-**Releasing, once the above is set up**: bump the version first (see the version-string-scatter gotcha above — grep the exact old string repo-wide, don't trust a single-file diff), verify all three gates locally, merge to `main`, then tag and push:
-```bash
-git tag v0.2.1-alpha
-git push origin v0.2.1-alpha
-```
-Watch the `Release` workflow run in the Actions tab, and do the final manual review/publish click in the Central Portal once the `publish` job succeeds.
+**Releasing, once the above is set up**: bump the version first (see the version-string-scatter gotcha above — grep the exact old string repo-wide, don't trust a single-file diff), verify all three gates locally, and merge to `main`. Tagging is automatic from there: `ci.yml`'s `auto-tag` job runs on every push to `main` (never on PRs), reads `pom.xml`'s version with `mvn help:evaluate`, and pushes `v<version>` as a tag if that tag doesn't already exist — which is what actually triggers `release.yml`. There is nothing else to run manually to kick off a release; merging the version bump is the trigger.
+
+Two safety properties this depends on: `auto-tag` only fires after `test-and-coverage` and `conformance` both pass (`needs: [...]`), and pushing the tag doesn't publish anything by itself — `release.yml`'s `publish` job still waits on manual approval in the `central-publish` GitHub Environment (required reviewers configured there) before `mvn deploy -Prelease` actually runs. Watch the `Release` workflow in the Actions tab, approve the `publish` job when it's ready, then do the final manual review/publish click in the Central Portal once that job succeeds.
