@@ -1,7 +1,9 @@
 package dev.omnist.document;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Shared utilities for constructing canonical document paths in diagnostics and report adjustments (omnist-spec §8).
@@ -80,5 +82,40 @@ public final class PathUtils {
             }
         }
         return out;
+    }
+
+    /**
+     * Detects whether grouping {@code node}'s direct child edges by label (the
+     * transform every JSON-family writer -- JSON, YAML, TOML -- applies via
+     * {@link #groupEdges}) would change their relative order: true when two or
+     * more distinct labels are present and at least one label's occurrences are
+     * not all contiguous in the original edge order (omnist-spec {@code
+     * format.interleaving-lost}, Sec8.3.8).
+     *
+     * @param node the node whose direct edges are checked
+     * @return {@code true} if grouping by label loses real cross-label interleaving
+     */
+    public static boolean hasInterleavedLabels(Node node) {
+        java.util.List<Edge> edges = node.edges();
+        Set<String> distinctLabels = new HashSet<>();
+        for (Edge e : edges) {
+            distinctLabels.add(e.label());
+        }
+        if (distinctLabels.size() < 2) {
+            return false;
+        }
+        Set<String> closed = new HashSet<>();
+        String current = null;
+        for (Edge e : edges) {
+            String label = e.label();
+            if (!label.equals(current)) {
+                if (closed.contains(label)) {
+                    return true;
+                }
+                closed.add(label);
+                current = label;
+            }
+        }
+        return false;
     }
 }

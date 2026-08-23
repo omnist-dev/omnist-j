@@ -359,7 +359,7 @@ public class XmlCodecTest {
     @DisplayName("read/write: budget guards and buildDoc's unknown-type throw (reflection)")
     void testBudgetGuardsAndUnknownTypeViaReflection() throws Exception {
         java.lang.reflect.Method xmlToNode = XmlCodec.class.getDeclaredMethod(
-            "xmlToNode", org.w3c.dom.Element.class, String.class, int.class, int[].class);
+            "xmlToNode", org.w3c.dom.Element.class, String.class, String.class, int.class, int[].class, dev.omnist.codec.WriteReport.class);
         xmlToNode.setAccessible(true);
         javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
         org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(
@@ -430,5 +430,85 @@ public class XmlCodecTest {
         // Note: \u0000 is replaced by \uFFFD by xmlSanitize
         String expected = "<>&\"'\uFFFD\t\n<&amp;>";
         assertEquals(expected, ((StringScalar) ((Node) advRound).edges().get(0).target()).value());
+    }
+
+    @Test
+    @DisplayName("Issue #84 (D-3): dropped attribute is reported via format.attribute-dropped at the owning element's path")
+    void testAttributeDroppedDiagnostic() {
+        String xml = "<a x=\"1\"><b>hi</b></a>";
+        WriteReport report = new WriteReport();
+        Document doc = XmlCodec.read(xml, null, report);
+
+        Node root = (Node) doc;
+        assertEquals(1, root.edges().size());
+        assertEquals("a", root.edges().get(0).label());
+        Node aNode = (Node) root.edges().get(0).target();
+        assertEquals(1, aNode.edges().size());
+        assertEquals("b", aNode.edges().get(0).label());
+        assertEquals("hi", ((StringScalar) aNode.edges().get(0).target()).value());
+
+        assertEquals(1, report.adjustments().size());
+        WriteAdjustment adj = report.adjustments().get(0);
+        assertEquals("$.a", adj.path());
+        assertEquals("format.attribute-dropped", adj.code());
+        assertEquals("warning", adj.severity());
+    }
+
+    @Test
+    @DisplayName("Issue #84 (D-3): dropped namespace prefix is reported via format.namespace-dropped at the element's own path")
+    void testNamespaceDroppedDiagnostic() {
+        String xml = "<a><ns:b>hi</ns:b></a>";
+        WriteReport report = new WriteReport();
+        Document doc = XmlCodec.read(xml, null, report);
+
+        Node root = (Node) doc;
+        Node aNode = (Node) root.edges().get(0).target();
+        assertEquals("b", aNode.edges().get(0).label());
+        assertEquals("hi", ((StringScalar) aNode.edges().get(0).target()).value());
+
+        assertEquals(1, report.adjustments().size());
+        WriteAdjustment adj = report.adjustments().get(0);
+        assertEquals("$.a.b", adj.path());
+        assertEquals("format.namespace-dropped", adj.code());
+        assertEquals("warning", adj.severity());
+    }
+
+    @Test
+    @DisplayName("Issue #84 (D-3): read(text) / read(text, schema) with no report still succeed (report is opt-in)")
+    void testReadWithoutReportStillWorks() {
+        assertDoesNotThrow(() -> XmlCodec.read("<a x=\"1\"><b>hi</b></a>"));
+        Schema schema = OsdReader.read("record R { \"b\": string }\nroot R\n");
+        assertDoesNotThrow(() -> XmlCodec.read("<a x=\"1\"><b>hi</b></a>", schema));
+    }
+
+    @Test
+    @DisplayName("a plain (non-prefixed, no-attribute) element produces no D-3 diagnostics")
+    void testNoSpuriousD3Diagnostics() {
+        WriteReport report = new WriteReport();
+        XmlCodec.read("<a><b>hi</b></a>", null, report);
+        assertTrue(report.adjustments().isEmpty(), "unexpected adjustments: " + report);
+    }
+
+    @Test
+    @DisplayName("an xmlns declaration attribute is not itself reported as format.attribute-dropped")
+    void testXmlnsDeclarationNotReportedAsAttributeDropped() {
+        String xml = "<root xmlns:ns='http://example.com'><ns:m>first</ns:m></root>";
+        WriteReport report = new WriteReport();
+        XmlCodec.read(xml, null, report);
+
+        assertTrue(report.adjustments().stream().noneMatch(a -> a.code().equals("format.attribute-dropped")),
+            "xmlns declaration should not be reported as a dropped attribute: " + report);
+        assertTrue(report.adjustments().stream().anyMatch(a -> a.code().equals("format.namespace-dropped")));
+    }
+
+    @Test
+    @DisplayName("a bare default-namespace xmlns attribute (no prefix) is not itself reported as format.attribute-dropped")
+    void testBareDefaultXmlnsNotReportedAsAttributeDropped() {
+        String xml = "<root xmlns='http://example.com'><b>hi</b></root>";
+        WriteReport report = new WriteReport();
+        XmlCodec.read(xml, null, report);
+
+        assertTrue(report.adjustments().stream().noneMatch(a -> a.code().equals("format.attribute-dropped")),
+            "bare xmlns declaration should not be reported as a dropped attribute: " + report);
     }
 }
