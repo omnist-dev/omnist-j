@@ -69,7 +69,7 @@ public class OsdReader {
             } else if (t.type() == TokenType.ROOT) {
                 consumeToken(); // consume 'root'
                 if (rootName != null) {
-                    throw new OsdParseException(t.line(), t.col(), "schema.no-root", "$", "Duplicate root declaration");
+                    throw new OsdParseException(t.line(), t.col(), "schema.duplicate-root", "$", "Duplicate root declaration");
                 }
                 Token nameTok = peekToken();
                 if (nameTok.type() != TokenType.IDENT) {

@@ -103,8 +103,10 @@ class FinalCoverageTest {
     @Test
     void osdReader_duplicateRootThrows() {
         // line 42: duplicate root
-        assertThrows(OsdParseException.class,
+        OsdParseException ex = assertThrows(OsdParseException.class,
             () -> OsdReader.read("record R { \"x\": string }\nroot R\nroot R\n"));
+        assertEquals("schema.duplicate-root", ex.getCode());
+        assertEquals("$", ex.getPath());
     }
 
     @Test
