@@ -168,7 +168,10 @@ class OsdReaderTest {
         assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"a\": string }"));
 
         // Duplicate root
-        assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"a\": string } root R root R"));
+        OsdParseException dupRoot = assertThrows(OsdParseException.class,
+            () -> OsdReader.read("record R { \"a\": string } root R root R"));
+        assertEquals("schema.duplicate-root", dupRoot.getCode());
+        assertEquals("$", dupRoot.getPath());
 
         // Duplicate record definition
         assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"a\": string } record R { \"b\": string } root R"));
