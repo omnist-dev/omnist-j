@@ -9,6 +9,30 @@
     <version>0.2.1-alpha</version>
     <name>omnist-j</name>
     <description>Java implementation of the Omnist data-interchange specification</description>
+    <url>https://j.omnist.dev</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>tomlee</id>
+            <name>Thomas Lee</name>
+            <url>https://github.com/tomlee</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/omnist-dev/omnist-j.git</connection>
+        <developerConnection>scm:git:git@github.com:omnist-dev/omnist-j.git</developerConnection>
+        <url>https://github.com/omnist-dev/omnist-j</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
@@ -203,6 +227,18 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!--
+                                Attached as a separate "cli" classifier rather than replacing the
+                                main artifact: the main dev.omnist:omnist-j jar must stay a plain
+                                library jar with its real <dependencies> intact for anyone adding
+                                it as a Maven/Gradle dependency, so Jackson/SnakeYAML/tomlj don't
+                                get silently duplicated on their classpath. The fat jar is only for
+                                running `omnist` as a standalone CLI (see the wrapper script and
+                                Track1Runner.java's conformance harness, both of which reference
+                                the -cli.jar explicitly).
+                            -->
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>cli</shadedClassifierName>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>dev.omnist.cli.CliMain</mainClass>
@@ -213,6 +249,82 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Signing and Central publishing are opt-in via `mvn -Prelease ...` rather than
+            bound to the default lifecycle, so ordinary `mvn clean test`/`mvn package` (what
+            CI and every contributor runs) never requires a GPG key to be present. Activate
+            with `mvn clean deploy -Prelease` once ~/.m2/settings.xml has the `central` server
+            credentials (see docs/workflow-playbook.md) and a GPG key is available locally.
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.10.0</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.7.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <!--
+                                Manual review before publish: the bundle uploads to the Portal
+                                but requires an explicit click there to actually release. Flip to
+                                true only once confident enough in the release process to skip
+                                that manual check; Central releases are immutable, there is no
+                                undo after publish.
+                            -->
+                            <autoPublish>false</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
