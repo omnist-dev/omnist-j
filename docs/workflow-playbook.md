@@ -218,24 +218,31 @@ If a change touches a public API surface, a documented number, or an external-st
 
 **Artifact shape**: the main `dev.omnist:omnist-j` jar is a plain library jar with its real `<dependencies>` intact (Jackson/SnakeYAML/tomlj resolve normally for anyone adding it as a dependency). The shaded fat jar for running `omnist` as a standalone CLI is a separate `-cli` classifier (`omnist-j-<version>-cli.jar`), attached by the same `maven-shade-plugin` execution but never replacing the main artifact. The `omnist` wrapper script and `Track1Runner.java`'s conformance harness both reference the `-cli.jar` explicitly — if either the shade plugin's classifier name or the version changes, update both call sites in the same commit (see §8 above).
 
-**One-time setup** (per releaser, not per machine the CI runs on):
-1. A Sonatype Central Publisher Portal account with the `dev.omnist` namespace verified (a DNS TXT record on `omnist.dev`, not GitHub-based verification, since the groupId is a custom domain, not `io.github.*`).
-2. A GPG signing key, with the public key published to a keyserver (e.g. `gpg --keyserver keyserver.ubuntu.com --send-keys <KEY_ID>`).
-3. A Central Portal user token in `~/.m2/settings.xml`:
-   ```xml
-   <settings>
-     <servers>
-       <server>
-         <id>central</id>
-         <username>TOKEN_USERNAME</username>
-         <password>TOKEN_PASSWORD</password>
-       </server>
-     </servers>
-   </settings>
-   ```
+**Releasing is automated via `.github/workflows/release.yml`**, triggered by pushing a `v*` tag (e.g. `v0.2.1-alpha`). It runs as two jobs:
+1. `verify` — the same `mvn clean test` + `./run-conformance` gates as regular CI, plus a check that the pushed tag's version actually matches `pom.xml`'s `<version>` (fails loudly if they've drifted, rather than publishing the wrong content under the wrong tag).
+2. `publish` — gated behind the `central-publish` GitHub Environment, runs `mvn clean deploy -Prelease` using secrets for the GPG key and Central Portal credentials.
 
-**Releasing**: bump the version first (see the version-string-scatter gotcha above — grep the exact old string repo-wide, don't trust a single-file diff), verify all three gates, then:
+`autoPublish` is deliberately `false` in `pom.xml`: the CI job uploads and signs the bundle, but it sits in the Portal for **manual review** — publishing still requires an explicit click there. Central releases are immutable once published: there is no undo, no republish under the same version, and no way to delete a bad release, only supersede it with a new one. Never flip `autoPublish` to `true` without a considered reason to skip that manual checkpoint.
+
+**One-time setup, done once by whoever administers the repo** (not per release, not per machine):
+1. A Sonatype Central Publisher Portal account with the `dev.omnist` namespace verified (a DNS TXT record on `omnist.dev`, not GitHub-based verification, since the groupId is a custom domain, not `io.github.*`).
+2. A GPG signing key. Export the private key in ASCII-armored form and publish the public key to a keyserver:
+   ```bash
+   gpg --full-generate-key
+   gpg --keyserver keyserver.ubuntu.com --send-keys <KEY_ID>
+   gpg --armor --export-secret-keys <KEY_ID> > private-key.asc
+   ```
+3. A Central Portal user token (generated in the Portal's account settings — a username/password pair for publishing, distinct from your login).
+4. Four GitHub Actions secrets on this repo (Settings → Secrets and variables → Actions), and a `central-publish` Environment (Settings → Environments) that the `publish` job's secrets are scoped to — optionally with required reviewers configured on that environment for an extra manual checkpoint before every publish run:
+   - `CENTRAL_USERNAME` / `CENTRAL_PASSWORD` — the Portal token from step 3.
+   - `GPG_PRIVATE_KEY` — the full contents of `private-key.asc` from step 2.
+   - `GPG_PASSPHRASE` — the passphrase protecting that key.
+
+   Delete `private-key.asc` locally once it's in GitHub Secrets — it shouldn't be left sitting on disk, committed, or shared anywhere else.
+
+**Releasing, once the above is set up**: bump the version first (see the version-string-scatter gotcha above — grep the exact old string repo-wide, don't trust a single-file diff), verify all three gates locally, merge to `main`, then tag and push:
 ```bash
-mvn clean deploy -Prelease
+git tag v0.2.1-alpha
+git push origin v0.2.1-alpha
 ```
-This signs and uploads the bundle (main jar, sources jar, javadoc jar, POM) to the Portal. `autoPublish` is deliberately `false` in `pom.xml` — the bundle sits in the Portal for manual review; publishing requires an explicit click there. Central releases are immutable once published: there is no undo, no republish under the same version, and no way to delete a bad release, only supersede it with a new one. Never flip `autoPublish` to `true` without a considered reason to skip that manual checkpoint.
+Watch the `Release` workflow run in the Actions tab, and do the final manual review/publish click in the Central Portal once the `publish` job succeeds.
