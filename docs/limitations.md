@@ -8,7 +8,7 @@ interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 
 ## Conformance
 
-Both tracks of the conformance harness pass at **181 / 181 (100%)** —
+Both tracks of the conformance harness pass at **182 / 182 (100%)** —
 Track 1 CLI fixtures and Track 2 JSON test vectors, run against
 `vendor/omnist-spec`'s pinned `test-suite/`. Zero fails, zero skips.
 
