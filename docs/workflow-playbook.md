@@ -209,3 +209,33 @@ Every fenced code block in `docs/*.md` requires an HTML-comment marker directly 
 ## 8. Documentation synchronization rule
 
 If a change touches a public API surface, a documented number, or an external-state claim, the documentation describing it MUST be updated in the **same PR** — never left as a follow-up task. Concretely: any PR or commit that adds, modifies, renames, or deprecates a public API class/method in `dev.omnist.*` or a CLI subcommand/flag in `dev.omnist.cli.Cli` MUST update `docs/01-api-reference.md` and/or `docs/02-cli-reference.md` in that same commit — the reflection safeguard in §7 above is the mechanical backstop for this, not a substitute for actually doing it.
+
+---
+
+## 9. Publishing to Maven Central
+
+`mvn clean test`/`mvn package` never require a GPG key or Central credentials — signing and publishing plugins are opt-in via the `release` Maven profile, not bound to the default lifecycle.
+
+**Artifact shape**: the main `dev.omnist:omnist-j` jar is a plain library jar with its real `<dependencies>` intact (Jackson/SnakeYAML/tomlj resolve normally for anyone adding it as a dependency). The shaded fat jar for running `omnist` as a standalone CLI is a separate `-cli` classifier (`omnist-j-<version>-cli.jar`), attached by the same `maven-shade-plugin` execution but never replacing the main artifact. The `omnist` wrapper script and `Track1Runner.java`'s conformance harness both reference the `-cli.jar` explicitly — if either the shade plugin's classifier name or the version changes, update both call sites in the same commit (see §8 above).
+
+**One-time setup** (per releaser, not per machine the CI runs on):
+1. A Sonatype Central Publisher Portal account with the `dev.omnist` namespace verified (a DNS TXT record on `omnist.dev`, not GitHub-based verification, since the groupId is a custom domain, not `io.github.*`).
+2. A GPG signing key, with the public key published to a keyserver (e.g. `gpg --keyserver keyserver.ubuntu.com --send-keys <KEY_ID>`).
+3. A Central Portal user token in `~/.m2/settings.xml`:
+   ```xml
+   <settings>
+     <servers>
+       <server>
+         <id>central</id>
+         <username>TOKEN_USERNAME</username>
+         <password>TOKEN_PASSWORD</password>
+       </server>
+     </servers>
+   </settings>
+   ```
+
+**Releasing**: bump the version first (see the version-string-scatter gotcha above — grep the exact old string repo-wide, don't trust a single-file diff), verify all three gates, then:
+```bash
+mvn clean deploy -Prelease
+```
+This signs and uploads the bundle (main jar, sources jar, javadoc jar, POM) to the Portal. `autoPublish` is deliberately `false` in `pom.xml` — the bundle sits in the Portal for manual review; publishing requires an explicit click there. Central releases are immutable once published: there is no undo, no republish under the same version, and no way to delete a bad release, only supersede it with a new one. Never flip `autoPublish` to `true` without a considered reason to skip that manual checkpoint.
