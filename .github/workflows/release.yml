@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*"
+  # A tag pushed by the ci.yml auto-tag job (using the default GITHUB_TOKEN)
+  # deliberately does NOT fire the `push: tags:` trigger above -- GitHub
+  # suppresses workflow-triggered-by-workflow events via the default token to
+  # prevent infinite loops. auto-tag explicitly dispatches this workflow via
+  # `gh workflow run release.yml --ref <tag>` right after pushing, which is
+  # the standard workaround; this trigger is what makes that dispatch valid.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.2.1-alpha)"
+        required: true
 
 jobs:
   verify:
