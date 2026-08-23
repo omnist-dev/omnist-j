@@ -67,7 +67,7 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 ## Status
 
-**`v0.2.0-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior).
+**`v0.2.1-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior).
 
 - **Conformance**: 181/181 (100%) passing against the shared spec test suite, across CLI fixtures and JSON test vectors.
 - **Tests**: 584 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
