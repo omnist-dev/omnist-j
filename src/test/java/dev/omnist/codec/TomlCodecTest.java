@@ -77,23 +77,30 @@ public class TomlCodecTest {
     }
 
     @Test
-    @DisplayName("write serializes dates natively and handles null omission")
+    @DisplayName("write serializes dates natively; a null leaf fails unconditionally, even in non-strict mode (issue #89)")
     void testWriteNullOmissionAndDate() {
+        Node dateOnly = new Node(List.of(new Edge("date", new DateScalar(LocalDate.of(2024, 1, 1)))));
+        String toml = TomlCodec.write(dateOnly, false, new WriteReport());
+        // Date should be written natively (unquoted)
+        assertTrue(toml.contains("date = 2024-01-01"));
+
         Node node = new Node(List.of(
             new Edge("date", new DateScalar(LocalDate.of(2024, 1, 1))),
             new Edge("nullable", Value.NULL)
         ));
 
+        // Issue #89: fail, don't invent -- silently dropping the null edge erases its
+        // existence entirely (no trace it ever existed on read-back), so it fails
+        // unconditionally now, regardless of strict.
         WriteReport report = new WriteReport();
-        String toml = TomlCodec.write(node, false, report);
+        WriteException ex = assertThrows(WriteException.class, () -> TomlCodec.write(node, false, report));
+        assertEquals(1, ex.report().adjustments().size());
+        assertEquals("write.unsupported-value", ex.report().adjustments().get(0).code());
+        assertEquals("$.nullable", ex.report().adjustments().get(0).path());
 
-        // Date should be written natively (unquoted)
-        assertTrue(toml.contains("date = 2024-01-01"));
-        // Null should be omitted
-        assertFalse(toml.contains("nullable"));
-
-        assertEquals(1, report.adjustments().size());
-        assertEquals("format.null-unrepresentable", report.adjustments().get(0).code());
+        // strict is the same
+        WriteException exStrict = assertThrows(WriteException.class, () -> TomlCodec.write(node, true, null));
+        assertEquals("write.unsupported-value", exStrict.report().adjustments().get(0).code());
     }
 
     // ==========================================================================
@@ -229,8 +236,15 @@ public class TomlCodecTest {
     @Test
     @DisplayName("write: strict mode throws WriteException, and write-side depth limit")
     void testWriteStrictAndDepthLimit() {
-        Node nullDoc = new Node(List.of(new Edge("x", Value.NULL)));
-        assertThrows(WriteException.class, () -> TomlCodec.write(nullDoc, true, null));
+        // A null leaf now fails unconditionally regardless of strict (issue #89), so use an
+        // interleaving-lost-only adjustment here to keep covering the strict-only throw path
+        // (an adjustment that ISN'T write.unsupported-value, only rejected because strict).
+        Node interleavedDoc = new Node(List.of(
+            new Edge("m", new StringScalar("A")),
+            new Edge("x", new StringScalar("X")),
+            new Edge("m", new StringScalar("B"))
+        ));
+        assertThrows(WriteException.class, () -> TomlCodec.write(interleavedDoc, true, null));
 
         Node deep = new Node(List.of());
         for (int i = 0; i < 205; i++) {

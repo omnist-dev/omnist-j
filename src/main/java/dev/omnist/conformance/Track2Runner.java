@@ -364,15 +364,11 @@ public final class Track2Runner {
     private static void compareDiagnostics(List<WriteAdjustment> actual, JsonNode expectedDiagNode) {
         Set<String> actualSet = new HashSet<>();
         for (WriteAdjustment adj : actual) {
-            String c = adj.code();
-            if ("format.null-unrepresentable".equals(c)) c = "write.unsupported-value";
-            actualSet.add(adj.path() + "|" + c);
+            actualSet.add(adj.path() + "|" + adj.code());
         }
         Set<String> expectedSet = new HashSet<>();
         for (JsonNode d : expectedDiagNode) {
-            String c = d.get("code").asText();
-            if ("format.null-unrepresentable".equals(c)) c = "write.unsupported-value";
-            expectedSet.add(d.get("path").asText() + "|" + c);
+            expectedSet.add(d.get("path").asText() + "|" + d.get("code").asText());
         }
         if (!actualSet.equals(expectedSet)) {
             throw new RuntimeException("Diagnostics mismatch. Expected: " + expectedSet + ", Actual: " + actualSet);

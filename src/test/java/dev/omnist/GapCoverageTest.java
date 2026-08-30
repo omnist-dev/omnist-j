@@ -283,14 +283,16 @@ class GapCoverageTest {
 
     @Test
     void jsonCodec_nanAndInfWrittenAsNull() {
-        // prepareJson: NaN and Inf serialize as null
+        // scanJson: NaN and Inf fail unconditionally now (issue #90), rather than
+        // silently serializing as null.
         Node doc = new Node(List.of(
             new Edge("nan", new NumberScalar(Double.NaN)),
             new Edge("inf", new NumberScalar(Double.POSITIVE_INFINITY)),
             new Edge("ninf", new NumberScalar(Double.NEGATIVE_INFINITY))
         ));
-        String json = JsonCodec.write(doc, null, false, null);
-        assertTrue(json.contains("null"), "Expected null for NaN/Inf in: " + json);
+        WriteException ex = assertThrows(WriteException.class, () -> JsonCodec.write(doc, null, false, null));
+        assertEquals(3, ex.report().adjustments().size());
+        assertTrue(ex.report().adjustments().stream().allMatch(a -> a.code().equals("write.unsupported-value")));
     }
 
     @Test

@@ -111,37 +111,58 @@ public class XmlCodecTest {
     }
 
     @Test
-    @DisplayName("write generates all adjustments (stringifications, sanitization, CR normalization, illegal chars)")
-    void testWriteAdjustments() {
+    @DisplayName("write records a warning for a stringified non-string scalar and a CR (unaffected by the fail-dont-invent fixes here)")
+    void testWriteValueStringifiedAndCrWarnings() {
         Node child = new Node(List.of(
-            new Edge("empty_seq", new Node(List.of())),
-            new Edge("invalid label !", new StringScalar("val")),
-            new Edge("nullable", Value.NULL),
             new Edge("bool", new BooleanScalar(true)),
             new Edge("int", new IntegerScalar(BigInteger.TEN)),
-            new Edge("cr", new StringScalar("line1\rline2")),
-            new Edge("illegal", new StringScalar("char \u0000"))
+            new Edge("cr", new StringScalar("line1\rline2"))
         ));
         Node root = new Node(List.of(new Edge("root", child)));
 
         WriteReport report = new WriteReport();
         String xml = XmlCodec.write(root, false, report);
-
-        // Verify elements are written
         assertTrue(xml.contains("<root>"));
-        assertTrue(xml.contains("<empty_seq />") || xml.contains("<empty_seq/>"));
-        // Invalid label sanitized to safe XML name
-        assertTrue(xml.contains("invalid_label__"));
-        // Illegal character U+0000 replaced with U+FFFD
-        assertTrue(xml.contains("char \uFFFD"));
 
         List<WriteAdjustment> adjs = report.adjustments();
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.shape-empty-ambiguous")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.key-sanitized")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.null-unrepresentable")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.value-stringified")));
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.string-cr-normalized")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.string-illegal-char")));
+    }
+
+    @Test
+    @DisplayName("an empty internal node cannot be written -- fails unconditionally (issue #90)")
+    void testEmptyInternalNodeCannotBeWritten() {
+        Node root = new Node(List.of(new Edge("root", new Node(List.of(new Edge("empty_seq", new Node(List.of())))))));
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(root, false, null));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value") && a.path().equals("$.root.empty_seq")));
+    }
+
+    @Test
+    @DisplayName("a label XML syntax cannot represent cannot be written -- fails unconditionally (issue #88)")
+    void testIllegalLabelCannotBeWritten() {
+        Node root = new Node(List.of(new Edge("root", new Node(List.of(new Edge("invalid label !", new StringScalar("val")))))));
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(root, false, null));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value") && a.path().equals("$.root.invalid label !")));
+    }
+
+    @Test
+    @DisplayName("a null leaf cannot be written to XML -- fails unconditionally (issue #89)")
+    void testNullCannotBeWritten() {
+        Node root = new Node(List.of(new Edge("root", new Node(List.of(new Edge("nullable", Value.NULL))))));
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(root, false, null));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value") && a.path().equals("$.root.nullable")));
+    }
+
+    @Test
+    @DisplayName("a character XML 1.0 cannot represent cannot be written -- fails unconditionally (issue #88)")
+    void testIllegalCharCannotBeWritten() {
+        Node root = new Node(List.of(new Edge("root", new Node(List.of(new Edge("illegal", new StringScalar("char \u0000")))))));
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(root, false, null));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value") && a.path().equals("$.root.illegal")));
     }
 
     // ==========================================================================
@@ -307,18 +328,22 @@ public class XmlCodecTest {
     @Test
     @DisplayName("write: strict mode throws WriteException when adjustments are non-empty")
     void testWriteStrictModeThrows() {
+        // A null leaf now fails unconditionally regardless of strict (issue #89), so use a
+        // value-stringified-only adjustment here to keep covering the strict-only throw path
+        // (an adjustment that ISN'T write.unsupported-value, only rejected because strict).
         Node doc = new Node(List.of(new Edge("root", new Node(List.of(
-            new Edge("x", Value.NULL)
+            new Edge("x", new BooleanScalar(true))
         )))));
         assertThrows(WriteException.class, () -> XmlCodec.write(doc, true, null));
     }
 
     @Test
-    @DisplayName("write: xmlName sanitizes an all-invalid label to an underscore-prefixed safe name")
+    @DisplayName("write: a label that isn't a valid XML name fails unconditionally, even in non-strict mode (issue #88)")
     void testWriteXmlNameSanitizationFallback() {
         Node doc = new Node(List.of(new Edge("123", new StringScalar("v"))));
-        String xml = XmlCodec.write(doc);
-        assertTrue(xml.contains("<_123>") || xml.contains("<_"));
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(doc));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value")));
     }
 
     @Test
@@ -383,28 +408,22 @@ public class XmlCodecTest {
     }
 
     @Test
-    @DisplayName("write: strict mode succeeds with no adjustments, and xmlName's fully-sanitized-to-empty fallback")
+    @DisplayName("write: strict mode succeeds with no adjustments; an invalid label (digit-led or empty) fails unconditionally either way (issue #88)")
     void testWriteStrictSucceedsAndXmlNameEmptyFallback() {
         Node cleanDoc = new Node(List.of(new Edge("root", new StringScalar("v"))));
         String xml = XmlCodec.write(cleanDoc, true, null);
         assertTrue(xml.contains("<root>"));
 
-        // "123" sanitizes to itself (digits are XML_NAME-legal characters) but
-        // still fails XML_NAME's own match (a name can't start with a digit),
-        // forcing the "_" prefix fallback -- distinct from a label whose
-        // sanitized form is empty.
+        // "123" isn't a valid XML name (a name can't start with a digit) -- issue #88
+        // means this now fails unconditionally, with no "_" prefix sanitize fallback.
         Node digitLabel = new Node(List.of(new Edge("123", new StringScalar("v"))));
-        String xml2 = XmlCodec.write(digitLabel);
-        assertTrue(xml2.contains("<_123"));
+        WriteException ex1 = assertThrows(WriteException.class, () -> XmlCodec.write(digitLabel));
+        assertTrue(ex1.report().adjustments().stream().anyMatch(a -> a.code().equals("write.unsupported-value")));
 
-        // An empty label: replaceAll can never shrink a non-empty string to
-        // empty (it's a 1:1 char substitution), so safe.isEmpty() can only be
-        // true when the original label was itself empty -- xmlName's isEmpty()
-        // short-circuit, distinct from the "123" case above (non-empty but
-        // XML_NAME-non-matching).
+        // An empty label is likewise not a valid XML name -- also fails unconditionally.
         Node emptyLabel = new Node(List.of(new Edge("", new StringScalar("v"))));
-        String xml3 = XmlCodec.write(emptyLabel);
-        assertTrue(xml3.contains("<_>") || xml3.contains("<_ "));
+        WriteException ex2 = assertThrows(WriteException.class, () -> XmlCodec.write(emptyLabel));
+        assertTrue(ex2.report().adjustments().stream().anyMatch(a -> a.code().equals("write.unsupported-value")));
     }
 
     @Test
@@ -422,14 +441,18 @@ public class XmlCodecTest {
         assertEquals("root", roundNode.edges().get(0).label());
         assertEquals("<admin>true</admin>", ((StringScalar) roundNode.edges().get(0).target()).value());
 
-        // Adversarial metacharacters roundtrip
-        String adversarial = "<>&\"'\u0000\t\n<&amp;>";
+        // Adversarial metacharacters that ARE representable still roundtrip fine.
+        String adversarial = "<>&\"'\t\n<&amp;>";
         Node advDoc = new Node(List.of(new Edge("root", new StringScalar(adversarial))));
         String advXml = XmlCodec.write(advDoc);
         Document advRound = XmlCodec.read(advXml);
-        // Note: \u0000 is replaced by \uFFFD by xmlSanitize
-        String expected = "<>&\"'\uFFFD\t\n<&amp;>";
-        assertEquals(expected, ((StringScalar) ((Node) advRound).edges().get(0).target()).value());
+        assertEquals(adversarial, ((StringScalar) ((Node) advRound).edges().get(0).target()).value());
+
+        // \u0000 is a character XML 1.0 cannot represent at all -- fails unconditionally
+        // now (issue #88), rather than being silently substituted with U+FFFD.
+        Node illegalDoc = new Node(List.of(new Edge("root", new StringScalar("a\u0000b"))));
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(illegalDoc));
+        assertTrue(ex.report().adjustments().stream().anyMatch(a -> a.code().equals("write.unsupported-value")));
     }
 
     @Test

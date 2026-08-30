@@ -379,6 +379,14 @@ public final class XmlCodec {
         if (!(node instanceof Node root) || root.edges().size() != 1) {
             throw new WriteException("XML needs exactly one document element; the root node must have a single top-level edge (a single-rooted Document)", rep);
         }
+        // Fail, don't invent (issues #88/#90): a label/string XML's own syntax cannot
+        // represent, or an empty internal node (indistinguishable from an empty string
+        // leaf on read-back), fails unconditionally -- regardless of strict -- since no
+        // single well-defined substitute exists that doesn't risk silent data loss or
+        // a collision with a genuinely different, independently-valid input.
+        if (rep.adjustments().stream().anyMatch(a -> "write.unsupported-value".equals(a.code()))) {
+            throw new WriteException(rep.toString(), rep);
+        }
         if (strict && !rep.adjustments().isEmpty()) {
             throw new WriteException(rep.toString(), rep);
         }
@@ -394,6 +402,12 @@ public final class XmlCodec {
         String pad = "\n" + "  ".repeat(depth);
         sb.append("<").append(tagName);
         if (doc instanceof Node node) {
+            // Confirmed-unreachable as of issue #90: write() always calls check() first
+            // and fails unconditionally (write.unsupported-value) on an empty internal
+            // node before writeNode is ever reached with one, so node.edges() is never
+            // empty here. Distinct from the empty-string-LEAF self-closing case below,
+            // which is still reachable (an empty string is a legitimately representable
+            // XML leaf value, not an ambiguous shape).
             if (node.edges().isEmpty()) {
                 sb.append(" />");
             } else {
@@ -414,22 +428,26 @@ public final class XmlCodec {
         }
     }
 
+    /**
+     * Returns {@code name} unchanged. {@code write()} always calls {@link #check} first
+     * and fails unconditionally (issue #88, {@code write.unsupported-value}) before this
+     * is ever reached with a name that isn't already a valid XML name, so there is no
+     * fallback to compute here anymore.
+     */
     private static String xmlName(String name) {
-        if (XML_NAME.matcher(name).matches()) {
-            return name;
-        }
-        String safe = name.replaceAll("[^A-Za-z0-9_.-]", "_");
-        if (safe.isEmpty() || !XML_NAME.matcher(safe).matches()) {
-            safe = "_" + safe;
-        }
-        return safe;
+        return name;
     }
 
+    /**
+     * Escapes {@code text} for XML output. {@code write()} always calls {@link #check}
+     * first and fails unconditionally (issue #88) on any character XML 1.0 cannot
+     * represent, so no U+FFFD substitution is needed here anymore -- this is reached
+     * only with already-legal XML character data.
+     */
     private static String xmlSanitize(String text) {
-        String clean = XML_ILLEGAL_CHAR.matcher(text).replaceAll("\uFFFD");
-        StringBuilder sb = new StringBuilder(clean.length() + 16);
-        for (int i = 0; i < clean.length(); i++) {
-            char c = clean.charAt(i);
+        StringBuilder sb = new StringBuilder(text.length() + 16);
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
             switch (c) {
                 case '&' -> sb.append("&amp;");
                 case '<' -> sb.append("&lt;");
@@ -502,9 +520,12 @@ public final class XmlCodec {
         }
         if (doc instanceof Node node) {
             if (node.edges().isEmpty()) {
-                rep.add(path, "format.shape-empty-ambiguous",
-                        "empty internal node (no edges) written as <tag /> and reads back as the empty-string leaf '', not []",
-                        "warning");
+                // Issue #90: an empty internal node is indistinguishable on read-back from
+                // an empty string leaf, so there's no safe substitute -- fail unconditionally.
+                rep.add(path, "write.unsupported-value",
+                        "empty internal node (no edges) has no representable XML syntax: " +
+                        "a self-closing <tag /> reads back as the empty-string leaf '', not []",
+                        "error");
                 return;
             }
             Map<String, Integer> totals = dev.omnist.document.PathUtils.countLabels(node);
@@ -516,14 +537,19 @@ public final class XmlCodec {
                 int total = totals.getOrDefault(label, 1);
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
                 if (!XML_NAME.matcher(label).matches()) {
-                    rep.add(p, "format.key-sanitized",
-                            "label '" + label + "' isn't a valid XML name; written sanitized",
-                            "warning");
+                    // Issue #88: two different labels can sanitize to the same XML name
+                    // (e.g. "my label" and "my_label" both -> <my_label>), silently
+                    // colliding on read-back with no diagnostic -- fail unconditionally.
+                    rep.add(p, "write.unsupported-value",
+                            "label '" + label + "' has no representable XML syntax (not a valid XML name)",
+                            "error");
                 }
                 scanXml((Document) edge.target(), p, rep, depth + 1);
             }
         } else if (doc instanceof Value.NullValue) {
-            rep.add(path, "format.null-unrepresentable", "null written as an empty element", "warning");
+            // Issue #89: a null leaf written as an empty XML element is indistinguishable
+            // on read-back from an empty string leaf -- fail unconditionally.
+            rep.add(path, "write.unsupported-value", "null has no representable XML syntax", "error");
         } else if (doc instanceof Scalar s) {
             if (s instanceof DateScalar || s instanceof TimeScalar || s instanceof DateTimeScalar) {
                 rep.add(path, "format.temporal-stringified",
@@ -535,10 +561,12 @@ public final class XmlCodec {
             
             String strVal = xmlText(doc);
             if (XML_ILLEGAL_CHAR.matcher(strVal).find()) {
-                rep.add(path, "format.string-illegal-char",
+                // Issue #88: no substitute exists for a character XML 1.0 cannot
+                // represent at all (e.g. a C0 control other than tab/LF/CR) -- fail
+                // unconditionally rather than silently replacing it with U+FFFD.
+                rep.add(path, "write.unsupported-value",
                         "string contains a character XML 1.0 cannot represent " +
-                        "(e.g. a C0 control other than tab/LF/CR); it is replaced " +
-                        "with U+FFFD on write so the output stays well-formed",
+                        "(e.g. a C0 control other than tab/LF/CR)",
                         "error");
             }
             if (strVal.contains("\r")) {

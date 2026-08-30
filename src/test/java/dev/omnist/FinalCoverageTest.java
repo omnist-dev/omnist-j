@@ -754,17 +754,16 @@ class FinalCoverageTest {
 
     @Test
     void tomlCodec_stripNullsWarning() {
-        // stripNulls: NullValue child -> format.null-unrepresentable warning
+        // stripNulls: NullValue child -> write.unsupported-value, fails unconditionally (issue #89)
         Node doc = new Node(List.of(
             new Edge("a", Value.NULL),
             new Edge("b", new StringScalar("val"))
         ));
         WriteReport rep = new WriteReport();
-        String written = TomlCodec.write(doc, false, rep);
-        assertTrue(rep.adjustments().stream()
-            .anyMatch(a -> a.code().equals("format.null-unrepresentable")),
-            "Expected null-unrepresentable warning");
-        assertTrue(written.contains("b"));
+        WriteException ex = assertThrows(WriteException.class, () -> TomlCodec.write(doc, false, rep));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value")),
+            "Expected write.unsupported-value failure");
     }
 
     @Test
@@ -831,15 +830,15 @@ class FinalCoverageTest {
 
     @Test
     void jsonCodec_infWrittenAsNull() {
-        // scanJson: Infinity -> format.float-special warning; prepareJson: returns null
+        // scanJson: Infinity -> write.unsupported-value, fails unconditionally (issue #90)
         Node doc = new Node(List.of(
             new Edge("v", new NumberScalar(Double.POSITIVE_INFINITY))
         ));
         WriteReport rep = new WriteReport();
-        JsonCodec.write(doc, null, false, rep);
-        assertTrue(rep.adjustments().stream()
-            .anyMatch(a -> a.code().equals("format.float-special")),
-            "Expected float-special warning");
+        WriteException ex = assertThrows(WriteException.class, () -> JsonCodec.write(doc, null, false, rep));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value")),
+            "Expected write.unsupported-value failure");
     }
 
     @Test
@@ -917,12 +916,14 @@ class FinalCoverageTest {
 
     @Test
     void xmlCodec_emptyNodeWrittenAsSelfClosing() {
-        // writeNode: node.edges().isEmpty() -> " />" branch
+        // scanXml: an empty internal node fails unconditionally now (issue #90) --
+        // a self-closing <tag /> is indistinguishable on read-back from an empty
+        // string leaf, so it's no longer silently written that way.
         Node doc = new Node(List.of(
             new Edge("root", new Node(List.of()))
         ));
-        String xml = XmlCodec.write(doc);
-        assertTrue(xml.contains("/>"), "Expected self-closing tag in: " + xml);
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(doc));
+        assertTrue(ex.report().adjustments().stream().anyMatch(a -> a.code().equals("write.unsupported-value")));
     }
 
     @Test
@@ -937,29 +938,29 @@ class FinalCoverageTest {
 
     @Test
     void xmlCodec_xmlNameSanitization() {
-        // xmlName: name with leading digit -> sanitized with underscore prefix
+        // scanXml: name with leading digit isn't a valid XML name -> write.unsupported-value,
+        // fails unconditionally (issue #88); no sanitize-and-succeed fallback anymore.
         Node doc = new Node(List.of(
             new Edge("123bad", new StringScalar("val"))
         ));
-        // Should not throw; name gets sanitized
-        String xml = XmlCodec.write(doc);
-        assertNotNull(xml);
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(doc));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value")));
     }
 
     @Test
     void xmlCodec_nullValueWrittenAsEmptyElement() {
-        // xmlText: Value.NullValue -> "" -> self-closing; scanXml -> format.null-unrepresentable
+        // scanXml: Value.NullValue -> write.unsupported-value, fails unconditionally (issue #89)
         Node doc = new Node(List.of(
             new Edge("root", new Node(List.of(
                 new Edge("v", Value.NULL)
             )))
         ));
         WriteReport rep = new WriteReport();
-        String xml = XmlCodec.write(doc, false, rep);
-        assertNotNull(xml);
-        assertTrue(rep.adjustments().stream()
-            .anyMatch(a -> a.code().equals("format.null-unrepresentable")),
-            "Expected null-unrepresentable warning");
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(doc, false, rep));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value")),
+            "Expected write.unsupported-value failure");
     }
 
     @Test
@@ -1003,32 +1004,33 @@ class FinalCoverageTest {
 
     @Test
     void xmlCodec_unsanitizedLabelWarning() {
-        // scanXml: !XML_NAME.matcher(label).matches() -> format.key-sanitized
+        // scanXml: !XML_NAME.matcher(label).matches() -> write.unsupported-value,
+        // fails unconditionally (issue #88)
         Node doc = new Node(List.of(
             new Edge("root", new Node(List.of(
                 new Edge("123", new StringScalar("val"))
             )))
         ));
         WriteReport rep = new WriteReport();
-        XmlCodec.write(doc, false, rep);
-        assertTrue(rep.adjustments().stream()
-            .anyMatch(a -> a.code().equals("format.key-sanitized")),
-            "Expected key-sanitized warning");
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(doc, false, rep));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value")),
+            "Expected write.unsupported-value failure");
     }
 
     @Test
     void xmlCodec_illegalCharWarning() {
-        // scanXml: XML_ILLEGAL_CHAR found -> format.string-illegal-char
+        // scanXml: XML_ILLEGAL_CHAR found -> write.unsupported-value, fails unconditionally (issue #88)
         Node doc = new Node(List.of(
             new Edge("root", new Node(List.of(
                 new Edge("s", new StringScalar("abc" + (char) 0x01 + "def"))
             )))
         ));
         WriteReport rep = new WriteReport();
-        XmlCodec.write(doc, false, rep);
-        assertTrue(rep.adjustments().stream()
-            .anyMatch(a -> a.code().equals("format.string-illegal-char")),
-            "Expected illegal-char warning");
+        WriteException ex = assertThrows(WriteException.class, () -> XmlCodec.write(doc, false, rep));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value")),
+            "Expected write.unsupported-value failure");
     }
 
     @Test
