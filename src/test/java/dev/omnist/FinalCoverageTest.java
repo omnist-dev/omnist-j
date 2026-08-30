@@ -1035,17 +1035,16 @@ class FinalCoverageTest {
 
     @Test
     void xmlCodec_crInStringWarning() {
-        // scanXml: strVal.contains(\r) -> format.string-cr-normalized
+        // xmlSanitize: \r escaped losslessly as &#13; -- no diagnostic anymore (issue #91)
         Node doc = new Node(List.of(
             new Edge("root", new Node(List.of(
                 new Edge("s", new StringScalar("line1\r\nline2"))
             )))
         ));
         WriteReport rep = new WriteReport();
-        XmlCodec.write(doc, false, rep);
-        assertTrue(rep.adjustments().stream()
-            .anyMatch(a -> a.code().equals("format.string-cr-normalized")),
-            "Expected cr-normalized warning");
+        String xml = XmlCodec.write(doc, false, rep);
+        assertTrue(xml.contains("line1&#13;\nline2"), "Expected &#13; escape in: " + xml);
+        assertTrue(rep.adjustments().isEmpty());
     }
 
     @Test
