@@ -166,6 +166,22 @@ class OsdReaderTest {
             () -> OsdReader.read("record R { \"a\" [0,0]: string } root R"));
         assertEquals("schema.invalid-cardinality", zeroZero.getCode());
 
+        // Empty-string field labels are rejected (issue #92)
+        OsdParseException emptyLabel = assertThrows(OsdParseException.class,
+            () -> OsdReader.read("record R { \"\": string } root R"));
+        assertEquals("schema.empty-label", emptyLabel.getCode());
+        assertEquals("R", emptyLabel.getPath());
+
+        // Brackets in field labels are rejected (issue #95)
+        OsdParseException bracketLabel = assertThrows(OsdParseException.class,
+            () -> OsdReader.read("record R { \"a[1]\": string } root R"));
+        assertEquals("schema.bracket-in-label", bracketLabel.getCode());
+        assertEquals("R", bracketLabel.getPath());
+
+        OsdParseException closingBracketOnly = assertThrows(OsdParseException.class,
+            () -> OsdReader.read("record R { \"total]\": string } root R"));
+        assertEquals("schema.bracket-in-label", closingBracketOnly.getCode());
+
 
         // [1.5] decimal bound
         assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"a\" [1.5]: string } root R"));

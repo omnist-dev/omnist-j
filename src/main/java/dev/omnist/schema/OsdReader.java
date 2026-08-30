@@ -136,6 +136,13 @@ public class OsdReader {
             consumeToken(); // consume field label string
             String label = labelTok.text();
 
+            if (label.isEmpty()) {
+                throw new OsdParseException(labelTok.line(), labelTok.col(), "schema.empty-label", recordName, "Field label cannot be the empty string");
+            }
+            if (label.indexOf('[') >= 0 || label.indexOf(']') >= 0) {
+                throw new OsdParseException(labelTok.line(), labelTok.col(), "schema.bracket-in-label", recordName, "Field label cannot contain '[' or ']': '" + label + "'");
+            }
+
             if (!seenLabels.add(label)) {
                 throw new OsdParseException(labelTok.line(), labelTok.col(), "schema.duplicate-field", recordName, "Duplicate field label '" + label + "' in record '" + recordName + "'");
             }
