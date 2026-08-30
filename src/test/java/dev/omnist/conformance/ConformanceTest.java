@@ -40,8 +40,8 @@ class ConformanceTest {
         // all 17 new conformance vectors for that batch at once, but the fixes land one PR
         // at a time. 15 vectors fail until the last PR in the batch (#91) lands; restore
         // these to 172/0/0 there.
-        assertEquals(167, results[0], "Track 2 should pass 167 of 172 real JSON test vectors during the #87-95 batch");
-        assertEquals(5, results[1], "Track 2 should have 5 known failures pending #88-90 (fail-dont-invent) and #91 (XML CR escaping)");
+        assertEquals(171, results[0], "Track 2 should pass 171 of 172 real JSON test vectors during the #87-95 batch");
+        assertEquals(1, results[1], "Track 2 should have 1 known failure pending #91 (XML CR escaping), the last PR in this batch");
         assertEquals(0, results[2], "Track 2 should have 0 skips");
     }
 

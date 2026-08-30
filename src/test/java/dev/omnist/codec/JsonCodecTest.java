@@ -73,7 +73,7 @@ public class JsonCodecTest {
     }
 
     @Test
-    @DisplayName("write records/fails on adjustments for temporal and special float values")
+    @DisplayName("write records a warning for a stringified temporal, but fails unconditionally on NaN/Infinity (issue #90)")
     void testWriteAdjustments() {
         Node node = new Node(List.of(
             new Edge("time", new DateScalar(LocalDate.of(2024, 1, 1))),
@@ -83,28 +83,32 @@ public class JsonCodecTest {
         // Strict mode throws
         assertThrows(WriteException.class, () -> JsonCodec.write(node, null, true, null));
 
-        // Lenient mode substitutes NaN -> null, stringifies date, and returns WriteReport
+        // Lenient mode ALSO throws now (issue #90: fail, don't invent -- a genuine null and a
+        // substituted NaN/Infinity both produce the identical JSON `null` token, indistinguishable
+        // on read-back, so there is no safe substitute regardless of strict).
         WriteReport report = new WriteReport();
-        String json = JsonCodec.write(node, null, false, report);
+        WriteException ex = assertThrows(WriteException.class, () -> JsonCodec.write(node, null, false, report));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value") && a.path().equals("$.val")));
 
-        assertTrue(json.contains("\"val\":null") || json.contains("\"val\": null"));
-        assertTrue(json.contains("\"time\":\"2024-01-01\"") || json.contains("\"time\": \"2024-01-01\""));
-        
-        assertEquals(2, report.adjustments().size());
-        
-        WriteAdjustment adj1 = report.adjustments().stream()
-            .filter(a -> a.code().equals("format.temporal-stringified"))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(adj1);
-        assertEquals("warning", adj1.severity());
+        // The temporal-stringified warning for a value that has no representability problem
+        // (a DateScalar) is unaffected -- writing that alone still succeeds with just a warning.
+        Node dateOnly = new Node(List.of(new Edge("time", new DateScalar(LocalDate.of(2024, 1, 1)))));
+        WriteReport dateReport = new WriteReport();
+        String dateJson = JsonCodec.write(dateOnly, null, false, dateReport);
+        assertTrue(dateJson.contains("\"time\":\"2024-01-01\"") || dateJson.contains("\"time\": \"2024-01-01\""));
+        assertEquals(1, dateReport.adjustments().size());
+        assertEquals("format.temporal-stringified", dateReport.adjustments().get(0).code());
+        assertEquals("warning", dateReport.adjustments().get(0).severity());
+    }
 
-        WriteAdjustment adj2 = report.adjustments().stream()
-            .filter(a -> a.code().equals("format.float-special"))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(adj2);
-        assertEquals("error", adj2.severity());
+    @Test
+    @DisplayName("NaN/Infinity written to JSON fails unconditionally, even in non-strict mode (issue #90)")
+    void testNanCannotBeWritten() {
+        Node node = new Node(List.of(new Edge("val", new NumberScalar(Double.POSITIVE_INFINITY))));
+        WriteException ex = assertThrows(WriteException.class, () -> JsonCodec.write(node, null, false, null));
+        assertTrue(ex.report().adjustments().stream()
+            .anyMatch(a -> a.code().equals("write.unsupported-value") && a.path().equals("$.val") && a.severity().equals("error")));
     }
 
     // ==========================================================================

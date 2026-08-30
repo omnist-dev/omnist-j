@@ -454,6 +454,13 @@ public final class TomlCodec {
         if (report != null) {
             report.addAll(rep.adjustments());
         }
+        // Fail, don't invent (issue #89): a null leaf has no TOML token, and silently
+        // dropping the edge erases its existence entirely -- read the output back and
+        // there's zero trace an edge with that label ever existed. Fails unconditionally,
+        // regardless of strict.
+        if (rep.adjustments().stream().anyMatch(a -> "write.unsupported-value".equals(a.code()))) {
+            throw new WriteException(rep.toString(), rep);
+        }
         if (strict && !rep.adjustments().isEmpty()) {
             throw new WriteException(rep.toString(), rep);
         }
@@ -623,7 +630,7 @@ public final class TomlCodec {
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
                 Document child = (Document) edge.target();
                 if (child instanceof Value.NullValue) {
-                    rep.add(p, "format.null-unrepresentable", "null value dropped (TOML has no null)", "warning");
+                    rep.add(p, "write.unsupported-value", "null has no representable TOML syntax", "error");
                     continue;
                 }
                 edges.add(new Edge(label, (Target) stripNulls(child, p, rep, depth + 1, interleavingFound)));

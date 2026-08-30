@@ -209,8 +209,20 @@
                                                  unreachable comment left at the call site (OmlLexer's Rule 4),
                                                  same treatment as the LINE gate's own dead-code lines. Re-
                                                  measured at 99.4% with the new branch count; gate lowered just
-                                                 below that. -->
-                                            <minimum>0.993</minimum>
+                                                 below that.
+
+                                                 Updated 2026-08-30 (#88/#89/#90, "fail, don't invent"): making
+                                                 XmlCodec/JsonCodec/TomlCodec's write() fail unconditionally on
+                                                 an unsupported value (rather than substituting one and
+                                                 continuing) made several sanitize-and-continue branches
+                                                 permanently unreachable: XmlCodec.writeNode's empty-internal-
+                                                 node self-closing branch and JsonCodec.prepareJson's NaN/
+                                                 Infinity-to-null branch can each only be reached after check()
+                                                 has already thrown for the same input. Confirmed-unreachable
+                                                 comments left at each call site, same treatment as above.
+                                                 Re-measured at 99.2% with the new branch count; gate lowered
+                                                 just below that. -->
+                                            <minimum>0.991</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

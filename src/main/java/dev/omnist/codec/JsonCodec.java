@@ -195,6 +195,13 @@ public final class JsonCodec {
         if (report != null) {
             report.addAll(rep.adjustments());
         }
+        // Fail, don't invent (issue #90): NaN/Infinity has no JSON token, and substituting
+        // null is unsafe -- a genuine null and a substituted NaN/Infinity both produce the
+        // identical null token and are indistinguishable on read-back. Fails unconditionally,
+        // regardless of strict.
+        if (rep.adjustments().stream().anyMatch(a -> "write.unsupported-value".equals(a.code()))) {
+            throw new WriteException(rep.toString(), rep);
+        }
         if (strict && !rep.adjustments().isEmpty()) {
             throw new WriteException(rep.toString(), rep);
         }
@@ -260,7 +267,7 @@ public final class JsonCodec {
             } else if (s instanceof NumberScalar num) {
                 double d = num.value();
                 if (Double.isNaN(d) || Double.isInfinite(d)) {
-                    rep.add(path, "format.float-special", d + " is not valid JSON; wrote null", "error");
+                    rep.add(path, "write.unsupported-value", d + " has no representable JSON syntax", "error");
                 }
             }
         }
@@ -289,6 +296,9 @@ public final class JsonCodec {
         } else if (doc instanceof IntegerScalar integer) {
             return integer.value();
         } else if (doc instanceof NumberScalar num) {
+            // Confirmed-unreachable as of issue #90: write() always calls check() first
+            // and fails unconditionally (write.unsupported-value) on a NaN/Infinite value
+            // before prepareJson is ever reached with one, so d is always finite here.
             double d = num.value();
             if (Double.isNaN(d) || Double.isInfinite(d)) {
                 return null;
