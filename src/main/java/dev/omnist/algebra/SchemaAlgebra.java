@@ -771,6 +771,10 @@ public final class SchemaAlgebra {
         List<Field> kept = new ArrayList<>();
         for (Field f : rec.fields()) {
             if (f.max() != null && f.max() == 0) {
+                // Confirmed-unreachable as of omnist-j#87 (schema.invalid-cardinality now
+                // rejects [0,0] at OSD parse time, the only path that used to produce a
+                // max==0 field here) -- kept as defensive code per the LINE-gate convention
+                // documented on the jacoco-maven-plugin check rule in pom.xml.
                 continue; // max == 0 can never be emitted
             }
             if (f.min() == 0 && f.type() instanceof Type.Ref ref && !sat.contains(ref.name())) {
