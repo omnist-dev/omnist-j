@@ -443,6 +443,11 @@ public final class XmlCodec {
      * first and fails unconditionally (issue #88) on any character XML 1.0 cannot
      * represent, so no U+FFFD substitution is needed here anymore -- this is reached
      * only with already-legal XML character data.
+     *
+     * <p>A literal carriage return is escaped as the numeric character reference
+     * {@code &#13;} (issue #91): XML mandates line-ending normalization on parse, so a
+     * raw '\r' and a raw '\n' are indistinguishable on read-back, but a numeric character
+     * reference is exempt from that normalization and survives a compliant parser intact.
      */
     private static String xmlSanitize(String text) {
         StringBuilder sb = new StringBuilder(text.length() + 16);
@@ -454,6 +459,7 @@ public final class XmlCodec {
                 case '>' -> sb.append("&gt;");
                 case '"' -> sb.append("&quot;");
                 case '\'' -> sb.append("&apos;");
+                case '\r' -> sb.append("&#13;");
                 default -> sb.append(c);
             }
         }
@@ -569,13 +575,9 @@ public final class XmlCodec {
                         "(e.g. a C0 control other than tab/LF/CR)",
                         "error");
             }
-            if (strVal.contains("\r")) {
-                rep.add(path, "format.string-cr-normalized",
-                        "string contains a carriage return ('\\r'); XML mandates " +
-                        "line-ending normalization on parse, so '\\r' (and '\\r\\n') " +
-                        "read back as '\\n'",
-                        "warning");
-            }
+            // Issue #91: a carriage return is now escaped losslessly as the numeric
+            // character reference &#13; (see xmlSanitize) instead of being written raw
+            // and warned about -- nothing to report here anymore.
         }
     }
 }

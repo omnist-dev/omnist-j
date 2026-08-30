@@ -34,14 +34,10 @@ class ConformanceTest {
         int[] results = Track2Runner.runTrack2(testSuitePath);
         assertNotNull(results);
         assertEquals(3, results.length);
-        // TEMPORARY during the #87-95 batch: the omnist-spec submodule pin was bumped
-        // ahead of time (per issue #87's own instructions, to avoid landing on an
-        // intermediate commit that contradicts the new [0,0]-cardinality rule) to bring in
-        // all 17 new conformance vectors for that batch at once, but the fixes land one PR
-        // at a time. 15 vectors fail until the last PR in the batch (#91) lands; restore
-        // these to 172/0/0 there.
-        assertEquals(171, results[0], "Track 2 should pass 171 of 172 real JSON test vectors during the #87-95 batch");
-        assertEquals(1, results[1], "Track 2 should have 1 known failure pending #91 (XML CR escaping), the last PR in this batch");
+        // Restored to full-pass in this PR, which closes out the #87-95 batch (all 17
+        // new conformance vectors for that batch, plus the 155 pre-existing ones, now pass).
+        assertEquals(172, results[0], "Track 2 should pass all 172 real JSON test vectors");
+        assertEquals(0, results[1], "Track 2 should have 0 failures");
         assertEquals(0, results[2], "Track 2 should have 0 skips");
     }
 

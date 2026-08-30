@@ -218,7 +218,7 @@ If a change touches a public API surface, a documented number, or an external-st
 
 **Artifact shape**: the main `dev.omnist:omnist-j` jar is a plain library jar with its real `<dependencies>` intact (Jackson/SnakeYAML/tomlj resolve normally for anyone adding it as a dependency). The shaded fat jar for running `omnist` as a standalone CLI is a separate `-cli` classifier (`omnist-j-<version>-cli.jar`), attached by the same `maven-shade-plugin` execution but never replacing the main artifact. The `omnist` wrapper script and `Track1Runner.java`'s conformance harness both reference the `-cli.jar` explicitly — if either the shade plugin's classifier name or the version changes, update both call sites in the same commit (see §8 above).
 
-**Releasing is automated via `.github/workflows/release.yml`**, triggered by pushing a `v*` tag (e.g. `v0.2.1-alpha`). It runs as two jobs:
+**Releasing is automated via `.github/workflows/release.yml`**, triggered by pushing a `v*` tag (e.g. `v0.2.2-alpha`). It runs as two jobs:
 1. `verify` — the same `mvn clean test` + `./run-conformance` gates as regular CI, plus a check that the pushed tag's version actually matches `pom.xml`'s `<version>` (fails loudly if they've drifted, rather than publishing the wrong content under the wrong tag).
 2. `publish` — gated behind the `central-publish` GitHub Environment, runs `mvn clean deploy -Prelease` using secrets for the GPG key and Central Portal credentials.
 

@@ -111,8 +111,8 @@ public class XmlCodecTest {
     }
 
     @Test
-    @DisplayName("write records a warning for a stringified non-string scalar and a CR (unaffected by the fail-dont-invent fixes here)")
-    void testWriteValueStringifiedAndCrWarnings() {
+    @DisplayName("write records a warning for a stringified non-string scalar; a CR is escaped losslessly, not warned about (issue #91)")
+    void testWriteValueStringifiedAndCrEscaping() {
         Node child = new Node(List.of(
             new Edge("bool", new BooleanScalar(true)),
             new Edge("int", new IntegerScalar(BigInteger.TEN)),
@@ -123,10 +123,25 @@ public class XmlCodecTest {
         WriteReport report = new WriteReport();
         String xml = XmlCodec.write(root, false, report);
         assertTrue(xml.contains("<root>"));
+        assertTrue(xml.contains("line1&#13;line2"), "Expected &#13; escape in: " + xml);
 
         List<WriteAdjustment> adjs = report.adjustments();
         assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.value-stringified")));
-        assertTrue(adjs.stream().anyMatch(a -> a.code().equals("format.string-cr-normalized")));
+        assertTrue(adjs.stream().noneMatch(a -> a.code().equals("format.string-cr-normalized")));
+    }
+
+    @Test
+    @DisplayName("carriage return written as numeric character reference (issue #91, happy path)")
+    void testCarriageReturnEscapedAsNumericCharacterReference() {
+        Node root = new Node(List.of(new Edge("root", new Node(List.of(new Edge("x", new StringScalar("a\rb")))))));
+        WriteReport report = new WriteReport();
+        String xml = XmlCodec.write(root, false, report);
+        assertEquals("<root>\n  <x>a&#13;b</x>\n</root>\n", xml);
+        assertTrue(report.adjustments().isEmpty());
+
+        Node crlf = new Node(List.of(new Edge("root", new Node(List.of(new Edge("x", new StringScalar("a\r\nb")))))));
+        String xmlCrlf = XmlCodec.write(crlf, false, new WriteReport());
+        assertEquals("<root>\n  <x>a&#13;\nb</x>\n</root>\n", xmlCrlf);
     }
 
     @Test
