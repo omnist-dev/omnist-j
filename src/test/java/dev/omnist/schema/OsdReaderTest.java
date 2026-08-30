@@ -161,6 +161,12 @@ class OsdReaderTest {
         // [1,0] inverted range
         assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"a\" [1,0]: string } root R"));
 
+        // [0,0] cardinality is redundant with not declaring the field (issue #87)
+        OsdParseException zeroZero = assertThrows(OsdParseException.class,
+            () -> OsdReader.read("record R { \"a\" [0,0]: string } root R"));
+        assertEquals("schema.invalid-cardinality", zeroZero.getCode());
+
+
         // [1.5] decimal bound
         assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"a\" [1.5]: string } root R"));
 

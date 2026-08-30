@@ -165,8 +165,16 @@
                                                  than being fragmented into dedicated excluded classes purely to
                                                  chase the metric. Gate set just below the real achieved number so
                                                  it catches actual regressions immediately rather than sitting on a
-                                                 stale floor. -->
-                                            <minimum>0.998</minimum>
+                                                 stale floor.
+
+                                                 Updated 2026-08-30 (#87): forbidding [0,0] cardinality at OSD
+                                                 parse time made SchemaAlgebra.pruneRecord's own defensive
+                                                 max==0 branch permanently unreachable too (that OSD text was
+                                                 the only way to produce such a field), a 6th confirmed-
+                                                 unreachable line, same treatment, comment left in place at the
+                                                 call site. Ratio re-measured at 99.7% with the new line count;
+                                                 gate lowered just below that. -->
+                                            <minimum>0.996</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>

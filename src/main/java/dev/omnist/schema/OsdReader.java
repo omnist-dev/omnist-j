@@ -237,6 +237,9 @@ public class OsdReader {
             if (max != null && max < min) {
                 throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.invalid-cardinality", fieldPath, "Invalid cardinality: max (" + max + ") < min (" + min + ")");
             }
+            if (min == 0 && max != null && max == 0) {
+                throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.invalid-cardinality", fieldPath, "Cardinality [0,0] is redundant with not declaring the field");
+            }
             return new CardBound(min, max);
         } catch (NumberFormatException e) {
             throw new OsdParseException(cardTok.line(), cardTok.col(), "schema.invalid-cardinality", fieldPath, "Invalid integer in cardinality: [" + s + "]");
