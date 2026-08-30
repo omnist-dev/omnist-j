@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.time.DateTimeException;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -201,10 +202,32 @@ public class OmlLexer {
                 DateTimeValue dtVal = parseDateTimeValue(text);
                 advance(text.length());
                 return new Token(TokenType.DATETIME, text, dtVal, startLine, startCol);
-            } catch (DateTimeParseException ignored) {}
+            } catch (DateTimeException e) {
+                // Syntactically shaped like a DATETIME but semantically invalid (out-of-range
+                // calendar/clock/tz-offset field, omnist-spec section 4.2.4, issue #94) --
+                // a definitive parse error at this token's position, not a signal to fall
+                // through and try other token rules.
+                int tIndex = text.indexOf('T');
+                String datePart = tIndex >= 0 ? text.substring(0, tIndex) : text;
+                if (!isValidDatePart(datePart)) {
+                    throw error("parse.invalid-date", "Invalid date in DATETIME literal: '" + text + "'", startLine, startCol);
+                }
+                throw error("parse.invalid-time", "Invalid time in DATETIME literal: '" + text + "'", startLine, startCol);
+            }
         }
 
-        // Rule 4: DATE (only when not followed by T plus a TIME-shaped lookahead)
+        // Rule 4: DATE (only when not followed by T plus a TIME-shaped lookahead).
+        //
+        // Confirmed-unreachable as of issue #94: DATETIME_PATTERN is structurally DATE_PATTERN
+        // + "T" + TIME_PATTERN, so whenever this lookahead's own condition (DATE_PATTERN
+        // matches here, followed by 'T', followed by a TIME_PATTERN match) is true, Rule 3's
+        // dtMatcher must also match at this same position -- and Rule 3 now always either
+        // returns a token or throws directly (it no longer silently falls through on an
+        // out-of-range DATETIME, per #94's fix above), so control can never reach this
+        // isDateTimeLookahead=true branch anymore. Kept as defensive belt-and-suspenders code
+        // in case DATE_PATTERN/TIME_PATTERN/DATETIME_PATTERN's structural relationship ever
+        // drifts apart; same documented-in-place convention as the LINE-gate's other
+        // confirmed-unreachable lines (see pom.xml's jacoco-maven-plugin check rule comment).
         if (dateMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String dateText = dateMatcher.group();
             int dateLen = dateText.length();
@@ -222,7 +245,12 @@ public class OmlLexer {
                     LocalDate dVal = LocalDate.parse(dateText);
                     advance(dateLen);
                     return new Token(TokenType.DATE, dateText, dVal, startLine, startCol);
-                } catch (DateTimeParseException ignored) {}
+                } catch (DateTimeException e) {
+                    // Syntactically shaped like a DATE but semantically invalid (out-of-range
+                    // month/day, non-leap Feb 29, omnist-spec section 4.2.4, issue #94) --
+                    // definitive parse error, not a fall-through signal.
+                    throw error("parse.invalid-date", "Invalid date: '" + dateText + "'", startLine, startCol);
+                }
             }
         }
 
@@ -233,12 +261,23 @@ public class OmlLexer {
                 TimeValue tVal = parseTimeValue(text);
                 advance(text.length());
                 return new Token(TokenType.TIME, text, tVal, startLine, startCol);
-            } catch (DateTimeParseException ignored) {}
+            } catch (DateTimeException e) {
+                // Syntactically shaped like a TIME but semantically invalid -- either the
+                // clock portion (hour/minute/second out of range, leap second) or the
+                // tz-offset (omnist-spec section 4.2.4, issue #94: tz-offset MUST share
+                // TIME's own hour/minute range check, not a separate looser one -- this
+                // shared catch is exactly that). Definitive parse error, not a fall-through
+                // signal.
+                throw error("parse.invalid-time", "Invalid time: '" + text + "'", startLine, startCol);
+            }
         }
 
         // Rule 6: NUMBER (decimal or exponent form)
         if (numMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = numMatcher.group();
+            if (hasLeadingZero(integerPartOf(text))) {
+                throw error("parse.leading-zero", "Leading zero not allowed in numeric literal: '" + text + "'", startLine, startCol);
+            }
             try {
                 double d = Double.parseDouble(text);
                 advance(text.length());
@@ -268,6 +307,9 @@ public class OmlLexer {
         // Rule 8: INTEGER (maxIntegerDigits limit enforced here)
         if (intMatcher.reset(source).region(pos, source.length()).lookingAt()) {
             String text = intMatcher.group();
+            if (hasLeadingZero(integerPartOf(text))) {
+                throw error("parse.leading-zero", "Leading zero not allowed in numeric literal: '" + text + "'", startLine, startCol);
+            }
             int digits = text.startsWith("-") ? text.length() - 1 : text.length();
             if (digits > limits.maxIntegerDigits()) {
                 throw error("document.limit.int-digits", "Integer literal digit count (" + digits + ") exceeds maximum limit of " + limits.maxIntegerDigits(), startLine, startCol);
@@ -294,6 +336,36 @@ public class OmlLexer {
         }
 
         throw error("parse.unexpected-token", "Unexpected character: '" + c + "'", startLine, startCol);
+    }
+
+    /**
+     * Extracts the integer part of a numeric literal's text (the digit run before any
+     * '.' or exponent marker), stripping a leading '-' sign. Used by the leading-zero
+     * check (omnist-spec section 4.2.3, issue #93): {@code int-part = "0" / (nonzero
+     * digit, then any digits)}.
+     */
+    private static String integerPartOf(String text) {
+        int start = text.startsWith("-") ? 1 : 0;
+        int end = start;
+        while (end < text.length() && Character.isDigit(text.charAt(end))) {
+            end++;
+        }
+        return text.substring(start, end);
+    }
+
+    /** True if {@code digits} is more than one character and starts with '0'. */
+    private static boolean hasLeadingZero(String digits) {
+        return digits.length() > 1 && digits.charAt(0) == '0';
+    }
+
+    /** True if {@code datePart} (the "YYYY-MM-DD" portion of a DATETIME) is a valid calendar date. */
+    private static boolean isValidDatePart(String datePart) {
+        try {
+            LocalDate.parse(datePart);
+            return true;
+        } catch (DateTimeException e) {
+            return false;
+        }
     }
 
     private boolean isReservedFloatWord(String target, int offset) {

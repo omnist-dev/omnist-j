@@ -141,4 +141,76 @@ class OmlLexerTest {
         List<Token> offset = tokenize("10:00:00+05:30");
         assertEquals(TokenType.TIME, offset.get(0).type());
     }
+
+    @Test
+    @DisplayName("Leading zero in an INTEGER's integer part is rejected (issue #93)")
+    void testLeadingZeroIntegerIsAnError() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> tokenize("n: 01"));
+        assertEquals("parse.leading-zero", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("Leading zero in a NUMBER's integer part is rejected even before the decimal point (issue #93)")
+    void testLeadingZeroInDecimalIsAnError() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> tokenize("n: 00.5"));
+        assertEquals("parse.leading-zero", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("A bare 0, -0, 0.5, and -12 are all still valid (no leading-zero false positive)")
+    void testSingleZeroAndNegativeFormsAreValid() {
+        assertEquals(TokenType.INTEGER, tokenize("0").get(0).type());
+        assertEquals(TokenType.INTEGER, tokenize("-0").get(0).type());
+        assertEquals(TokenType.NUMBER, tokenize("0.5").get(0).type());
+        assertEquals(TokenType.INTEGER, tokenize("-12").get(0).type());
+    }
+
+    @Test
+    @DisplayName("DATE with an out-of-range month is a definitive parse.invalid-date error (issue #94)")
+    void testDateOutOfRangeMonthIsAnError() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> tokenize("n: 2024-13-01"));
+        assertEquals("parse.invalid-date", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("DATE with a day invalid for its month is a parse.invalid-date error (issue #94)")
+    void testDateDayInvalidForMonthIsAnError() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> tokenize("n: 2024-02-30"));
+        assertEquals("parse.invalid-date", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("February 29 in a non-leap year is a parse.invalid-date error (issue #94)")
+    void testFebruary29NonLeapYearIsAnError() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> tokenize("n: 1900-02-29"));
+        assertEquals("parse.invalid-date", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("February 29 in a leap year is valid (issue #94 happy path)")
+    void testFebruary29LeapYearIsValid() {
+        List<Token> tokens = tokenize("2000-02-29");
+        assertEquals(TokenType.DATE, tokens.get(0).type());
+    }
+
+    @Test
+    @DisplayName("A leap second (23:59:60) is a parse.invalid-time error (issue #94)")
+    void testLeapSecondIsAnError() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> tokenize("n: 2024-01-01T23:59:60"));
+        assertEquals("parse.invalid-time", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("A tz-offset minute out of range (+00:60) is a parse.invalid-time error, sharing TIME's own range check (issue #94)")
+    void testTzOffsetMinuteOutOfRangeIsAnError() {
+        OmlParseException ex = assertThrows(OmlParseException.class, () -> tokenize("n: 2024-01-01T10:30+00:60"));
+        assertEquals("parse.invalid-time", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("A tz-offset within range is valid (issue #94 happy path)")
+    void testTzOffsetWithinRangeIsValid() {
+        List<Token> tokens = tokenize("2024-01-01T10:30+01:00");
+        assertEquals(TokenType.DATETIME, tokens.get(0).type());
+    }
 }

@@ -199,8 +199,18 @@
                                                  run's random inputs happen to hit can legitimately shift by a
                                                  branch or two run to run. A CI run at exactly 0.998 failed on
                                                  real, non-regressive variance (0.997 measured) shortly after this
-                                                 gate was first set at 0.998; this margin is the fix. -->
-                                            <minimum>0.995</minimum>
+                                                 gate was first set at 0.998; this margin is the fix.
+
+                                                 Updated 2026-08-30 (#94): fixing OmlLexer's DATETIME rule to
+                                                 throw directly on an out-of-range calendar/clock/tz-offset value
+                                                 (instead of silently falling through) made the DATE rule's own
+                                                 isDateTimeLookahead=true branch permanently unreachable too,
+                                                 that fall-through was the only way to reach it. Confirmed-
+                                                 unreachable comment left at the call site (OmlLexer's Rule 4),
+                                                 same treatment as the LINE gate's own dead-code lines. Re-
+                                                 measured at 99.4% with the new branch count; gate lowered just
+                                                 below that. -->
+                                            <minimum>0.993</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
