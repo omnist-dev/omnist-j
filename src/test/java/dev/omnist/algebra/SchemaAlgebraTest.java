@@ -1067,5 +1067,82 @@ public class SchemaAlgebraTest {
         Schema schema = SchemaAlgebra.infer(List.of(sample));
         assertTrue(schema.records().containsKey("A_b_c"));
     }
+
+    @Test
+    @DisplayName("Issue #102: compareCodePoints orders by Unicode codepoint, not UTF-16 code unit")
+    void testCompareCodePointsDisagreesWithDefaultStringOrder() {
+        // U+FFFF (a BMP char) vs U+10000 (the smallest supplementary-plane
+        // char, encoded as the surrogate pair U+D800 U+DC00). Java's default
+        // String.compareTo compares UTF-16 code units, so it sees the lead
+        // surrogate 0xD800 < 0xFFFF and puts the supplementary char first --
+        // the wrong answer, since its codepoint (0x10000) is numerically
+        // larger.
+        String bmpHigh = "￿";
+        String supplementary = new String(Character.toChars(0x10000));
+
+        assertTrue(supplementary.compareTo(bmpHigh) < 0,
+            "sanity check: default UTF-16 code-unit order disagrees with codepoint order for this pair");
+
+        assertTrue(SchemaAlgebra.compareCodePoints(bmpHigh, supplementary) < 0);
+        assertTrue(SchemaAlgebra.compareCodePoints(supplementary, bmpHigh) > 0);
+        assertEquals(0, SchemaAlgebra.compareCodePoints(bmpHigh, bmpHigh));
+    }
+
+    @Test
+    @DisplayName("Issue #102: lint's duplicate-record finding orders record names by codepoint, not UTF-16 code unit")
+    void testLintDuplicateRecordLocationUsesCodepointOrder() {
+        String bmpHigh = "￿";
+        String supplementary = new String(Character.toChars(0x10000));
+
+        dev.omnist.schema.Record recBmp = new dev.omnist.schema.Record(bmpHigh, List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record recSupp = new dev.omnist.schema.Record(supplementary, List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Schema schema = new Schema(bmpHigh, Map.of(bmpHigh, recBmp, supplementary, recSupp));
+
+        List<LintFinding> findings = SchemaAlgebra.lint(schema);
+        LintFinding dup = findings.stream()
+            .filter(f -> f.code().equals("lint.duplicate-record"))
+            .findFirst().orElseThrow();
+
+        // Codepoint order puts bmpHigh (0xFFFF) before supplementary
+        // (0x10000); the buggy UTF-16 code-unit order would put
+        // supplementary first since its lead surrogate (0xD800) is a
+        // smaller code unit than 0xFFFF.
+        assertEquals(bmpHigh + ", " + supplementary, dup.location());
+        assertTrue(dup.message().contains("'" + supplementary + "'"));
+        assertTrue(dup.message().contains("'" + bmpHigh + "'"));
+    }
+
+    @Test
+    @DisplayName("Issue #102: normalize's minimum-of-block rule picks the codepoint-smallest name, not UTF-16-smallest")
+    void testNormalizeMinOfBlockUsesCodepointOrder() {
+        String bmpHigh = "￿";
+        String supplementary = new String(Character.toChars(0x10000));
+
+        dev.omnist.schema.Record recBmp = new dev.omnist.schema.Record(bmpHigh, List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record recSupp = new dev.omnist.schema.Record(supplementary, List.of(
+            new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        dev.omnist.schema.Record root = new dev.omnist.schema.Record("Root", List.of(
+            new Field("a", new Type.Ref(bmpHigh), 1, 1),
+            new Field("b", new Type.Ref(supplementary), 1, 1)
+        ));
+        Schema schema = new Schema("Root", Map.of("Root", root, bmpHigh, recBmp, supplementary, recSupp));
+
+        Schema normalized = SchemaAlgebra.normalize(schema);
+
+        // bmpHigh is codepoint-smaller, so it must be the surviving name;
+        // both of Root's refs must be remapped to point at it.
+        assertTrue(normalized.records().containsKey(bmpHigh));
+        assertFalse(normalized.records().containsKey(supplementary));
+        dev.omnist.schema.Record normalizedRoot = normalized.records().get("Root");
+        assertEquals(new Type.Ref(bmpHigh), normalizedRoot.field("a").type());
+        assertEquals(new Type.Ref(bmpHigh), normalizedRoot.field("b").type());
+    }
 }
 
