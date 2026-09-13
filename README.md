@@ -87,7 +87,7 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 | [`docs/02-cli-reference.md`](docs/02-cli-reference.md) | Every CLI subcommand |
 | [Javadoc](https://j.omnist.dev/javadoc/) | Generated API docs, straight from source |
 | [`docs/limitations.md`](docs/limitations.md) | Current status, conformance, and coverage numbers |
-| [`docs/workflow-playbook.md`](docs/workflow-playbook.md) | Engineering rules and contribution workflow for this repo |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Engineering rules and contribution workflow for this repo |
 
 ## Status
 
