@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.2.2-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.2.3-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -8,9 +8,11 @@ interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 
 ## Conformance
 
-Both tracks of the conformance harness pass at **182 / 182 (100%)** —
-Track 1 CLI fixtures and Track 2 JSON test vectors, run against
-`vendor/omnist-spec`'s pinned `test-suite/`. Zero fails, zero skips.
+Both tracks of the conformance harness pass at **204 / 228**, 0 failures,
+run against `vendor/omnist-spec` v0.7.0-beta's pinned `test-suite/` —
+Track 1 CLI fixtures and Track 2 JSON test vectors. The 24 skips are the
+not-yet-implemented OSD-OML extension (see
+[omnist-j#105](https://github.com/omnist-dev/omnist-j/issues/105)).
 
 ## Testing
 
