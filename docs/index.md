@@ -8,7 +8,7 @@ Most formats model an object as a map from key to value. That works fine until a
 
 ## Why "spec-first"
 
-This port follows [omnist-spec](https://spec.omnist.dev) as its primary normative contract — `vendor/omnist-spec` is pinned as a git submodule. See the [workflow playbook](workflow-playbook.md) for the full engineering policy.
+This port follows [omnist-spec](https://spec.omnist.dev) as its primary normative contract — `vendor/omnist-spec` is pinned as a git submodule. See [`CONTRIBUTING.md`](https://github.com/omnist-dev/omnist-j/blob/main/CONTRIBUTING.md) for the full engineering policy.
 
 ## Install
 

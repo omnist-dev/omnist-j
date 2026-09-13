@@ -302,7 +302,7 @@
             bound to the default lifecycle, so ordinary `mvn clean test`/`mvn package` (what
             CI and every contributor runs) never requires a GPG key to be present. Activate
             with `mvn clean deploy -Prelease` once ~/.m2/settings.xml has the `central` server
-            credentials (see docs/workflow-playbook.md) and a GPG key is available locally.
+            credentials (see CONTRIBUTING.md) and a GPG key is available locally.
         -->
         <profile>
             <id>release</id>

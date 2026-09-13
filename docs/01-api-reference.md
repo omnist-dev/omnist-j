@@ -1,6 +1,8 @@
 # omnist-j API Reference
 
-Comprehensive API reference for `omnist-j`, verified directly against the underlying Java source declarations.
+> Looking for the complete, automatically generated Java API reference? See the [Javadoc](https://j.omnist.dev/javadoc/).
+
+A curated overview of `omnist-j`'s public API, verified directly against the underlying Java source declarations. See the [Document Model](https://spec.omnist.dev/02-document-model/) and [Schema Model](https://spec.omnist.dev/03-schema-model/) chapters of spec.omnist.dev for the formal, language-agnostic definitions.
 
 ---
 

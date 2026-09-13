@@ -94,5 +94,6 @@ assertTrue(json.contains("\"Alice\""));
 ## 4. Documentation Index
 
 - [`docs/01-api-reference.md`](01-api-reference.md): Complete Java API Reference for all public classes and methods.
+- [Javadoc](https://j.omnist.dev/javadoc/): Generated API docs, straight from source.
 - [`docs/02-cli-reference.md`](02-cli-reference.md): Complete Command-Line Interface (CLI) Reference.
-- [`workflow-playbook.md`](workflow-playbook.md): Development & Spec Alignment Playbook.
+- [`CONTRIBUTING.md`](https://github.com/omnist-dev/omnist-j/blob/main/CONTRIBUTING.md): Development & Spec Alignment Playbook.
