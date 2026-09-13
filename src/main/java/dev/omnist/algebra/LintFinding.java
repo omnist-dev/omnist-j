@@ -10,6 +10,10 @@ public record LintFinding(String code, String severity, String location, String 
         if (c != 0) {
             return c;
         }
-        return this.location.compareTo(o.location);
+        // location embeds record/field names; compare by Unicode codepoint
+        // (not Java's default UTF-16 code-unit order) per omnist-spec
+        // section 3.3 principle 3 -- same rule SchemaAlgebra's
+        // normalize/extract alphabetical fallbacks use.
+        return SchemaAlgebra.compareCodePoints(this.location, o.location);
     }
 }

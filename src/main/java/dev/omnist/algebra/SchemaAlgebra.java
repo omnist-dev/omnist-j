@@ -18,6 +18,28 @@ public final class SchemaAlgebra {
     private SchemaAlgebra() {}
 
     /**
+     * Compares two strings by Unicode codepoint, not by Java's default
+     * UTF-16 code-unit ordering (String.compareTo) -- required by
+     * omnist-spec section 3.3 principle 3 for every alphabetical-fallback
+     * sort used by normalize/extract (record names, field labels) so that
+     * canonical output agrees with every other port for names containing
+     * supplementary-plane characters.
+     */
+    static int compareCodePoints(String a, String b) {
+        PrimitiveIterator.OfInt ia = a.codePoints().iterator();
+        PrimitiveIterator.OfInt ib = b.codePoints().iterator();
+        while (ia.hasNext() && ib.hasNext()) {
+            int diff = ia.nextInt() - ib.nextInt();
+            if (diff != 0) {
+                return diff;
+            }
+        }
+        return Boolean.compare(ia.hasNext(), ib.hasNext());
+    }
+
+    static final Comparator<String> CODEPOINT_ORDER = SchemaAlgebra::compareCodePoints;
+
+    /**
      * Computes the set of record names in schema S that admit at least one finite document (§6.4).
      * Implements a least fixpoint computation.
      */
@@ -121,7 +143,7 @@ public final class SchemaAlgebra {
      */
     public static List<List<String>> equivalenceClasses(Schema schema) {
         List<String> names = new ArrayList<>(schema.records().keySet());
-        Collections.sort(names);
+        names.sort(CODEPOINT_ORDER);
 
         // Initial partition by target-blind local_signature
         Map<LocalSigKey, List<String>> initialMap = new LinkedHashMap<>();
@@ -183,14 +205,14 @@ public final class SchemaAlgebra {
 
         Map<String, String> rep = new HashMap<>();
         for (List<String> block : blocks) {
-            String keep = Collections.min(block);
+            String keep = Collections.min(block, CODEPOINT_ORDER);
             for (String n : block) {
                 rep.put(n, keep);
             }
         }
 
         List<String> sortedNames = new ArrayList<>(pruned.records().keySet());
-        Collections.sort(sortedNames);
+        sortedNames.sort(CODEPOINT_ORDER);
 
         Map<String, Record> newEnv = new LinkedHashMap<>();
         for (String name : sortedNames) {
@@ -304,7 +326,7 @@ public final class SchemaAlgebra {
         for (List<String> block : blocks) {
             if (block.size() > 1) {
                 List<String> group = new ArrayList<>(block);
-                Collections.sort(group);
+                group.sort(CODEPOINT_ORDER);
                 String location = String.join(", ", group);
                 String keep = group.get(0);
                 
@@ -645,7 +667,7 @@ public final class SchemaAlgebra {
             };
             fields.add(new FieldSigKey(f.label(), f.min(), f.max(), shapeKey));
         }
-        fields.sort(Comparator.comparing(FieldSigKey::label));
+        fields.sort(Comparator.comparing(FieldSigKey::label, CODEPOINT_ORDER));
         return new LocalSigKey(fields);
     }
 
@@ -654,7 +676,7 @@ public final class SchemaAlgebra {
     private static RefineKey refineKey(Record rec, Map<String, Integer> blockOf) {
         LocalSigKey localSig = localSignature(rec);
         List<Field> sortedFields = new ArrayList<>(rec.fields());
-        sortedFields.sort(Comparator.comparing(Field::label));
+        sortedFields.sort(Comparator.comparing(Field::label, CODEPOINT_ORDER));
 
         List<Object> refBlockIndices = new ArrayList<>();
         for (Field f : sortedFields) {
