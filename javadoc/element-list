@@ -1,0 +1,8 @@
+dev.omnist.algebra
+dev.omnist.cli
+dev.omnist.codec
+dev.omnist.conformance
+dev.omnist.document
+dev.omnist.oml
+dev.omnist.schema
+dev.omnist.validation
