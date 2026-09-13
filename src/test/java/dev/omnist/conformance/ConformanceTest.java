@@ -34,11 +34,15 @@ class ConformanceTest {
         int[] results = Track2Runner.runTrack2(testSuitePath);
         assertNotNull(results);
         assertEquals(3, results.length);
-        // Restored to full-pass in this PR, which closes out the #87-95 batch (all 17
-        // new conformance vectors for that batch, plus the 155 pre-existing ones, now pass).
-        assertEquals(172, results[0], "Track 2 should pass all 172 real JSON test vectors");
+        // Bumped to omnist-spec v0.7.0-beta (c4141d0), which adds the
+        // OSD-OML extension test suite (24 vectors, all skipped -- no port
+        // implements OSD-OML yet, see divergence ledger Sec9.6) and 3 new
+        // Sec3.3 canonical-serialization-order characterization vectors
+        // (all passing, since PR #103's compareCodePoints fix already
+        // satisfies them). 172 + 3 = 175 passing; 24 skipped.
+        assertEquals(175, results[0], "Track 2 should pass all 175 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
-        assertEquals(0, results[2], "Track 2 should have 0 skips");
+        assertEquals(24, results[2], "Track 2 should skip the 24 not-yet-implemented OSD-OML vectors");
     }
 
     @Test
