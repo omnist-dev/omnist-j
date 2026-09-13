@@ -34,15 +34,20 @@ class ConformanceTest {
         int[] results = Track2Runner.runTrack2(testSuitePath);
         assertNotNull(results);
         assertEquals(3, results.length);
-        // Bumped to omnist-spec v0.7.0-beta (c4141d0), which adds the
-        // OSD-OML extension test suite (24 vectors, all skipped -- no port
-        // implements OSD-OML yet, see divergence ledger Sec9.6) and 3 new
-        // Sec3.3 canonical-serialization-order characterization vectors
-        // (all passing, since PR #103's compareCodePoints fix already
-        // satisfies them). 172 + 3 = 175 passing; 24 skipped.
-        assertEquals(175, results[0], "Track 2 should pass all 175 real JSON test vectors");
+        // Bumped to omnist-spec v0.9.1-beta, which adds:
+        // - Sec3.3 S-8 (Name grammar, [A-Za-z_][A-Za-z0-9_]*) -- no code
+        //   change needed, OsdLexer.IDENT_PATTERN already matches exactly.
+        // - Sec3.3 S-3 clarified (reserved-name check is exact,
+        //   case-sensitive) -- 1 new characterization vector
+        //   (case-mismatched-name-is-not-reserved), passing, since
+        //   ScalarKind.fromKeyword already does plain case-sensitive
+        //   String.equals with no folding. 175 + 1 = 176 passing.
+        // - 4 new extensions-osd-oml/* vectors (schema.invalid-name and
+        //   friends) -- Java doesn't implement OSD-OML yet (omnist-j#105),
+        //   so these skip like the other 24. 24 + 4 = 28 skipped.
+        assertEquals(176, results[0], "Track 2 should pass all 176 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
-        assertEquals(24, results[2], "Track 2 should skip the 24 not-yet-implemented OSD-OML vectors");
+        assertEquals(28, results[2], "Track 2 should skip the 28 not-yet-implemented OSD-OML vectors");
     }
 
     @Test
