@@ -13,19 +13,19 @@ Available on [Maven Central](https://central.sonatype.com/artifact/dev.omnist/om
 <dependency>
     <groupId>dev.omnist</groupId>
     <artifactId>omnist-j</artifactId>
-    <version>0.2.2-alpha</version>
+    <version>0.2.3-alpha</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'dev.omnist:omnist-j:0.2.2-alpha'
+implementation 'dev.omnist:omnist-j:0.2.3-alpha'
 ```
 
 This is a plain library jar with its real dependencies (Jackson, SnakeYAML, tomlj) resolved normally — nothing bundled or shaded. If you want to run `omnist` as a standalone CLI instead of using it as a library, use the `cli` classifier, which is a self-contained fat jar:
 ```bash
-curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.2.2-alpha/omnist-j-0.2.2-alpha-cli.jar
-java -jar omnist-j-0.2.2-alpha-cli.jar format sample.oml --to json
+curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.2.3-alpha/omnist-j-0.2.3-alpha-cli.jar
+java -jar omnist-j-0.2.3-alpha-cli.jar format sample.oml --to json
 ```
 
 ## Quickstart
@@ -91,10 +91,10 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 ## Status
 
-**`v0.2.2-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior).
+**`v0.2.3-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.7.0-beta.
 
-- **Conformance**: 182/182 (100%) passing against the shared spec test suite, across CLI fixtures and JSON test vectors.
-- **Tests**: 584 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
+- **Conformance**: 204/228 passing, 0 failures, 24 skipped (the not-yet-implemented OSD-OML extension) against the shared spec test suite, across CLI fixtures and JSON test vectors.
+- **Tests**: 615 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
 - **Coverage**: 99.83% line / 99.75% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.
 
 ## Sibling ports
