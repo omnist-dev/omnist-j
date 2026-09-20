@@ -360,9 +360,11 @@ class FinalCoverageTest {
     }
 
     @Test
-    void omlReader_separatorAfterCommaInArrayThrows() {
-        // parseArrayElements: SEPARATOR after comma inside array -> throw
-        assertThrows(OmlParseException.class, () -> OmlReader.read("a: [1,\n2]"));
+    void omlReader_separatorAfterCommaInArrayIsInsignificant() {
+        // Separators are insignificant after '[', after a comma and before ']' (section 4.3.1,
+        // "otherwise insignificant"); only a newline standing where a comma is REQUIRED is an error.
+        assertEquals(OmlReader.read("a: [1, 2]"), OmlReader.read("a: [1,\n2]"));
+        assertEquals(OmlReader.read("a: [1, 2]"), OmlReader.read("a: [\n1, 2\n]"));
     }
 
     @Test

@@ -41,11 +41,14 @@ public final class Harness {
             int passCount = 0;
             int failCount = 0;
             int skipCount = 0;
+            int[] track1 = new int[]{0, 0, 0};
+            int[] track2 = new int[]{0, 0, 0};
 
             // 1. Run Track 1: CLI Fixtures
             System.out.println("\n=== Track 1: CLI Fixtures ===");
             if (Files.exists(fixturesPath)) {
                 int[] res1 = Track1Runner.runTrack1(fixturesPath, repoDir);
+                track1 = res1;
                 passCount += res1[0];
                 failCount += res1[1];
                 skipCount += res1[2];
@@ -58,6 +61,7 @@ public final class Harness {
             System.out.println("\n=== Track 2: JSON Vectors ===");
             if (Files.exists(testSuitePath)) {
                 int[] res2 = Track2Runner.runTrack2(testSuitePath);
+                track2 = res2;
                 passCount += res2[0];
                 failCount += res2[1];
                 skipCount += res2[2];
@@ -72,6 +76,14 @@ public final class Harness {
             System.out.println("  Pass: " + passCount);
             System.out.println("  Fail: " + failCount);
             System.out.println("  Skip: " + skipCount);
+            System.out.println("Comparison mode: (path, code) sets, E-17 rules 1-3 (code-aware, not code-agnostic)");
+            int referee = Track1Runner.refereeSelfTestCount();
+            System.out.println("Track 1: pass " + track1[0] + " fail " + track1[1] + " skip " + track1[2]
+                + " (headline; includes " + referee + " _referee-self-test fixtures, omnist-j#110; "
+                + "per-port-comparable: " + (track1[0] - referee) + " pass)");
+            System.out.println("Track 2: pass " + track2[0] + " fail " + track2[1] + " skip " + track2[2]);
+            System.out.println("Skips by reason:");
+            Track2Runner.skipReasons().forEach((reason, n) -> System.out.println("  " + n + " x " + reason));
             System.out.println("=============================");
 
             if (failCount > 0) {

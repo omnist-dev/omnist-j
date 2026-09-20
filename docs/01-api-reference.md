@@ -119,6 +119,24 @@ Node root = (Node) doc;
 assertEquals("name", root.edges().get(0).label());
 ```
 
+**Diagnostics.** `OmlParseException`, `OsdParseException` and `DocumentParseException` (thrown by the
+codecs) each carry a machine-readable `getCode()` and `getPath()` from the omnist-spec §8.3 taxonomy;
+message text is for humans and is never a stable contract. The `path` follows §8.4 (E-11):
+
+| Code family | `getPath()` |
+|---|---|
+| `parse.*` (including `parse.codec-syntax`) | a text position, `line:col`, 1-based |
+| `document.*`, `format.*` | a Document path such as `$` or `$.order.items[2].sku` |
+| `schema.*` | a schema path such as `Record.field`, or `$` for whole-schema cases |
+
+String-body errors (`parse.control-character`, `parse.invalid-escape`, `parse.unterminated-string`,
+`parse.unpaired-surrogate`) report the position of the string's opening quote (E-23).
+
+**Leading byte-order mark.** Every reader (OML, OSD, JSON, YAML, TOML, XML) strips exactly one leading
+U+FEFF (D-15) and rejects a second one at `1:1` (D-21): `parse.unexpected-token` for OML and OSD,
+`parse.codec-syntax` for the four codecs. A U+FEFF anywhere else is ordinary content. No writer ever emits
+one. The rule lives in one place, `dev.omnist.document.Bom`.
+
 ### `OmlWriter`
 - `public static String write(Document doc)`
 

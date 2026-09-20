@@ -51,20 +51,23 @@ public final class JsonCodec {
      *         or if nesting depth exceeds 200, or if node count exceeds 1,000,000
      */
     public static Document read(String text) {
-        if (text == null) {
-            throw new IllegalArgumentException("input text cannot be null");
-        }
-        if (text.length() > MAX_INPUT_LENGTH) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid JSON: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
-        }
+        text = CodecInput.prepare(text, "JSON", MAX_INPUT_LENGTH);
+        Object raw;
         try {
-            Object raw = MAPPER.readValue(text, Object.class);
-            int[] budget = new int[]{0};
-            Document doc = buildNode(raw, "$", 0, budget);
-            return doc;
-        } catch (IOException e) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid JSON: " + e.getMessage(), e);
+            raw = MAPPER.readValue(text, Object.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw syntaxError(e);
         }
+        int[] budget = new int[]{0};
+        return buildNode(raw, "$", 0, budget);
+    }
+
+    /** Maps a Jackson failure to {@code parse.codec-syntax} at Jackson's own line and column. */
+    static DocumentParseException syntaxError(com.fasterxml.jackson.core.JsonProcessingException e) {
+        com.fasterxml.jackson.core.JsonLocation at = e.getLocation();
+        int line = at == null ? 1 : at.getLineNr();
+        int column = at == null ? 1 : at.getColumnNr();
+        return CodecInput.syntax("JSON", e.getOriginalMessage(), line, column, e);
     }
 
     /**

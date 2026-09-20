@@ -143,7 +143,7 @@ public class OsdLexer {
             return new Token(TokenType.IDENT, text, startLine, startCol);
         }
 
-        throw new OsdParseException(startLine, startCol, "parse.unexpected-token", "$", "Unexpected character: '" + c + "'");
+        throw new OsdParseException(startLine, startCol, "parse.unexpected-token", startLine + ":" + startCol, "Unexpected character: '" + c + "'");
     }
 
     private void skipHSpaceCommentsAndNewlines() {
@@ -170,20 +170,25 @@ public class OsdLexer {
                 return sb.toString();
             }
             if (c < 0x20) {
-                throw new OsdParseException(startLine, startCol, "parse.control-character", "$", "Control characters below U+0020 are forbidden in strings");
+                throw new OsdParseException(startLine, startCol, "parse.control-character", startLine + ":" + startCol, "Control characters below U+0020 are forbidden in strings");
             }
             if (c == '\\') {
+                // E-23: a string-body error reports the position of the string's opening quote.
                 if (pos >= source.length()) {
-                    throw new OsdParseException(line, col, "parse.unterminated-string", "$", "Unterminated escape in string");
+                    throw new OsdParseException(startLine, startCol, "parse.unterminated-string", startLine + ":" + startCol, "Unterminated escape in string");
                 }
                 char esc = consumeChar();
+                if (esc < 0x20) {
+                    // An escaped control character is still a control character (section 5.3.1).
+                    throw new OsdParseException(startLine, startCol, "parse.control-character", startLine + ":" + startCol, "Control characters below U+0020 are forbidden in strings, escaped or not");
+                }
                 // OSD §5.3.1: replaces every \X with single character X (no named-escape table)
                 sb.append(esc);
             } else {
                 sb.append(c);
             }
         }
-        throw new OsdParseException(startLine, startCol, "parse.unterminated-string", "$", "Unterminated double-quoted string");
+        throw new OsdParseException(startLine, startCol, "parse.unterminated-string", startLine + ":" + startCol, "Unterminated double-quoted string");
     }
 
     private String parseBracketText(int startLine, int startCol) {
@@ -196,7 +201,7 @@ public class OsdLexer {
             }
             sb.append(c);
         }
-        throw new OsdParseException(startLine, startCol, "parse.unexpected-token", "$", "Unterminated bracket ']' in cardinality");
+        throw new OsdParseException(startLine, startCol, "parse.unexpected-token", startLine + ":" + startCol, "Unterminated bracket ']' in cardinality");
     }
 
     private char consumeChar() {

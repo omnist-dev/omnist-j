@@ -36,10 +36,20 @@ public final class Track1Runner {
     private static int passCount = 0;
     private static int failCount = 0;
     private static int skipCount = 0;
-
-    private record JsonDiagnostic(String path, String code) {}
+    private static int refereeCount = 0;
 
     private Track1Runner() {}
+
+    /**
+     * How many of the fixtures counted by the last {@link #runTrack1} were the
+     * {@code _referee-self-test/*} cases (omnist-j#110): the other ports do not fold these into
+     * their Track 1 headline, so the per-port-comparable figure is the tally minus this.
+     *
+     * @return the number of referee self-test fixtures seen
+     */
+    public static int refereeSelfTestCount() {
+        return refereeCount;
+    }
 
     /**
      * Runs every fixture under {@code fixturesDir} against the CLI jar built from
@@ -54,6 +64,7 @@ public final class Track1Runner {
         passCount = 0;
         failCount = 0;
         skipCount = 0;
+        refereeCount = 0;
         doRunTrack1(fixturesDir, repoDir);
         return new int[]{passCount, failCount, skipCount};
     }
@@ -70,6 +81,7 @@ public final class Track1Runner {
                 String relPath = fixturesDir.relativize(fixtureDir).toString().replace('\\', '/');
 
                 if (relPath.startsWith("_referee-self-test")) {
+                    refereeCount++;
                     runRefereeSelfTest(fixtureDir, relPath);
                 } else {
                     runCliFixture(fixtureDir, relPath, repoDir);
@@ -244,7 +256,7 @@ public final class Track1Runner {
             String stderr = "";
             int exitCode = -1;
 
-            Path omnistJar = repoDir.resolve("target/omnist-j-0.2.3-alpha-cli.jar");
+            Path omnistJar = repoDir.resolve("target/omnist-j-0.2.4-alpha-cli.jar");
             Path omnistBin = repoDir.resolve("omnist");
             if (Files.exists(omnistJar) && Files.exists(omnistBin) && Files.isExecutable(omnistBin)) {
                 try {
@@ -538,108 +550,6 @@ public final class Track1Runner {
             }
         }
         return true;
-    }
-
-    private static String findOsdPath(String osd, int line) {
-        String[] lines = osd.split("\\n");
-        String currentRecord = null;
-        String currentField = null;
-        
-        for (int i = 0; i < Math.min(line, lines.length); i++) {
-            String l = lines[i].trim();
-            if (l.startsWith("record ")) {
-                String[] parts = l.split("\\s+");
-                if (parts.length > 1) {
-                    currentRecord = parts[1];
-                    if (currentRecord.endsWith("{")) {
-                        currentRecord = currentRecord.substring(0, currentRecord.length() - 1);
-                    }
-                    currentRecord = currentRecord.trim();
-                }
-                currentField = null;
-            } else if (l.startsWith("}")) {
-                currentRecord = null;
-                currentField = null;
-            } else if (currentRecord != null) {
-                if (l.startsWith("\"")) {
-                    int nextQuote = l.indexOf('"', 1);
-                    if (nextQuote > 1) {
-                        currentField = l.substring(1, nextQuote);
-                    }
-                }
-            }
-        }
-        
-        if (currentRecord != null) {
-            if (currentField != null) {
-                return currentRecord + "." + currentField;
-            }
-            return currentRecord;
-        }
-        return "$";
-    }
-
-    private static List<JsonDiagnostic> extractParserDiagnostics(Throwable ex) {
-        if (ex instanceof dev.omnist.document.DocumentParseException dpe) {
-            return List.of(new JsonDiagnostic(dpe.getPath(), dpe.getCode()));
-        }
-        if (ex instanceof dev.omnist.algebra.AlgebraException ae) {
-            return List.of(new JsonDiagnostic(ae.getPath(), ae.getCode()));
-        }
-        if (ex instanceof OmlParseException ope) {
-            return List.of(new JsonDiagnostic(ope.getPath(), ope.getCode()));
-        }
-        if (ex instanceof OsdParseException osd) {
-            return List.of(new JsonDiagnostic(osd.getPath(), osd.getCode()));
-        }
-        String msg = ex.getMessage();
-        if (msg == null) msg = "";
-        
-        String path = "$";
-        String code = "document.parse-error";
-        
-        if (msg.startsWith("$")) {
-            int colon = msg.indexOf(':');
-            if (colon > 0) {
-                path = msg.substring(0, colon).trim();
-                msg = msg.substring(colon + 1).trim();
-            }
-        }
-        
-        if (msg.contains("depth") || msg.contains("nesting exceeds")) {
-            code = "document.limit.depth";
-        } else if (msg.contains("too many nodes") || msg.contains("materialized") || msg.contains("Node count")) {
-            code = "document.limit.nodes";
-        } else if (msg.contains("array of arrays") || msg.contains("no labeled-edge form") || msg.contains("unlabeled")) {
-            code = "document.unlabeled-element";
-        } else if (msg.contains("maximum digit limit") || msg.contains("digit limit") || msg.contains("Integer literal digit count")) {
-            code = "document.limit.int-digits";
-        } else if (msg.contains("invalidates root") || msg.contains("deletes a mandatory field")) {
-            code = "algebra.extract-invalidates-root";
-            if (msg.contains("deletes a mandatory field of ")) {
-                int idx = msg.indexOf("deletes a mandatory field of ");
-                path = msg.substring(idx + "deletes a mandatory field of ".length()).trim();
-                if (path.contains(" ")) path = path.substring(0, path.indexOf(" "));
-            }
-        } else if (msg.contains("root must be a node") || msg.contains("scalar root") || msg.contains("expects object (record) samples")) {
-            code = "algebra.infer-scalar-root";
-        } else if (msg.contains("no samples") || msg.contains("empty samples") || msg.contains("zero samples")) {
-            code = "algebra.infer-no-samples";
-        } else if (msg.contains("mixes objects and values") || msg.contains("mixed shape")) {
-            code = "algebra.infer-mixed-shape";
-            int colon = msg.indexOf(':');
-            if (colon > 0) path = msg.substring(0, colon).trim();
-        } else if (msg.contains("conflicting") || msg.contains("conflicting types") || msg.contains("more than one scalar kind")) {
-            code = "algebra.infer-conflicting-scalars";
-            int colon = msg.indexOf(':');
-            if (colon > 0) path = msg.substring(0, colon).trim();
-        } else if (msg.contains("Unexpected token") || msg.contains("unexpected token") || msg.contains("Bare word") || msg.contains("bare word")) {
-            code = "parse.unexpected-token";
-        } else if (msg.contains("invalid JSON") || msg.contains("invalid TOML") || msg.contains("invalid XML")) {
-            code = "document.parse-error";
-        }
-        
-        return List.of(new JsonDiagnostic(path, code));
     }
 
     private static Document parseFormat(String text, String format) throws Exception {

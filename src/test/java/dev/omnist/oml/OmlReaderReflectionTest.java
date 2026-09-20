@@ -51,18 +51,21 @@ class OmlReaderReflectionTest {
         // OmlLexer's token list always ends with a real EOF token, which is itself
         // non-separator -- so peekNonSeparatorToken(1) normally finds either a real
         // next token or that EOF sentinel, never null, through any real parse.
-        // Positioning `index` exactly at the EOF token itself means offset 0 finds
-        // EOF as t1 and offset 1 finds nothing after it, forcing the null return
-        // isEdgeListStart's t2 != null guards against.
+        // isEdgeListStart returns early unless the first token could be a label (a STRING or a
+        // non-reserved IDENT, OML-16), so to reach the second peek the token list is cut down to
+        // an identifier with nothing after it, not even the EOF sentinel. Offset 0 then finds the
+        // identifier and offset 1 finds nothing, forcing the null return isEdgeListStart's
+        // t2 != null guards against.
         OmlReader reader = new OmlReader("a\n", null);
 
         Field tokensField = OmlReader.class.getDeclaredField("tokens");
         tokensField.setAccessible(true);
         java.util.List<Token> tokens = (java.util.List<Token>) tokensField.get(reader);
+        tokens.remove(tokens.size() - 1); // drop the EOF sentinel
 
         Field indexField = OmlReader.class.getDeclaredField("index");
         indexField.setAccessible(true);
-        indexField.set(reader, tokens.size() - 1);
+        indexField.set(reader, 0);
 
         Method isEdgeListStart = OmlReader.class.getDeclaredMethod("isEdgeListStart");
         isEdgeListStart.setAccessible(true);

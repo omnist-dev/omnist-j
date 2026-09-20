@@ -26,6 +26,9 @@ public class OsdReader {
         if (source != null && source.length() > MAX_INPUT_LENGTH) {
             throw new OsdParseException(1, 1, "schema.input-too-large", "$", "Input exceeds maximum length of " + MAX_INPUT_LENGTH + " characters");
         }
+        // D-15 / D-21: one leading U+FEFF is consumed, a second is rejected at 1:1 of what remains.
+        source = dev.omnist.document.Bom.strip(source, () -> new OsdParseException(1, 1, "parse.unexpected-token", "1:1",
+                "Unexpected second leading byte-order mark (U+FEFF); exactly one is consumed"));
         OsdLexer lexer = new OsdLexer(source);
         this.tokens = lexer.tokenizeAll();
     }
@@ -107,7 +110,7 @@ public class OsdReader {
     private Record parseRecord() {
         Token nameTok = peekToken();
         if (nameTok.type() != TokenType.IDENT) {
-            throw new OsdParseException(nameTok.line(), nameTok.col(), "schema.parse-error", "$", "Expected record name identifier");
+            throw new OsdParseException(nameTok.line(), nameTok.col(), "parse.unexpected-token", nameTok.line() + ":" + nameTok.col(), "Expected record name identifier");
         }
 
         String recordName = nameTok.text();
@@ -121,7 +124,7 @@ public class OsdReader {
 
         Token braceTok = peekToken();
         if (braceTok.type() != TokenType.LBRACE) {
-            throw new OsdParseException(braceTok.line(), braceTok.col(), "schema.parse-error", recordName, "Expected '{' after record name");
+            throw new OsdParseException(braceTok.line(), braceTok.col(), "parse.unexpected-token", braceTok.line() + ":" + braceTok.col(), "Expected '{' after record name");
         }
         consumeToken(); // consume '{'
 
@@ -159,7 +162,7 @@ public class OsdReader {
 
             Token colonTok = peekToken();
             if (colonTok.type() != TokenType.COLON) {
-                throw new OsdParseException(colonTok.line(), colonTok.col(), "schema.parse-error", recordName + "." + label, "Expected ':' after field label");
+                throw new OsdParseException(colonTok.line(), colonTok.col(), "parse.unexpected-token", colonTok.line() + ":" + colonTok.col(), "Expected ':' after field label");
             }
             consumeToken(); // consume ':'
 
@@ -168,7 +171,7 @@ public class OsdReader {
                 throw new OsdParseException(typeTok.line(), typeTok.col(), "schema.quoted-type", recordName, "A quoted string cannot appear in type position");
             }
             if (typeTok.type() != TokenType.IDENT) {
-                throw new OsdParseException(typeTok.line(), typeTok.col(), "schema.parse-error", recordName + "." + label, "Expected type name identifier");
+                throw new OsdParseException(typeTok.line(), typeTok.col(), "parse.unexpected-token", typeTok.line() + ":" + typeTok.col(), "Expected type name identifier");
             }
             consumeToken();
 
@@ -205,7 +208,7 @@ public class OsdReader {
 
         if (peekType() != TokenType.RBRACE) {
             Token cur = peekToken();
-            throw new OsdParseException(cur.line(), cur.col(), "schema.parse-error", recordName, "Expected '}' closing record definition");
+            throw new OsdParseException(cur.line(), cur.col(), "parse.unexpected-token", cur.line() + ":" + cur.col(), "Expected '}' closing record definition");
         }
         consumeToken(); // consume '}'
 

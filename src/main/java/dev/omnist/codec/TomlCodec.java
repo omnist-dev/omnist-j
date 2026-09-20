@@ -239,22 +239,33 @@ public final class TomlCodec {
      * @throws RuntimeException if the TOML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
      */
     public static Document read(String text) {
-        if (text == null) {
-            throw new IllegalArgumentException("input text cannot be null");
-        }
-        if (text.length() > MAX_INPUT_LENGTH) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
-        }
+        text = CodecInput.prepare(text, "TOML", MAX_INPUT_LENGTH);
 
         String preprocessed;
         TomlParseResult result;
         try {
             preprocessed = preprocessToml(text);
             result = Toml.parse(preprocessed);
-        } catch (Exception | AssertionError e) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: " + e.getMessage(), e);
+        } catch (DocumentParseException e) {
+            throw e;
+        } catch (Exception | AssertionError | StackOverflowError e) {
+            throw unexpectedFailure(e);
         }
         return documentFromParseResult(result);
+    }
+
+    /**
+     * Maps a failure thrown (rather than reported) by tomlj. It parses nested arrays and inline
+     * tables recursively, so a hostile input can exhaust the stack before any depth limit is
+     * consulted: that is a depth violation (D-13), not a crash and not a syntax error. Anything
+     * else it throws is reported as {@code parse.codec-syntax}.
+     */
+    static DocumentParseException unexpectedFailure(Throwable e) {
+        if (e instanceof StackOverflowError) {
+            return new DocumentParseException("$", "document.limit.depth",
+                    "TOML nesting exceeds the maximum depth (" + Limits.DEFAULT.maxDepth() + ")", e);
+        }
+        return CodecInput.syntax("TOML", String.valueOf(e.getMessage()), 1, 1, e);
     }
 
     /**
@@ -276,12 +287,15 @@ public final class TomlCodec {
     // through the real Toml.parse() path.
     private static Document documentFromParseResult(TomlParseResult result) {
         if (result.hasErrors()) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: " + result.errors().get(0).toString());
+            org.tomlj.TomlParseError first = result.errors().get(0);
+            // TomlParseError.position() is never null: tomlj builds every error with a position.
+            org.tomlj.TomlPosition at = first.position();
+            throw CodecInput.syntax("TOML", String.valueOf(first.getMessage()), at.line(), at.column(), first);
         }
 
         Map<String, Object> raw = result.toMap();
         if (raw == null) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid TOML: no document found");
+            throw CodecInput.syntax("TOML", "no document found", 1, 1, null);
         }
 
         int[] budget = new int[]{0};
