@@ -208,22 +208,22 @@ class OsdReaderTest {
         // Line 146: Unexpected character -> parse.unexpected-token
         OsdParseException ex1 = assertThrows(OsdParseException.class, () -> OsdReader.read("record R { @ } root R"));
         assertEquals("parse.unexpected-token", ex1.getCode());
-        assertEquals("$", ex1.getPath());
+        assertEquals("1:12", ex1.getPath());
 
         // Line 174: Unterminated escape in string -> parse.unterminated-string
         OsdParseException ex2 = assertThrows(OsdParseException.class, () -> new OsdLexer("\"abc\\").tokenizeAll());
         assertEquals("parse.unterminated-string", ex2.getCode());
-        assertEquals("$", ex2.getPath());
+        assertEquals("1:1", ex2.getPath()); // E-23: the opening quote
 
         // Line 183: Unterminated double-quoted string -> parse.unterminated-string
         OsdParseException ex3 = assertThrows(OsdParseException.class, () -> OsdReader.read("record R { \"unclosed: string } root R"));
         assertEquals("parse.unterminated-string", ex3.getCode());
-        assertEquals("$", ex3.getPath());
+        assertEquals("1:12", ex3.getPath()); // E-23: the opening quote
 
         // Line 196: Unterminated bracket in cardinality -> parse.unexpected-token
         OsdParseException ex4 = assertThrows(OsdParseException.class, () -> new OsdLexer("record R { \"a\" [1,2").tokenizeAll());
         assertEquals("parse.unexpected-token", ex4.getCode());
-        assertEquals("$", ex4.getPath());
+        assertEquals("1:16", ex4.getPath());
     }
 
     @Test
@@ -232,6 +232,25 @@ class OsdReaderTest {
         String withControlChar = "record R { \"a\": \"xy\" } root R";
         OsdParseException ex = assertThrows(OsdParseException.class, () -> OsdReader.read(withControlChar));
         assertEquals("parse.control-character", ex.getCode());
-        assertEquals("$", ex.getPath());
+        assertEquals("1:17", ex.getPath()); // E-23: the opening quote, not the control character
+    }
+
+    @Test
+    @DisplayName("an escaped control character is still a control character, reported at the opening quote (E-23)")
+    void testEscapedControlCharacterIsRejected() {
+        OsdParseException ex = assertThrows(OsdParseException.class,
+                () -> OsdReader.read("record R {\n    \"a\\\u0001b\": string,\n}\nroot R\n"));
+        assertEquals("parse.control-character", ex.getCode());
+        assertEquals("2:5", ex.getPath());
+
+        OsdParseException newline = assertThrows(OsdParseException.class,
+                () -> OsdReader.read("record R {\n    \"a\\\nb\": string,\n}\nroot R\n"));
+        assertEquals("parse.control-character", newline.getCode());
+        assertEquals("2:5", newline.getPath());
+
+        // A backslash then end of input inside a string is an unterminated string, at the quote.
+        OsdParseException eof = assertThrows(OsdParseException.class, () -> OsdReader.read("record R {\n    \"a\\"));
+        assertEquals("parse.unterminated-string", eof.getCode());
+        assertEquals("2:5", eof.getPath());
     }
 }

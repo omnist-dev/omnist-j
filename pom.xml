@@ -6,7 +6,7 @@
 
     <groupId>dev.omnist</groupId>
     <artifactId>omnist-j</artifactId>
-    <version>0.2.3-alpha</version>
+    <version>0.2.4-alpha</version>
     <name>omnist-j</name>
     <description>Java implementation of the Omnist data-interchange specification</description>
     <url>https://j.omnist.dev</url>
@@ -116,7 +116,7 @@
                             <!--
                                 dev.omnist.conformance is excluded from coverage metrics.
                                 Its primary verification is running ./run-conformance against
-                                omnist-spec's 181 live test-suite vectors, not exhaustive unit
+                                omnist-spec's live test-suite vectors, not exhaustive unit
                                 coverage — identical justification to omnist-go CI's exclusion
                                 of tools/conformance/ from its own 100% bar.
 
@@ -139,7 +139,7 @@
                         <configuration>
                             <!--
                                 dev.omnist.conformance excluded: verified by live harness
-                                (181/0/0), not unit tests — see omnist-go tools/conformance/.
+                                (0 failures, see docs/limitations.md for the current counts), not unit tests — see omnist-go tools/conformance/.
                                 CliMain excluded: one-line System.exit entry point, all real
                                 logic lives in the fully-covered Cli.run.
                             -->

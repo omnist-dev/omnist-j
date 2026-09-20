@@ -28,6 +28,21 @@ public class OmlReader {
     private int materializedNodeCount = 0;
 
     /**
+     * One step of the Document path to the value being parsed: the edge list the edge will live
+     * in, its label, and the position it takes in that list. Paths (E-9, E-10) need the TOTAL
+     * count of a label in its node, which is only known once the node is complete, so a path is
+     * resolved after the parse rather than while it runs.
+     */
+    private record PathSeg(List<Edge> siblings, String label, int position) {}
+
+    /** Ancestor path segments of the value currently being parsed. */
+    private final List<PathSeg> pathStack = new ArrayList<>();
+
+    /** The first integer literal over the digit limit, recorded and reported after the parse. */
+    private List<PathSeg> overLimitInteger;
+    private Token overLimitToken;
+
+    /**
      * Constructs a reader over a pre-tokenized OML source.
      * The source is immediately tokenized by {@link OmlLexer} during construction.
      *
@@ -40,6 +55,9 @@ public class OmlReader {
             throw new OmlParseException(1, 1, "parse.input-too-large", "Input exceeds maximum length of " + MAX_INPUT_LENGTH + " characters");
         }
         this.limits = limits != null ? limits : Limits.DEFAULT;
+        // D-15 / D-21: one leading U+FEFF is consumed, a second is rejected at 1:1 of what remains.
+        source = Bom.strip(source, () -> new OmlParseException(1, 1, "parse.unexpected-token",
+                "Unexpected second leading byte-order mark (U+FEFF); exactly one is consumed"));
         OmlLexer lexer = new OmlLexer(source, this.limits);
         this.tokens = lexer.tokenizeAll();
     }
@@ -78,6 +96,17 @@ public class OmlReader {
      * @throws OmlParseException if the token stream does not form a valid OML document
      */
     public Document parseDocument() {
+        Document doc = parseDocumentBody();
+        if (overLimitInteger != null) {
+            throw new OmlParseException(overLimitToken.line(), overLimitToken.col(), "document.limit.int-digits",
+                    resolvePath(overLimitInteger),
+                    "Integer literal digit count (" + overLimitToken.text().replace("-", "").length()
+                            + ") exceeds maximum limit of " + limits.maxIntegerDigits());
+        }
+        return doc;
+    }
+
+    private Document parseDocumentBody() {
 
         skipSeparators();
         if (peekType() == TokenType.EOF) {
@@ -92,9 +121,11 @@ public class OmlReader {
             // (see its own parse.trailing-content check).
             return parseNodeEdges(false);
         } else {
-            Value bareValue = parseScalarValue();
+            Value bareValue = parseScalarValue(null, null);
             skipSeparators();
             if (peekType() != TokenType.EOF) {
+                // OML-25: whatever the scalar was, leftover content is trailing content, at the
+                // first leftover significant token.
                 Token extra = peekToken();
                 throw new OmlParseException(extra.line(), extra.col(), "parse.trailing-content", "Trailing content after bare scalar document");
             }
@@ -102,13 +133,21 @@ public class OmlReader {
         }
     }
 
+    /**
+     * OML-16: a document is an edge list only when its first token is a {@code STRING}, or an
+     * {@code IDENT} that is not {@code null}/{@code true}/{@code false}, and the next token is
+     * {@code :}. Anything else, including a number-like token such as {@code nan} or {@code 5},
+     * takes the scalar branch (so {@code nan: 1} is a scalar followed by trailing content, OML-25).
+     */
     private boolean isEdgeListStart() {
         // isEdgeListStart's only caller (parseDocument) already calls
         // skipSeparators() and checks for EOF before invoking this, so
         // peekNonSeparatorToken(0) always finds a real non-separator token here.
         Token t1 = peekNonSeparatorToken(0);
 
-        if (t1.type() == TokenType.IDENT && RESERVED_WORDS.contains(t1.text())) {
+        boolean labelShaped = t1.type() == TokenType.STRING
+                || (t1.type() == TokenType.IDENT && !RESERVED_WORDS.contains(t1.text()));
+        if (!labelShaped) {
             return false;
         }
 
@@ -147,22 +186,9 @@ public class OmlReader {
                 parseArrayElements(label, edges, valueStart.line(), valueStart.col());
             } else if (valueStart.type() == TokenType.LBRACE) {
                 consumeToken(); // consume '{'
-                currentDepth++;
-                if (currentDepth > limits.maxDepth()) {
-                    throw new OmlParseException(valueStart.line(), valueStart.col(), "document.limit.depth",
-                            "Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
-                }
-                Node childNode = parseNodeEdges(true);
-                skipSeparators();
-                if (peekType() != TokenType.RBRACE) {
-                    Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected '}' closing braced node");
-                }
-                consumeToken(); // consume '}'
-                currentDepth--;
-                edges.add(new Edge(label, childNode));
+                edges.add(new Edge(label, parseBracedNode(valueStart, edges, label)));
             } else {
-                Value val = parseScalarValue();
+                Value val = parseScalarValue(edges, label);
                 edges.add(new Edge(label, val));
             }
 
@@ -173,7 +199,10 @@ public class OmlReader {
                 }
                 if (!HadSep) {
                     Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "parse.trailing-content", "Edge separator (newline or ';') required between adjacent edges");
+                    // Leftover content after a complete TOP-LEVEL edge is trailing content
+                    // (omnist-spec#103); a missing separator inside {...} is an unexpected token.
+                    String code = insideBraces ? "parse.unexpected-token" : "parse.trailing-content";
+                    throw new OmlParseException(cur.line(), cur.col(), code, "Edge separator (newline or ';') required between adjacent edges");
                 }
             }
         }
@@ -181,11 +210,50 @@ public class OmlReader {
         return createNode(edges);
     }
 
+    /** Parses the body of a {@code {...}} value; the opening brace has already been consumed. */
+    private Node parseBracedNode(Token open, List<Edge> siblings, String label) {
+        currentDepth++;
+        if (currentDepth > limits.maxDepth()) {
+            throw new OmlParseException(open.line(), open.col(), "document.limit.depth", "$",
+                    "Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
+        }
+        pathStack.add(new PathSeg(siblings, label, siblings.size()));
+        Node childNode = parseNodeEdges(true);
+        skipSeparators();
+        if (peekType() != TokenType.RBRACE) {
+            Token cur = peekToken();
+            throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected '}' closing braced node");
+        }
+        consumeToken(); // consume '}'
+        pathStack.remove(pathStack.size() - 1);
+        currentDepth--;
+        return childNode;
+    }
+
+    /** Builds the E-9/E-10 Document path for a recorded segment list, now the nodes are complete. */
+    private static String resolvePath(List<PathSeg> segments) {
+        String path = "$";
+        for (PathSeg seg : segments) {
+            int before = 0;
+            int total = 0;
+            for (int i = 0; i < seg.siblings().size(); i++) {
+                if (seg.siblings().get(i).label().equals(seg.label())) {
+                    total++;
+                    if (i < seg.position()) {
+                        before++;
+                    }
+                }
+            }
+            path = PathUtils.childPath(path, seg.label(), before, total);
+        }
+        return path;
+    }
+
     private Node createNode(List<Edge> edges) {
         materializedNodeCount++;
         if (materializedNodeCount > limits.maxNodeCount()) {
             Token cur = peekToken();
-            throw new OmlParseException(cur.line(), cur.col(), "document.limit.nodes",
+            throw new OmlParseException(cur.line(), cur.col(), "document.limit.nodes", "$",
                     "Node count (" + materializedNodeCount + ") exceeds maximum limit of " + limits.maxNodeCount());
         }
         return new Node(edges);
@@ -208,76 +276,65 @@ public class OmlReader {
     }
 
     private void parseArrayElements(String label, List<Edge> edges, int bracketLine, int bracketCol) {
+        // Comma is the only element separator (OML-11): a newline or ';' where a comma belongs is
+        // parse.separator-in-array, but ONLY when a further element follows it. Separators are
+        // otherwise insignificant inside [...] (after '[', after a comma, before ']').
         skipSeparators();
         if (peekType() == TokenType.RBRACKET) {
             throw new OmlParseException(bracketLine, bracketCol, "parse.empty-array", "Empty array `[]` is an error");
         }
 
-        boolean first = true;
-        boolean closed = false;
-        while (peekType() != TokenType.EOF) {
-            if (peekType() == TokenType.SEPARATOR) {
-                Token sep = peekToken();
-                throw new OmlParseException(sep.line(), sep.col(), "parse.separator-in-array", "Newlines and separators are forbidden inside array brackets");
-            }
-            if (peekType() == TokenType.RBRACKET) {
-                consumeToken();
-                closed = true;
-                break;
-            }
-
-            if (!first) {
-                if (peekType() == TokenType.COMMA) {
-                    consumeToken();
-                    if (peekType() == TokenType.SEPARATOR) {
-                        Token sep = peekToken();
-                        throw new OmlParseException(sep.line(), sep.col(), "parse.separator-in-array", "Newlines and separators are forbidden inside array brackets");
-                    }
-                    if (peekType() == TokenType.RBRACKET) {
-                        consumeToken();
-                        closed = true;
-                        break;
-                    }
-                } else {
-                    Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected ',' between array elements");
-                }
-            }
-
+        while (true) {
             Token valToken = peekToken();
             if (valToken.type() == TokenType.LBRACKET) {
                 throw new OmlParseException(valToken.line(), valToken.col(), "parse.nested-array", "Arrays cannot be nested inside arrays");
             } else if (valToken.type() == TokenType.LBRACE) {
                 consumeToken(); // consume '{'
-                currentDepth++;
-                if (currentDepth > limits.maxDepth()) {
-                    throw new OmlParseException(valToken.line(), valToken.col(), "document.limit.depth",
-                            "Nesting depth (" + currentDepth + ") exceeds maximum limit of " + limits.maxDepth());
-                }
-                Node childNode = parseNodeEdges(true);
-                skipSeparators();
-                if (peekType() != TokenType.RBRACE) {
-                    Token cur = peekToken();
-                    throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Expected '}' closing braced node");
-                }
-                consumeToken();
-                currentDepth--;
-                edges.add(new Edge(label, childNode));
+                edges.add(new Edge(label, parseBracedNode(valToken, edges, label)));
             } else {
-                Value val = parseScalarValue();
+                Value val = parseScalarValue(edges, label);
                 edges.add(new Edge(label, val));
             }
 
-            first = false;
-        }
-
-        if (!closed) {
-            Token eof = peekToken();
-            throw new OmlParseException(eof.line(), eof.col(), "parse.unexpected-token", "Expected ',' or ']' in array, got EOF");
+            boolean hadSeparator = skipSeparators();
+            if (peekType() == TokenType.COMMA) {
+                consumeToken();
+                skipSeparators();
+                if (peekType() == TokenType.RBRACKET) {
+                    consumeToken(); // trailing comma
+                    return;
+                }
+                continue;
+            }
+            if (peekType() == TokenType.RBRACKET) {
+                consumeToken();
+                return;
+            }
+            Token cur = peekToken();
+            String code = hadSeparator && startsElement(cur.type()) ? "parse.separator-in-array" : "parse.unexpected-token";
+            throw new OmlParseException(cur.line(), cur.col(), code, "Expected ',' or ']' in array, got " + describe(cur));
         }
     }
 
-    private Value parseScalarValue() {
+    private static boolean startsElement(TokenType type) {
+        return switch (type) {
+            case STRING, DATETIME, DATE, TIME, NUMBER, INTEGER, IDENT, LBRACE, LBRACKET -> true;
+            default -> false;
+        };
+    }
+
+    private static String describe(Token t) {
+        return t.type() == TokenType.EOF ? "end of input" : "'" + t.text() + "'";
+    }
+
+    /**
+     * Parses one scalar.
+     *
+     * @param siblings the edge list the resulting edge will be added to, or {@code null} for the
+     *                 top-level bare scalar (whose Document path is {@code $})
+     * @param label    the edge label, or {@code null} for the top-level bare scalar
+     */
+    private Value parseScalarValue(List<Edge> siblings, String label) {
         Token t = peekToken();
         if (t.type() == TokenType.STRING) {
             consumeToken();
@@ -296,6 +353,19 @@ public class OmlReader {
             return new Scalar.NumberScalar((Double) t.value());
         } else if (t.type() == TokenType.INTEGER) {
             consumeToken();
+            if (t.value() == null) {
+                // Over the digit limit (see OmlLexer). Keep parsing so the Document path can be
+                // resolved against complete nodes; parseDocument raises it, first violation only.
+                if (overLimitInteger == null) {
+                    List<PathSeg> segs = new ArrayList<>(pathStack);
+                    if (siblings != null) {
+                        segs.add(new PathSeg(siblings, label, siblings.size()));
+                    }
+                    overLimitInteger = segs;
+                    overLimitToken = t;
+                }
+                return new Scalar.IntegerScalar(BigInteger.ZERO);
+            }
             return new Scalar.IntegerScalar((BigInteger) t.value());
         } else if (t.type() == TokenType.IDENT) {
             consumeToken();

@@ -45,9 +45,12 @@ class ConformanceTest {
         // - 4 new extensions-osd-oml/* vectors (schema.invalid-name and
         //   friends) -- Java doesn't implement OSD-OML yet (omnist-j#105),
         //   so these skip like the other 24. 24 + 4 = 28 skipped.
-        assertEquals(176, results[0], "Track 2 should pass all 176 real JSON test vectors");
+        // Bumped to omnist-spec v0.19.0-beta: 249 vectors, none failing. Skips are exactly the 28
+        // not-yet-implemented OSD-OML vectors (omnist-j#105) and the 6 alias-expansion vectors
+        // (D-18, DIV-3) that carry declared_max_alias_expansion.
+        assertEquals(215, results[0], "Track 2 should pass 215 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
-        assertEquals(28, results[2], "Track 2 should skip the 28 not-yet-implemented OSD-OML vectors");
+        assertEquals(34, results[2], "Track 2 should skip 28 OSD-OML vectors and 6 alias-expansion vectors");
     }
 
     @Test

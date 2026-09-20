@@ -21,6 +21,11 @@ public class OmlParseException extends RuntimeException {
     private final int column;
     /** Machine-readable error code identifying the violation category. */
     private final String code;
+    /**
+     * The diagnostic {@code path} (omnist-spec section 8.4, E-11): a text position for a
+     * {@code parse.*} code, a Document path for a {@code document.*} code.
+     */
+    private final String path;
 
     /**
      * Constructs an OML parse exception with full location and code details.
@@ -32,10 +37,27 @@ public class OmlParseException extends RuntimeException {
      * @param message human-readable description of the error
      */
     public OmlParseException(int line, int column, String code, String message) {
+        this(line, column, code, line + ":" + column, message);
+    }
+
+    /**
+     * Constructs an OML parse exception whose diagnostic path is a Document path rather than a
+     * text position, as E-11 requires for the {@code document.*} family (for example
+     * {@code document.limit.depth}). The line and column still locate the failure in the message.
+     *
+     * @param line         1-based line number where the error was detected
+     * @param column       1-based column number where the error was detected
+     * @param code         machine-readable error code
+     * @param diagnosticPath the diagnostic path: {@code line:col} for {@code parse.*}, a Document
+     *                     path such as {@code $.n} for {@code document.*}
+     * @param message      human-readable description of the violation
+     */
+    public OmlParseException(int line, int column, String code, String diagnosticPath, String message) {
         super(line + ":" + column + ": [" + code + "] " + message);
         this.line = line;
         this.column = column;
         this.code = code;
+        this.path = diagnosticPath;
     }
 
     /**
@@ -65,6 +87,6 @@ public class OmlParseException extends RuntimeException {
      * the prefix of {@link #getMessage()}.
      */
     public String getPath() {
-        return line + ":" + column;
+        return path;
     }
 }

@@ -312,7 +312,12 @@ public class OmlLexer {
             }
             int digits = text.startsWith("-") ? text.length() - 1 : text.length();
             if (digits > limits.maxIntegerDigits()) {
-                throw error("document.limit.int-digits", "Integer literal digit count (" + digits + ") exceeds maximum limit of " + limits.maxIntegerDigits(), startLine, startCol);
+                // document.limit.int-digits is a document.* diagnostic, so its path is a Document
+                // path (E-11) that only the parser, which knows the edge structure, can build.
+                // The token is flagged (null value) instead of raising here, and never converted
+                // to a BigInteger, so a huge literal costs nothing.
+                advance(text.length());
+                return new Token(TokenType.INTEGER, text, null, startLine, startCol);
             }
             try {
                 BigInteger bi = new BigInteger(text);

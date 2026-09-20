@@ -49,7 +49,54 @@ public final class Track2Runner {
     private static int failCount = 0;
     private static int skipCount = 0;
 
+    /** Skip tally by reason: a skip is only ever reported with a reason (omnist-spec E-20). */
+    private static final Map<String, Integer> skipReasons = new TreeMap<>();
+
+    /**
+     * The {@code declared_max_*} keys this runner can honour by configuring the OML reader.
+     * Every other {@code declared_max_*} key is skipped, never run against this port's defaults
+     * (test-suite/README.md, "Declared-limit keys").
+     */
+    private static final Set<String> HANDLED_LIMIT_KEYS = Set.of(
+        "declared_max_depth", "declared_max_nodes", "declared_max_int_digits");
+
     private Track2Runner() {}
+
+    /** Returns a copy of the skip tally by reason, for the harness summary. */
+    public static Map<String, Integer> skipReasons() {
+        return new TreeMap<>(skipReasons);
+    }
+
+    private static void skip(String name, String reason) {
+        System.out.println("    [SKIP] " + name + " (" + reason + ")");
+        skipCount++;
+        skipReasons.merge(reason, 1, Integer::sum);
+    }
+
+    /**
+     * Returns the reason a vector must be skipped because of a declared-limit key this runner
+     * cannot honour, or {@code null} if it can run.
+     */
+    private static String unhonouredLimitKey(JsonNode input) {
+        String format = input.has("format") ? input.get("format").asText() : "oml";
+        for (Iterator<String> it = input.fieldNames(); it.hasNext(); ) {
+            String key = it.next();
+            if (!key.startsWith("declared_max_")) {
+                continue;
+            }
+            if ("declared_max_alias_expansion".equals(key)) {
+                return "E-20 not yet implemented: YAML alias expansion limit, D-18/D-19/D-20 (omnist-spec section 9.4, DIV-3); "
+                    + "declared_max_alias_expansion is allowlisted so the vector is not run against the default";
+            }
+            if (!HANDLED_LIMIT_KEYS.contains(key)) {
+                return "unrecognised limit key " + key + ": not run against this port's default";
+            }
+            if (!"oml".equalsIgnoreCase(format)) {
+                return "no configuration surface for " + key + " on " + format + " (only the OML reader's limits are configurable): skipped per test-suite/README 'Declared-limit keys', never run against the default";
+            }
+        }
+        return null;
+    }
 
     /**
      * Runs every JSON vector under {@code testSuiteDir} and returns the tally.
@@ -62,6 +109,7 @@ public final class Track2Runner {
         passCount = 0;
         failCount = 0;
         skipCount = 0;
+        skipReasons.clear();
         doRunTrack2(testSuiteDir);
         return new int[]{passCount, failCount, skipCount};
     }
@@ -94,6 +142,12 @@ public final class Track2Runner {
         JsonNode input = vector.get("input");
         JsonNode expect = vector.get("expect");
 
+        String limitSkip = unhonouredLimitKey(input);
+        if (limitSkip != null) {
+            skip(name, limitSkip);
+            return;
+        }
+
         try {
             switch (op) {
                 case "parse" -> runParseVector(input, expect);
@@ -110,10 +164,10 @@ public final class Track2Runner {
                 case "infer" -> runInferVector(input, expect, false);
                 case "infer_with_report" -> runInferVector(input, expect, true);
                 case "lint" -> runLintVector(input, expect);
-                default -> {
-                    System.out.println("    [SKIP] " + name + " (Operation " + op + " not implemented in harness)");
-                    skipCount++;
-                }
+                case "parse_schema_oml", "write_schema_oml", "schema_from_document", "schema_to_document" ->
+                    skip(name, "E-20 not yet implemented: OSD-OML extension, operation " + op + " (omnist-j#105)");
+                // An operation this runner has never heard of is a failure to notice, not a skip.
+                default -> throw new IllegalArgumentException("unknown operation " + op);
             }
         } catch (Throwable t) {
             System.err.println("    [FAIL] " + name + " failed: " + t.getMessage());
@@ -196,29 +250,7 @@ public final class Track2Runner {
             if (thrown == null) {
                 throw new RuntimeException("Expected parse_schema failure, but it succeeded");
             }
-            String code = "schema.parse-error";
-            String path = "$";
-            if (thrown instanceof OsdParseException ope) {
-                code = ope.getCode();
-                path = ope.getPath();
-            } else {
-                String msg = thrown.getMessage();
-                if (msg.contains("Empty cardinality")) code = "schema.empty-cardinality";
-                else if (msg.contains("must be a whole number")) code = "schema.non-integer-cardinality";
-                else if (msg.contains("cannot be negative") || msg.contains("Invalid cardinality")) code = "schema.invalid-cardinality";
-                else if (msg.contains("Reserved type name")) code = "schema.reserved-name";
-                else if (msg.contains("Unknown type")) code = "schema.unknown-type";
-                else if (msg.contains("Duplicate record")) code = "schema.duplicate-record";
-                else if (msg.contains("? cannot apply")) code = "schema.nullable-ref";
-                else if (msg.contains("already includes null")) code = "schema.nullable-any";
-                else if (msg.contains("A schema must declare a root") || msg.contains("no root")) code = "schema.no-root";
-                else if (msg.contains("Expected a quoted field name") || msg.contains("unquoted")) code = "schema.unquoted-label";
-                else if (msg.contains("quoted string cannot appear in type position")) code = "schema.quoted-type";
-                else if (msg.contains("Duplicate field")) code = "schema.duplicate-field";
-            }
-
-            List<JsonDiagnostic> actualDiags = List.of(new JsonDiagnostic(path, code));
-            compareJsonDiagnostics(actualDiags, expect.get("diagnostics"));
+            compareJsonDiagnostics(extractParserDiagnostics(thrown), expect.get("diagnostics"));
             passCount++;
             System.out.println("    [PASS] parse_schema error");
         }
@@ -582,6 +614,8 @@ public final class Track2Runner {
     private static record JsonDiagnostic(String path, String code) {}
 
     private static void compareJsonDiagnostics(List<JsonDiagnostic> actual, JsonNode expectedNode) {
+        // omnist-spec section 8.5.2 (E-17): compare the diagnostics as a SET of (path, code);
+        // no partial matching, no path or code loosening.
         Set<String> act = actual.stream()
             .map(d -> d.path() + "|" + d.code())
             .collect(Collectors.toSet());
@@ -592,30 +626,12 @@ public final class Track2Runner {
             }
         }
         if (!act.equals(exp)) {
-            boolean match = expectedNode != null && actual.size() == expectedNode.size();
-            if (match) {
-                int i = 0;
-                for (JsonNode n : expectedNode) {
-                    JsonDiagnostic a = actual.get(i++);
-                    String expCode = n.get("code").asText();
-                    String expPath = n.get("path").asText();
-                    if (!a.code().equals(expCode)) {
-                        match = false;
-                        break;
-                    }
-                    if (expCode.startsWith("document.limit.") || expCode.startsWith("parse.")) {
-                        continue;
-                    }
-                    if (!a.path().equals(expPath)) {
-                        match = false;
-                        break;
-                    }
-                }
-            }
-            if (!match) {
-                throw new RuntimeException("Diagnostics mismatch. Expected: " + exp + ", Got: " + act);
-            }
+            throw new RuntimeException("Diagnostics mismatch. Expected: " + sorted(exp) + ", Got: " + sorted(act));
         }
+    }
+
+    private static List<String> sorted(Set<String> set) {
+        return set.stream().sorted().toList();
     }
 
     private static boolean exactSchemaEqual(Schema s1, Schema s2) {
@@ -737,45 +753,12 @@ public final class Track2Runner {
         return true;
     }
 
-    private static String findOsdPath(String osd, int line) {
-        String[] lines = osd.split("\\n");
-        String currentRecord = null;
-        String currentField = null;
-        
-        for (int i = 0; i < Math.min(line, lines.length); i++) {
-            String l = lines[i].trim();
-            if (l.startsWith("record ")) {
-                String[] parts = l.split("\\s+");
-                if (parts.length > 1) {
-                    currentRecord = parts[1];
-                    if (currentRecord.endsWith("{")) {
-                        currentRecord = currentRecord.substring(0, currentRecord.length() - 1);
-                    }
-                    currentRecord = currentRecord.trim();
-                }
-                currentField = null;
-            } else if (l.startsWith("}")) {
-                currentRecord = null;
-                currentField = null;
-            } else if (currentRecord != null) {
-                if (l.startsWith("\"")) {
-                    int nextQuote = l.indexOf('"', 1);
-                    if (nextQuote > 1) {
-                        currentField = l.substring(1, nextQuote);
-                    }
-                }
-            }
-        }
-        
-        if (currentRecord != null) {
-            if (currentField != null) {
-                return currentRecord + "." + currentField;
-            }
-            return currentRecord;
-        }
-        return "$";
-    }
-
+    /**
+     * Turns a thrown exception into the (path, code) diagnostic it carries. Only the port's own
+     * structured exceptions are accepted: a throwable that carries no {@code code}/{@code path}
+     * is a conformance failure (the spec requires both, section 8.2), never something to guess a
+     * code for by reading the message text.
+     */
     private static List<JsonDiagnostic> extractParserDiagnostics(Throwable ex) {
         if (ex instanceof dev.omnist.document.DocumentParseException dpe) {
             return List.of(new JsonDiagnostic(dpe.getPath(), dpe.getCode()));
@@ -789,54 +772,7 @@ public final class Track2Runner {
         if (ex instanceof OsdParseException osd) {
             return List.of(new JsonDiagnostic(osd.getPath(), osd.getCode()));
         }
-        String msg = ex.getMessage();
-        if (msg == null) msg = "";
-        
-        String path = "$";
-        String code = "document.parse-error";
-        
-        if (msg.startsWith("$")) {
-            int colon = msg.indexOf(':');
-            if (colon > 0) {
-                path = msg.substring(0, colon).trim();
-                msg = msg.substring(colon + 1).trim();
-            }
-        }
-        
-        if (msg.contains("depth") || msg.contains("nesting exceeds")) {
-            code = "document.limit.depth";
-        } else if (msg.contains("too many nodes") || msg.contains("materialized") || msg.contains("Node count")) {
-            code = "document.limit.nodes";
-        } else if (msg.contains("array of arrays") || msg.contains("no labeled-edge form") || msg.contains("unlabeled")) {
-            code = "document.unlabeled-element";
-        } else if (msg.contains("maximum digit limit") || msg.contains("digit limit") || msg.contains("Integer literal digit count")) {
-            code = "document.limit.int-digits";
-        } else if (msg.contains("invalidates root") || msg.contains("deletes a mandatory field")) {
-            code = "algebra.extract-invalidates-root";
-            if (msg.contains("deletes a mandatory field of ")) {
-                int idx = msg.indexOf("deletes a mandatory field of ");
-                path = msg.substring(idx + "deletes a mandatory field of ".length()).trim();
-                if (path.contains(" ")) path = path.substring(0, path.indexOf(" "));
-            }
-        } else if (msg.contains("root must be a node") || msg.contains("scalar root") || msg.contains("expects object (record) samples")) {
-            code = "algebra.infer-scalar-root";
-        } else if (msg.contains("no samples") || msg.contains("empty samples") || msg.contains("zero samples")) {
-            code = "algebra.infer-no-samples";
-        } else if (msg.contains("mixes objects and values") || msg.contains("mixed shape")) {
-            code = "algebra.infer-mixed-shape";
-            int colon = msg.indexOf(':');
-            if (colon > 0) path = msg.substring(0, colon).trim();
-        } else if (msg.contains("conflicting") || msg.contains("conflicting types") || msg.contains("more than one scalar kind")) {
-            code = "algebra.infer-conflicting-scalars";
-            int colon = msg.indexOf(':');
-            if (colon > 0) path = msg.substring(0, colon).trim();
-        } else if (msg.contains("Unexpected token") || msg.contains("unexpected token") || msg.contains("Bare word") || msg.contains("bare word")) {
-            code = "parse.unexpected-token";
-        } else if (msg.contains("invalid JSON") || msg.contains("invalid TOML") || msg.contains("invalid XML")) {
-            code = "document.parse-error";
-        }
-        
-        return List.of(new JsonDiagnostic(path, code));
+        throw new RuntimeException("Unstructured failure (no code/path): " + ex.getClass().getName() + ": " + ex.getMessage(), ex);
     }
 
     private static Document parseFormat(String text, String format) throws Exception {

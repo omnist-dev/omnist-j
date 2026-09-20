@@ -82,7 +82,8 @@ class StructuredExceptionTest {
         assertEquals("$.a[0]", exNested.getPath());
 
         DocumentParseException exParse = assertThrows(DocumentParseException.class, () -> JsonCodec.read("{invalid json"));
-        assertEquals("document.parse-error", exParse.getCode());
+        assertEquals("parse.codec-syntax", exParse.getCode());
+        assertTrue(exParse.getPath().matches("\\d+:\\d+"), exParse.getPath());
     }
 
     @Test
@@ -97,7 +98,8 @@ class StructuredExceptionTest {
         assertEquals("$.a[0]", exNested.getPath());
 
         DocumentParseException exParse = assertThrows(DocumentParseException.class, () -> YamlCodec.read("a: [1, 2"));
-        assertEquals("document.parse-error", exParse.getCode());
+        assertEquals("parse.codec-syntax", exParse.getCode());
+        assertTrue(exParse.getPath().matches("\\d+:\\d+"), exParse.getPath());
     }
 
     @Test
@@ -108,17 +110,20 @@ class StructuredExceptionTest {
         assertEquals("$.a[0]", exNested.getPath());
 
         DocumentParseException exParse = assertThrows(DocumentParseException.class, () -> TomlCodec.read("a = \n"));
-        assertEquals("document.parse-error", exParse.getCode());
+        assertEquals("parse.codec-syntax", exParse.getCode());
+        assertEquals("1:5", exParse.getPath());
     }
 
     @Test
     @DisplayName("XmlCodec throws DocumentParseException with correct codes and paths")
     void testXmlCodecStructuredExceptions() {
         DocumentParseException exParse = assertThrows(DocumentParseException.class, () -> XmlCodec.read("<root><unclosed>"));
-        assertEquals("document.parse-error", exParse.getCode());
+        assertEquals("parse.codec-syntax", exParse.getCode());
+        assertTrue(exParse.getPath().matches("\\d+:\\d+"), exParse.getPath());
 
         DocumentParseException exMixed = assertThrows(DocumentParseException.class, () -> XmlCodec.read("<root>text<child>1</child></root>"));
-        assertEquals("document.unlabeled-element", exMixed.getCode());
+        assertEquals("format.mixed-content", exMixed.getCode());
+        assertEquals("$", exMixed.getPath());
     }
 
     @Test

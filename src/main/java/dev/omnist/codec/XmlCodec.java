@@ -102,14 +102,14 @@ public final class XmlCodec {
      * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
      */
     public static Document read(String text, Schema schema, WriteReport report) {
-        if (text == null) {
-            throw new IllegalArgumentException("input text cannot be null");
-        }
-        if (text.length() > MAX_INPUT_LENGTH) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid XML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
-        }
+        text = CodecInput.prepare(text, "XML", MAX_INPUT_LENGTH);
 
-        org.w3c.dom.Element rootElem;
+        // Data-XML profile (docs/formats/xml.md): DOCTYPE and non-predefined entity references are
+        // refused on sight. They are well-formed XML, so they are reported only AFTER the rest of
+        // the text has proven well-formed; malformed input stays parse.codec-syntax.
+        XmlProfileScan profile = XmlProfileScan.scan(text);
+
+        org.w3c.dom.Document domDoc;
         try {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
             dbf.setNamespaceAware(false);
@@ -123,11 +123,23 @@ public final class XmlCodec {
             dbf.setXIncludeAware(false);
             dbf.setExpandEntityReferences(false);
 
-            InputSource is = new InputSource(new StringReader(text));
-            org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(is);
-            rootElem = requireRootElement(domDoc);
+            InputSource is = new InputSource(new StringReader(profile.sanitized));
+            javax.xml.parsers.DocumentBuilder builder = dbf.newDocumentBuilder();
+            // The default error handler prints "[Fatal Error]" to stderr; this one only rethrows.
+            builder.setErrorHandler(new org.xml.sax.helpers.DefaultHandler());
+            domDoc = builder.parse(is);
         } catch (Exception e) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid XML: " + e.getMessage(), e);
+            throw syntaxError(e);
+        }
+        org.w3c.dom.Element rootElem = requireRootElement(domDoc);
+
+        if (profile.kind == XmlProfileScan.Kind.DTD) {
+            throw new DocumentParseException("$", "format.dtd-forbidden",
+                    "a DOCTYPE declaration is outside the data-XML profile and is refused");
+        }
+        if (profile.kind == XmlProfileScan.Kind.ENTITY) {
+            throw new DocumentParseException("$", "format.entity-forbidden",
+                    "an entity reference other than the five predefined ones is outside the data-XML profile and is refused");
         }
 
         int[] budget = new int[]{0};
@@ -156,6 +168,20 @@ public final class XmlCodec {
     }
 
     /**
+     * Maps a failure of the XML parser to {@code parse.codec-syntax}, at the position the parser
+     * reported when it is a {@link org.xml.sax.SAXParseException}, else at {@code 1:1}.
+     */
+    static DocumentParseException syntaxError(Exception e) {
+        int line = 1;
+        int column = 1;
+        if (e instanceof org.xml.sax.SAXParseException spe) {
+            line = spe.getLineNumber();
+            column = spe.getColumnNumber();
+        }
+        return CodecInput.syntax("XML", String.valueOf(e.getMessage()), line, column, e);
+    }
+
+    /**
      * Extracted purely as a reflection seam for a defensive branch: unreachable in
      * practice, since {@code DocumentBuilder.parse} either throws (malformed input,
      * caught by {@code read}'s caller) or returns a {@code Document} per the
@@ -166,7 +192,7 @@ public final class XmlCodec {
     private static org.w3c.dom.Element requireRootElement(org.w3c.dom.Document domDoc) {
         org.w3c.dom.Element rootElem = domDoc.getDocumentElement();
         if (rootElem == null) {
-            throw new DocumentParseException("$", "document.parse-error", "no document element found");
+            throw CodecInput.syntax("XML", "no document element found", 1, 1, null);
         }
         return rootElem;
     }
@@ -222,7 +248,7 @@ public final class XmlCodec {
                     // never null) character data -- kept as defensive handling for the
                     // nullable-Object-returning Node.getNodeValue() signature itself.
                     if (text != null && !text.trim().isEmpty()) {
-                        throw new DocumentParseException(path, "document.unlabeled-element", path + ": mixed content (text alongside child elements) is outside the data-XML profile");
+                        throw new DocumentParseException("$", "format.mixed-content", path + ": mixed content (text alongside child elements) is outside the data-XML profile");
                     }
                 }
             }

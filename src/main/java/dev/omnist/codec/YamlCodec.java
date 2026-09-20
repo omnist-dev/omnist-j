@@ -83,6 +83,9 @@ public final class YamlCodec {
         return DateTimeValue.parse(text.replace(' ', 'T'));
     }
 
+    /** SnakeYAML's own nesting cap, set well above {@link Limits#DEFAULT}'s depth limit. */
+    private static final int YAML_NESTING_DEPTH_LIMIT = 1000;
+
     /** Maximum accepted input length in characters, guarding against oversized YAML input. */
     public static final int MAX_INPUT_LENGTH = 2_000_000;
 
@@ -94,14 +97,16 @@ public final class YamlCodec {
      * @throws RuntimeException if the YAML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
      */
     public static Document read(String text) {
-        if (text == null) {
-            throw new IllegalArgumentException("input text cannot be null");
-        }
-        if (text.length() > MAX_INPUT_LENGTH) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid YAML: input exceeds maximum size limit of " + MAX_INPUT_LENGTH + " characters");
-        }
+        // D-15 / D-21: SnakeYAML would swallow a second leading mark on its own (it treats it as
+        // the start of a plain scalar), so the check happens here, before the library sees the text.
+        text = CodecInput.prepare(text, "YAML", MAX_INPUT_LENGTH);
 
         LoaderOptions loaderOptions = new LoaderOptions();
+        // SnakeYAML refuses nesting deeper than 50 by default, which would report a document that
+        // is well within this port's own depth limit (200) as a syntax error. Raise it clear of
+        // Limits.DEFAULT.maxDepth() so the port's own check, with its document.limit.depth code
+        // (D-12, D-13), is the one that decides. Deeper than this the library still refuses first.
+        loaderOptions.setNestingDepthLimit(YAML_NESTING_DEPTH_LIMIT);
         CustomConstructor constructor = new CustomConstructor(loaderOptions);
         org.yaml.snakeyaml.resolver.Resolver resolver = new org.yaml.snakeyaml.resolver.Resolver();
         DumperOptions dumperOptions = new DumperOptions();
@@ -112,20 +117,34 @@ public final class YamlCodec {
             Iterable<Object> docs = yaml.loadAll(text);
             Iterator<Object> it = docs.iterator();
             if (!it.hasNext()) {
-                throw new DocumentParseException("$", "document.parse-error", "no document found");
+                throw CodecInput.syntax("YAML", "no document found", 1, 1, null);
             }
             raw = it.next();
             if (it.hasNext()) {
-                throw new DocumentParseException("$", "document.parse-error", "expected a single document in the stream but found another document");
+                throw CodecInput.syntax("YAML", "expected a single document in the stream but found another document", 1, 1, null);
             }
         } catch (DocumentParseException dpe) {
             throw dpe;
         } catch (Exception e) {
-            throw new DocumentParseException("$", "document.parse-error", "invalid YAML: " + e.getMessage(), e);
+            throw syntaxError(e);
         }
 
         int[] budget = new int[]{0};
         return buildNode(raw, "$", 0, budget);
+    }
+
+    /**
+     * Maps a SnakeYAML failure to {@code parse.codec-syntax}, at the problem mark SnakeYAML
+     * reported (its marks are 0-based) when there is one, else at {@code 1:1}.
+     */
+    static DocumentParseException syntaxError(Exception e) {
+        int line = 1;
+        int column = 1;
+        if (e instanceof org.yaml.snakeyaml.error.MarkedYAMLException marked && marked.getProblemMark() != null) {
+            line = marked.getProblemMark().getLine() + 1;
+            column = marked.getProblemMark().getColumn() + 1;
+        }
+        return CodecInput.syntax("YAML", String.valueOf(e.getMessage()), line, column, e);
     }
 
     /**
@@ -384,7 +403,11 @@ public final class YamlCodec {
             @Override
             public Node representData(Object data) {
                 String s = (String) data;
-                DumperOptions.ScalarStyle style = s.contains("\u0085") ? 
+                // A label that begins with U+FEFF must be quoted: unquoted as the first key of the
+                // document it would be the second leading mark D-21 rejects on read, and a writer
+                // MUST NOT produce text its own reader refuses.
+                boolean quote = s.contains("\u0085") || (!s.isEmpty() && s.charAt(0) == Bom.MARK);
+                DumperOptions.ScalarStyle style = quote ?
                     DumperOptions.ScalarStyle.DOUBLE_QUOTED : null;
                 return representScalar(Tag.STR, s, style);
             }
