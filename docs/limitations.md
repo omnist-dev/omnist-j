@@ -26,7 +26,7 @@ Every skip is a real, cited reason (omnist-spec §8.5.5, E-20), never a run agai
 | Skips | Reason |
 |---|---|
 | 28 | Not yet implemented: the OSD-OML extension ([omnist-j#105](https://github.com/omnist-dev/omnist-j/issues/105)); 25 `parse_schema_oml`, 3 `write_schema_oml` |
-| 6 | Not yet implemented: the YAML alias expansion limit, D-18/D-19/D-20 (omnist-spec §9.4 **DIV-3**). Every vector carrying `declared_max_alias_expansion` is skipped; the key is on the runner's allowlist so none of them is run against this port's default |
+| 6 | Not yet implemented: the YAML alias expansion limit, D-18/D-19/D-20 (omnist-spec §9.4 **DIV-3**, [omnist-j#113](https://github.com/omnist-dev/omnist-j/issues/113)). Every vector carrying `declared_max_alias_expansion` is skipped, as the suite README's declared-limit rule requires: the key is on the runner's allowlist and this port has no way to configure that limit to the vector's value. Four of the six expect `ok: true` at a limit at or above what the cap enforces and would pass if run, but they would be run against the wrong number, so a pass would prove nothing; the skip is deliberate, not a hidden failure |
 
 A vector whose operation the runner has never heard of is a failure, and a failure whose exception
 carries no structured `code`/`path` is a failure, not a guess. There is no runner-side "known failing"
@@ -34,14 +34,22 @@ list: the CI gate fails on any nonzero fail count (E-22).
 
 ## Known gaps
 
-- **D-18/D-19/D-20 (YAML alias expansion), DIV-3.** Not implemented. SnakeYAML preserves alias
-  identity (an alias is the same Java object as its anchor), so nothing is expanded when the text is
-  decoded; the expansion happens when this port walks the result, bounded by the 1,000,000-node
-  limit (measured: a 48-alias, fan-out-3 bomb costs about 1.2 s and is refused as
-  `document.limit.nodes`, which E-4a says an over-expansion must not be reported as). SnakeYAML's own
-  cap (`maxAliasesForCollections`, default 50 alias uses) refuses a bomb with more alias uses than
-  that first, reported as `parse.codec-syntax`, not `document.limit.alias-expansion`. A self-referential
-  merge (`a: &A {<<: *A, x: 1}`) is accepted as `{x: 1}`, as in the reference.
+- **D-18/D-19/D-20 (YAML alias expansion), DIV-3; tracked in
+  [omnist-j#113](https://github.com/omnist-dev/omnist-j/issues/113).** Not implemented. The only
+  protection today is SnakeYAML's own global cap, `maxAliasesForCollections` (default 50), a
+  stop-gap that is to be replaced by the per-anchor expansion factor once D-18 lands:
+  - **It rejects legitimate input.** It counts alias uses that point at collections; it is not the
+    spec's per-anchor E(a) = W(a) / S(a), which deliberately admits ordinary merge-key configs.
+    Measured: a config with 50 `<<: *defaults` references is accepted, 51, 60 and 100 are refused as
+    `parse.codec-syntax` ("Number of aliases for non-scalar nodes exceeds the specified max=50");
+    100 aliases to a scalar anchor are accepted. Each such merge has E = 1.00 under D-18.
+  - **It is not a complete bomb defence.** A bomb with fewer alias uses than the cap is not refused
+    until this port's walk reaches the 1,000,000-node limit (measured: 48 alias uses, fan-out 3, about
+    1.2 s of CPU), and is then reported as `document.limit.nodes`, which E-4a says an over-expansion
+    must not be. SnakeYAML preserves alias identity, so nothing is expanded when the text is decoded.
+  - A self-referential merge (`a: &A {<<: *A, x: 1}`) is accepted as `{x: 1}`, as in the reference.
+  - The cap is deliberately not changed in this release: raising it would let a bomb burn that CPU
+    before the node limit fires, and it is the only protection until D-18 exists.
 - **D-14 (input must be valid UTF-8).** The library API takes `String`, so decoding is the caller's.
   `Cli` reads files with `Files.readString` (rejects malformed input) but decodes **stdin** with
   `new String(bytes, UTF_8)`, which silently substitutes U+FFFD. There is no conformance vector for
@@ -67,24 +75,31 @@ contains a raw U+FEFF.
 ## Code coverage (JaCoCo)
 
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
-`CliMain`, which is a thin argument-parsing entry point):
+`CliMain`, which is a thin argument-parsing entry point). Numbers are from
+`target/site/jacoco/jacoco.xml` after a fresh `mvn clean test` (two consecutive runs
+gave identical figures; a further six runs by an independent reviewer varied only in
+branch coverage, 99.23% to 99.27% overall):
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.72%** | **99.27%** |
-| `dev.omnist.document` | 100.0% | 98.1% |
+| Overall | **99.72%** (9 of 3169 missed) | **99.27%** (16 of 2194 missed) |
+| `dev.omnist.document` | 100.0% | 98.6% |
 | `dev.omnist.schema` | 100.0% | 99.5% |
-| `dev.omnist.algebra` | 100.0% | 100.0% |
+| `dev.omnist.algebra` | 99.8% | 99.4% |
 | `dev.omnist.cli` | 100.0% | 98.9% |
-| `dev.omnist.codec` | 99.8% | 99.9% |
+| `dev.omnist.codec` | 99.6% | 99.2% |
 | `dev.omnist.validation` | 100.0% | 100.0% |
-| `dev.omnist.oml` | 99.5% | 100.0% |
+| `dev.omnist.oml` | 99.3% | 99.3% |
 
-The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch. BRANCH has
-more margin than LINE because it's measurably sensitive to jqwik's
-`RANDOMIZED` fuzz-test seeding (a fresh seed every run can legitimately
-hit a slightly different set of combinatorial branch outcomes); LINE
-doesn't have this sensitivity, so it stays tight to the real number.
+The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
+
+**The margin is thin, and this is a known risk.** At these numbers the gate has headroom of
+only 3 more missed lines (12 allowed, 9 missed) and 3 more missed branches (19 allowed, 16
+missed); across the reviewer's six runs it was 2 to 3 branches. Any change that adds a few
+uncovered branches can fail `mvn clean test` in CI. BRANCH is measurably sensitive to jqwik's
+`RANDOMIZED` fuzz-test seeding (a fresh seed every run can legitimately hit a slightly
+different set of combinatorial branch outcomes), which is why it has more margin than LINE,
+and still not much.
 
 The handful of remaining uncovered lines are documented trip-wires:
 branches that are defensively correct but not reachable given the real

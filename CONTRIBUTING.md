@@ -40,7 +40,7 @@ Do not open sibling repositories (`~/dev/omnist`, `~/dev/omnist-ts`, `~/dev/omni
 
 Advancing past `v0.0.x-alpha` will be a maintainer sign-off event, not a routine release mechanic.
 
-The spec version this repository targets is **omnist-spec v0.7.0-beta** (pinned via the `vendor/omnist-spec` git submodule). Pass/fail/skip counts will be shipped alongside every release per spec §10.3.
+The spec version this repository targets is **omnist-spec v0.19.0-beta** (pinned via the `vendor/omnist-spec` git submodule). Pass/fail/skip counts will be shipped alongside every release per spec §10.3.
 
 ---
 
