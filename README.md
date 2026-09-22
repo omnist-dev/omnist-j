@@ -13,19 +13,19 @@ Available on [Maven Central](https://central.sonatype.com/artifact/dev.omnist/om
 <dependency>
     <groupId>dev.omnist</groupId>
     <artifactId>omnist-j</artifactId>
-    <version>0.2.4-alpha</version>
+    <version>0.2.5-alpha</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'dev.omnist:omnist-j:0.2.4-alpha'
+implementation 'dev.omnist:omnist-j:0.2.5-alpha'
 ```
 
 This is a plain library jar with its real dependencies (Jackson, SnakeYAML, tomlj) resolved normally — nothing bundled or shaded. If you want to run `omnist` as a standalone CLI instead of using it as a library, use the `cli` classifier, which is a self-contained fat jar:
 ```bash
-curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.2.4-alpha/omnist-j-0.2.4-alpha-cli.jar
-java -jar omnist-j-0.2.4-alpha-cli.jar format sample.oml --to json
+curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.2.5-alpha/omnist-j-0.2.5-alpha-cli.jar
+java -jar omnist-j-0.2.5-alpha-cli.jar format sample.oml --to json
 ```
 
 ## Quickstart
@@ -91,7 +91,7 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 ## Status
 
-**`v0.2.4-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.19.0-beta.
+**`v0.2.5-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.21.0-beta.
 
 - **Conformance**: 244 passing, 0 failures, 34 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (215 pass), compared as (path, code) sets. The skips are the not-yet-implemented OSD-OML extension (28) and the YAML alias expansion limit D-18 (6, DIV-3); see [`docs/limitations.md`](docs/limitations.md).
 - **Tests**: 686 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.

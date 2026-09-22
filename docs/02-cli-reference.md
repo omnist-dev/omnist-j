@@ -9,7 +9,7 @@
 The CLI executable fat jar can be invoked via:
 
 ```bash
-java -jar target/omnist-j-0.2.4-alpha-cli.jar <command> [subcommand] [options]
+java -jar target/omnist-j-0.2.5-alpha-cli.jar <command> [subcommand] [options]
 ```
 
 Or via `./run-conformance` / shell wrapper `omnist`:
