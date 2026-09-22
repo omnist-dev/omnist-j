@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.2.4-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.2.5-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -9,17 +9,32 @@ interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.19.0-beta**'s pinned suite, comparing diagnostics as **(path, code) sets**
+**v0.21.0-beta**'s pinned suite, comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 215 | 0 | 34 |
+| 2: JSON vectors | 239 | 0 | 34 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.19.0-beta to v0.21.0-beta (2026-09-22).** Track 2 went from 215 pass / 0 fail / 34 skip
+(of 249 vectors) to 239 pass / 0 fail / 34 skip (of 273): +14 `bytes_hex` D-14 vectors (all
+presented through the CLI's byte-oriented entry point, per E-27; none decoded with
+replacement), +5 OML-26/OML-27 stray-token vectors (already satisfied, unmeasured before this
+sweep), +4 OSD-15 canonical-escaping vectors (already satisfied, unmeasured before this
+sweep). Skip count is unchanged at 34 (28 OSD-OML + 6 alias-expansion, DIV-3), though its
+composition shifted by +2 OSD-OML skips (parse_schema_oml/write_schema_oml still #105) net of
+the 14 bytes_hex vectors moving from unrunnable to passing. Fixed a real conformance-runner
+gap found during this sweep's comparison audit: `runParseSchemaVector` never compared
+`expect.schema` on a successful `parse_schema` vector at all (not even structurally) --
+confirmed by mutation, a corrupted `expect.schema` on
+`osd-grammar/canonical-output/declaration-order-round-trips-exactly` still reported PASS
+before the fix. Now compared byte-for-byte per Sec3.3/Sec5.9, and the same mutation now
+fails as expected.
 
 Every skip is a real, cited reason (omnist-spec §8.5.5, E-20), never a run against a wrong default:
 
@@ -76,17 +91,16 @@ contains a raw U+FEFF.
 
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 `CliMain`, which is a thin argument-parsing entry point). Numbers are from
-`target/site/jacoco/jacoco.xml` after a fresh `mvn clean test` (two consecutive runs
-gave identical figures; a further six runs by an independent reviewer varied only in
-branch coverage, 99.23% to 99.27% overall):
+`target/site/jacoco/jacoco.xml` after a fresh `mvn clean test`, measured twice
+(v0.21.0-beta adoption sweep, 2026-09-22): both runs gave identical figures.
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.72%** (9 of 3169 missed) | **99.27%** (16 of 2194 missed) |
+| Overall | **99.66%** (11 of 3208 missed) | **99.19%** (18 of 2210 missed) |
 | `dev.omnist.document` | 100.0% | 98.6% |
 | `dev.omnist.schema` | 100.0% | 99.5% |
 | `dev.omnist.algebra` | 99.8% | 99.4% |
-| `dev.omnist.cli` | 100.0% | 98.9% |
+| `dev.omnist.cli` | 99.4% | 98.0% |
 | `dev.omnist.codec` | 99.6% | 99.2% |
 | `dev.omnist.validation` | 100.0% | 100.0% |
 | `dev.omnist.oml` | 99.3% | 99.3% |
@@ -94,12 +108,18 @@ branch coverage, 99.23% to 99.27% overall):
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
 
 **The margin is thin, and this is a known risk.** At these numbers the gate has headroom of
-only 3 more missed lines (12 allowed, 9 missed) and 3 more missed branches (19 allowed, 16
-missed); across the reviewer's six runs it was 2 to 3 branches. Any change that adds a few
-uncovered branches can fail `mvn clean test` in CI. BRANCH is measurably sensitive to jqwik's
-`RANDOMIZED` fuzz-test seeding (a fresh seed every run can legitimately hit a slightly
-different set of combinatorial branch outcomes), which is why it has more margin than LINE,
-and still not much.
+only 1 more missed line (12 allowed, 11 missed) and 1 more missed branch (19 allowed, 18
+missed) -- thinner than the previous v0.19.0-beta measurement (3 lines / 3 branches), because
+this sweep's new code (Cli.java's D-14 strict-UTF-8 decode and its `--json` structured-error
+branches, Track2Runner's bytes_hex routing and its canonical-schema byte-for-byte comparison)
+added lines faster than the new CliTest/Osd14Osd15/property-test coverage could close every
+branch. Two consecutive `mvn clean test` runs gave identical numbers (11 missed lines, 18
+missed branches both times), so this is not run-to-run jqwik seed noise -- it is a real,
+reproducible margin that the next behavior-changing PR should watch closely. `dev.omnist.cli`
+in particular dropped from 100.0%/98.9% to 99.4%/98.0% branch: one defensive catch
+(`Cli.java`'s `MAPPER.writeValueAsString` failure path inside the new `--json` error handler)
+is confirmed-unreachable in practice (the `JsonResponse`/`JsonError` shapes serialize
+unconditionally), the same class of documented trip-wire as the pre-existing gaps below.
 
 The handful of remaining uncovered lines are documented trip-wires:
 branches that are defensively correct but not reachable given the real
