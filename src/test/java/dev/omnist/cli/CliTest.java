@@ -119,4 +119,32 @@ public class CliTest {
         assertEquals(1, res.exitCode); // not empty -> exit code 1
         assertTrue(res.stdout.contains("\"empty\":false"));
     }
+
+
+    @Test
+    @DisplayName("cli --json reports an OmlParseException as a structured (path, code) diagnostic")
+    void testJsonReportsOmlParseException() {
+        CliResult res = runCli(new String[]{"format", "-", "--from", "oml", "--json"}, "a: \"unterminated\n");
+        assertEquals(2, res.exitCode);
+        assertTrue(res.stdout.contains("\"ok\":false"));
+        assertTrue(res.stdout.contains("code"));
+    }
+
+    @Test
+    @DisplayName("cli --json reports an OsdParseException as a structured (path, code) diagnostic")
+    void testJsonReportsOsdParseException() {
+        CliResult res = runCli(new String[]{"schema", "normalize", "-", "--json"}, "record R { \"a\" integer, } root R\n");
+        assertEquals(2, res.exitCode);
+        assertTrue(res.stdout.contains("\"ok\":false"));
+    }
+
+    @Test
+    @DisplayName("cli --json --debug prints a stack trace to stderr in addition to the JSON diagnostic")
+    void testJsonWithDebugPrintsStackTrace() {
+        CliResult res = runCli(new String[]{"format", "-", "--from", "oml", "--json", "--debug"}, "a: \"unterminated\n");
+        assertEquals(2, res.exitCode);
+        assertTrue(res.stdout.contains("\"ok\":false"));
+        assertFalse(res.stderr.isEmpty(), "a stack trace should have been printed to stderr");
+    }
+
 }

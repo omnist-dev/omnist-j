@@ -174,6 +174,33 @@ public final class Cli {
             };
 
         } catch (Exception ex) {
+            boolean jsonFlag = java.util.Arrays.asList(args).contains("--json");
+            if (jsonFlag) {
+                String path = null;
+                String code = null;
+                if (ex instanceof dev.omnist.document.DocumentParseException dpe) {
+                    path = dpe.getPath();
+                    code = dpe.getCode();
+                } else if (ex instanceof dev.omnist.oml.OmlParseException ope) {
+                    path = ope.getPath();
+                    code = ope.getCode();
+                } else if (ex instanceof dev.omnist.schema.OsdParseException spe) {
+                    path = spe.getPath();
+                    code = spe.getCode();
+                }
+                if (code != null) {
+                    try {
+                        out.println(MAPPER.writeValueAsString(new JsonResponse(false, ex.getMessage(),
+                                List.of(new JsonError(path, code, ex.getMessage())))));
+                    } catch (Exception writeEx) {
+                        err.println("Error: " + ex.getMessage());
+                    }
+                    if (debug) {
+                        ex.printStackTrace(err);
+                    }
+                    return 2;
+                }
+            }
             err.println("Error: " + ex.getMessage());
             if (debug) {
                 ex.printStackTrace(err);
@@ -476,10 +503,34 @@ public final class Cli {
     }
 
     private static String readInput(String path, InputStream in) throws Exception {
-        if ("-".equals(path)) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        byte[] bytes = "-".equals(path)
+                ? in.readAllBytes()
+                : java.nio.file.Files.readAllBytes(java.nio.file.Path.of(path));
+        return decodeStrictUtf8(bytes);
+    }
+
+    /**
+     * Decodes {@code bytes} as strict UTF-8 (omnist-spec D-14, §2.5): invalid UTF-8 MUST be
+     * rejected with {@code parse.invalid-encoding} at {@code 1:1}, before any BOM handling
+     * (D-15, D-21). Applies uniformly to every byte-oriented entry point this CLI has —
+     * standard input and file input alike — and never falls back to a lossy repair such as
+     * {@code U+FFFD} replacement or a surrogate-escape scheme.
+     *
+     * @param bytes the raw input bytes
+     * @return the decoded text
+     * @throws dev.omnist.document.DocumentParseException with code {@code parse.invalid-encoding}
+     *         at path {@code 1:1} if {@code bytes} is not valid UTF-8
+     */
+    private static String decodeStrictUtf8(byte[] bytes) {
+        try {
+            java.nio.charset.CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
+            return decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        } catch (java.nio.charset.CharacterCodingException ex) {
+            throw new dev.omnist.document.DocumentParseException("1:1", "parse.invalid-encoding",
+                    "invalid encoding at 1:1: input is not valid UTF-8", ex);
         }
-        return java.nio.file.Files.readString(java.nio.file.Path.of(path), StandardCharsets.UTF_8);
     }
 
     private static void writeOutput(String path, String data, PrintStream out) throws Exception {

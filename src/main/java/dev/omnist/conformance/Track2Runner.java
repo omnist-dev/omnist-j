@@ -177,6 +177,10 @@ public final class Track2Runner {
     }
 
     private static void runParseVector(JsonNode input, JsonNode expect) throws Exception {
+        if (input.has("bytes_hex")) {
+            runParseVectorBytesHex(input, expect);
+            return;
+        }
         String text = input.get("text").asText();
         String format = input.has("format") ? input.get("format").asText() : "oml";
         boolean expectedOk = expect.get("ok").asBoolean();
@@ -228,7 +232,11 @@ public final class Track2Runner {
         }
     }
 
-    private static void runParseSchemaVector(JsonNode input, JsonNode expect) {
+    private static void runParseSchemaVector(JsonNode input, JsonNode expect) throws Exception {
+        if (input.has("bytes_hex")) {
+            runParseSchemaVectorBytesHex(input, expect);
+            return;
+        }
         String text = input.get("text").asText();
         boolean expectedOk = expect.get("ok").asBoolean();
 
@@ -244,6 +252,20 @@ public final class Track2Runner {
             if (thrown != null) {
                 throw new RuntimeException("Expected parse_schema success, but got: " + thrown.getMessage(), thrown);
             }
+            if (expect.has("schema")) {
+                // omnist-spec Sec3.3/Sec5.9: canonical OSD output is byte-for-byte
+                // deterministic, so a determinism-regression vector's expect.schema is
+                // compared as exact text, not merely re-parsed for structural equality
+                // (the gap the TypeScript sweep review found: a structural comparison
+                // would pass even if OsdWriter mis-orders records, mis-escapes a label
+                // (OSD-15), or otherwise deviates from the one canonical spelling).
+                String expectedSchemaText = normalizeNewlines(expect.get("schema").asText());
+                String actualSchemaText = normalizeNewlines(OsdWriter.write(actualSchema));
+                if (!actualSchemaText.equals(expectedSchemaText)) {
+                    throw new RuntimeException("parse_schema canonical output mismatch. Expected: ["
+                            + expectedSchemaText + "] Actual: [" + actualSchemaText + "]");
+                }
+            }
             passCount++;
             System.out.println("    [PASS] parse_schema success");
         } else {
@@ -254,6 +276,119 @@ public final class Track2Runner {
             passCount++;
             System.out.println("    [PASS] parse_schema error");
         }
+    }
+
+    private static String normalizeNewlines(String s) {
+        return s.replace("\r\n", "\n");
+    }
+
+    /**
+     * D-14 / E-27: presents a {@code bytes_hex} {@code parse} vector's raw bytes to the CLI's
+     * byte-oriented entry point ({@code omnist format - --from &lt;format&gt; --json}, fed via
+     * stdin) rather than decoding them in this runner with a lossy repair. On success, the CLI's
+     * stdout is the reformatted document (OML by default) which is re-parsed and compared to
+     * {@code expect.document}; on failure, the CLI's {@code --json} error payload's
+     * {@code (path, code)} is compared to {@code expect.diagnostics}, exactly as the text-input
+     * path does via {@link #compareJsonDiagnostics}.
+     */
+    private static void runParseVectorBytesHex(JsonNode input, JsonNode expect) throws Exception {
+        byte[] bytes = hexToBytes(input.get("bytes_hex").asText());
+        String format = input.has("format") ? input.get("format").asText() : "oml";
+        boolean expectedOk = expect.get("ok").asBoolean();
+
+        CliResult result = runCli(new String[] {"format", "-", "--from", format, "--json"}, bytes);
+
+        if (expectedOk) {
+            if (result.exitCode() != 0) {
+                throw new RuntimeException("Expected parse success (bytes_hex), but CLI exited " + result.exitCode()
+                        + ": " + result.stdout() + result.stderr());
+            }
+            Document actualDoc = OmlReader.read(result.stdout());
+            Document expectedDoc = decodeJsonDoc(expect.get("document"));
+            if (!actualDoc.equals(expectedDoc) && !isEquivalentDoc(actualDoc, expectedDoc)) {
+                throw new RuntimeException("Parsed document (bytes_hex, via CLI) does not match expected document");
+            }
+            passCount++;
+            System.out.println("    [PASS] parse (bytes_hex):" + input.get("bytes_hex").asText());
+        } else {
+            if (result.exitCode() == 0) {
+                throw new RuntimeException("Expected parse failure (bytes_hex), but CLI succeeded: " + result.stdout());
+            }
+            List<JsonDiagnostic> actualDiags = extractCliJsonDiagnostics(result.stdout());
+            compareJsonDiagnostics(actualDiags, expect.get("diagnostics"));
+            passCount++;
+            System.out.println("    [PASS] parse error (bytes_hex):" + input.get("bytes_hex").asText());
+        }
+    }
+
+    /**
+     * D-14 / E-27, the {@code parse_schema} counterpart of {@link #runParseVectorBytesHex}:
+     * presents the bytes to {@code omnist schema normalize - --json} (any command that reads an
+     * OSD schema from stdin exercises the same byte-oriented decode path).
+     */
+    private static void runParseSchemaVectorBytesHex(JsonNode input, JsonNode expect) throws Exception {
+        byte[] bytes = hexToBytes(input.get("bytes_hex").asText());
+        boolean expectedOk = expect.get("ok").asBoolean();
+
+        CliResult result = runCli(new String[] {"schema", "normalize", "-", "--json"}, bytes);
+
+        if (expectedOk) {
+            if (result.exitCode() != 0) {
+                throw new RuntimeException("Expected parse_schema success (bytes_hex), but CLI exited "
+                        + result.exitCode() + ": " + result.stdout() + result.stderr());
+            }
+            passCount++;
+            System.out.println("    [PASS] parse_schema success (bytes_hex)");
+        } else {
+            if (result.exitCode() == 0) {
+                throw new RuntimeException("Expected parse_schema failure (bytes_hex), but CLI succeeded: " + result.stdout());
+            }
+            List<JsonDiagnostic> actualDiags = extractCliJsonDiagnostics(result.stdout());
+            compareJsonDiagnostics(actualDiags, expect.get("diagnostics"));
+            passCount++;
+            System.out.println("    [PASS] parse_schema error (bytes_hex)");
+        }
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        int len = hex.length();
+        byte[] out = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            out[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
+        }
+        return out;
+    }
+
+    private record CliResult(int exitCode, String stdout, String stderr) {}
+
+    /**
+     * Runs the CLI's {@code dev.omnist.cli.Cli#run} entry point in-process, feeding {@code bytes}
+     * raw (undecoded) on stdin — the CLI's own byte-oriented entry point, per E-27 — and capturing
+     * its exit code and streams.
+     */
+    private static CliResult runCli(String[] args, byte[] bytes) throws Exception {
+        java.io.ByteArrayOutputStream outBaos = new java.io.ByteArrayOutputStream();
+        java.io.ByteArrayOutputStream errBaos = new java.io.ByteArrayOutputStream();
+        try (java.io.PrintStream outPs = new java.io.PrintStream(outBaos, true, StandardCharsets.UTF_8);
+             java.io.PrintStream errPs = new java.io.PrintStream(errBaos, true, StandardCharsets.UTF_8);
+             java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(bytes)) {
+            int code = dev.omnist.cli.Cli.run(args, outPs, errPs, in);
+            return new CliResult(code, outBaos.toString(StandardCharsets.UTF_8), errBaos.toString(StandardCharsets.UTF_8));
+        }
+    }
+
+    /**
+     * Parses a {@code --json} error payload the CLI printed on stdout (the same
+     * {@code {"ok":false,"errors":[{"path":...,"code":...}]}} shape {@link #extractParserDiagnostics}
+     * builds from an in-process exception) into the same {@link JsonDiagnostic} list.
+     */
+    private static List<JsonDiagnostic> extractCliJsonDiagnostics(String stdout) throws Exception {
+        JsonNode root = MAPPER.readTree(stdout);
+        List<JsonDiagnostic> diags = new ArrayList<>();
+        for (JsonNode err : root.get("errors")) {
+            diags.add(new JsonDiagnostic(err.get("path").asText(), err.get("code").asText()));
+        }
+        return diags;
     }
 
     private static void runValidateVector(JsonNode input, JsonNode expect) {

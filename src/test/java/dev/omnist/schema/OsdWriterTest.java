@@ -1,5 +1,6 @@
 package dev.omnist.schema;
 
+import dev.omnist.codec.WriteException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +11,15 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OsdWriterTest {
+
+    private static Schema schemaWithLabel(String label) {
+        Record r = new Record("R", List.of(
+                new Field(label, new Type.Scalar(ScalarKind.STRING, false), 1, 1)
+        ));
+        Map<String, Record> records = new LinkedHashMap<>();
+        records.put("R", r);
+        return new Schema("R", records);
+    }
 
     @Test
     @DisplayName("Full canonical and compact round-trip test across all types and cardinalities")
@@ -125,5 +135,98 @@ class OsdWriterTest {
         String written = OsdWriter.write(schema);
         Schema readBack = OsdReader.read(written);
         assertEquals(schema, readBack, "All scalar kinds & types round-trip failed");
+    }
+
+    // --- OSD-15: canonical OSD escaping (§5.9) -- a backslash MUST be written \\,
+    // a double quote MUST be written \", and nothing else may be escaped. No conformance
+    // vector coverage gap here (four osd-grammar/canonical-output/label-* vectors already
+    // pin this at the harness level); these add engine-level, assertion-specific coverage. ---
+
+    @Test
+    @DisplayName("OSD-15: a label containing a backslash is written as \\\\ and round-trips")
+    void testOsd15BackslashLabel() {
+        Schema schema = schemaWithLabel("a\\b");
+        String written = OsdWriter.write(schema);
+        assertTrue(written.contains("\"a\\\\b\""), "backslash must be written as \\\\");
+        assertEquals(schema, OsdReader.read(written));
+    }
+
+    @Test
+    @DisplayName("OSD-15: a label containing a double quote is written as \\\" and round-trips")
+    void testOsd15QuoteLabel() {
+        Schema schema = schemaWithLabel("a\"b");
+        String written = OsdWriter.write(schema);
+        assertTrue(written.contains("\"a\\\"b\""), "double quote must be written as \\\"");
+        assertEquals(schema, OsdReader.read(written));
+    }
+
+    @Test
+    @DisplayName("OSD-15: a label containing both a backslash and a quote round-trips")
+    void testOsd15BackslashAndQuoteLabel() {
+        Schema schema = schemaWithLabel("a\\\"b");
+        String written = OsdWriter.write(schema);
+        assertEquals(schema, OsdReader.read(written));
+    }
+
+    @Test
+    @DisplayName("OSD-15: a label ending in a backslash round-trips (naive-writer's own-quote-escape trap)")
+    void testOsd15TrailingBackslashLabel() {
+        Schema schema = schemaWithLabel("a\\");
+        String written = OsdWriter.write(schema);
+        assertEquals(schema, OsdReader.read(written));
+    }
+
+    // --- OSD-14: an OSD writer refuses a field label carrying a C0 control character
+    // (§5.9/§8.3.9), unconditionally and regardless of strict mode, with
+    // write.unsupported-value whose path is the Schema path of the record holding the
+    // field. No conformance vector can pin this (DIV-5): a vector's schema input is OSD
+    // text, and a schema with such a label has no OSD text to begin with. ---
+
+    @Test
+    @DisplayName("OSD-14: a label containing a C0 control character fails write.unsupported-value")
+    void testOsd14ControlCharacterLabel() {
+        Schema schema = schemaWithLabel("a" + (char) 0 + "b");
+        WriteException ex = assertThrows(WriteException.class, () -> OsdWriter.write(schema));
+        assertEquals("write.unsupported-value", ex.report().adjustments().get(0).code());
+    }
+
+    @Test
+    @DisplayName("OSD-14: a tab (U+0009) in a label fails write.unsupported-value")
+    void testOsd14TabLabel() {
+        assertThrows(WriteException.class, () -> OsdWriter.write(schemaWithLabel("a\tb")));
+    }
+
+    @Test
+    @DisplayName("OSD-14: a newline (U+000A) in a label fails write.unsupported-value")
+    void testOsd14NewlineLabel() {
+        assertThrows(WriteException.class, () -> OsdWriter.write(schemaWithLabel("a\nb")));
+    }
+
+    @Test
+    @DisplayName("OSD-14: a label containing U+001F (last C0 control) fails write.unsupported-value")
+    void testOsd14LastC0ControlLabel() {
+        assertThrows(WriteException.class, () -> OsdWriter.write(schemaWithLabel("a" + (char) 0x1F + "b")));
+    }
+
+    @Test
+    @DisplayName("OSD-14: U+0020 (space, first non-C0 codepoint) does not fail")
+    void testOsd14SpaceLabelAllowed() {
+        Schema schema = schemaWithLabel("a" + (char) 0x20 + "b");
+        String written = OsdWriter.write(schema);
+        assertEquals(schema, OsdReader.read(written));
+    }
+
+    @Test
+    @DisplayName("OSD-14: the failure's path is the record's Schema path, not record.label")
+    void testOsd14FailurePathIsRecordPath() {
+        WriteException ex = assertThrows(WriteException.class,
+                () -> OsdWriter.write(schemaWithLabel("a" + (char) 1 + "b")));
+        assertEquals("R", ex.report().adjustments().get(0).path());
+    }
+
+    @Test
+    @DisplayName("OSD-14: the compact writer also refuses unconditionally")
+    void testOsd14CompactWriterAlsoRefuses() {
+        assertThrows(WriteException.class, () -> OsdWriter.writeCompact(schemaWithLabel("a" + (char) 1 + "b")));
     }
 }
