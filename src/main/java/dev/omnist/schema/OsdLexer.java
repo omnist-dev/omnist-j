@@ -209,7 +209,8 @@ public class OsdLexer {
         if (c == '\n') {
             line++;
             col = 1;
-        } else {
+        } else if (!(pos > 1 && Character.isLowSurrogate(c) && Character.isHighSurrogate(source.charAt(pos - 2)))) {
+            // E-28: the column counts Unicode code points, so the second half of a surrogate pair adds nothing.
             col++;
         }
         return c;
