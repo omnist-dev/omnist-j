@@ -120,14 +120,13 @@ public class CliTest {
         assertTrue(res.stdout.contains("\"empty\":false"));
     }
 
-
     @Test
     @DisplayName("cli --json reports an OmlParseException as a structured (path, code) diagnostic")
     void testJsonReportsOmlParseException() {
         CliResult res = runCli(new String[]{"format", "-", "--from", "oml", "--json"}, "a: \"unterminated\n");
         assertEquals(2, res.exitCode);
         assertTrue(res.stdout.contains("\"ok\":false"));
-        assertTrue(res.stdout.contains("code"));
+        assertTrue(res.stdout.contains("\"path\":\"1:4\",\"code\":\"parse.control-character\""), res.stdout);
     }
 
     @Test
@@ -136,6 +135,7 @@ public class CliTest {
         CliResult res = runCli(new String[]{"schema", "normalize", "-", "--json"}, "record R { \"a\" integer, } root R\n");
         assertEquals(2, res.exitCode);
         assertTrue(res.stdout.contains("\"ok\":false"));
+        assertTrue(res.stdout.contains("\"path\":\"1:16\",\"code\":\"parse.unexpected-token\""), res.stdout);
     }
 
     @Test
@@ -144,7 +144,7 @@ public class CliTest {
         CliResult res = runCli(new String[]{"format", "-", "--from", "oml", "--json", "--debug"}, "a: \"unterminated\n");
         assertEquals(2, res.exitCode);
         assertTrue(res.stdout.contains("\"ok\":false"));
+        assertTrue(res.stdout.contains("\"path\":\"1:4\",\"code\":\"parse.control-character\""), res.stdout);
         assertFalse(res.stderr.isEmpty(), "a stack trace should have been printed to stderr");
     }
-
 }

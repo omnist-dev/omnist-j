@@ -25,7 +25,7 @@ omnist <command> [subcommand] [options]
 - `--compact`: write output in compact single-line form where supported.
 - `-o <file>`: write output to a file instead of standard output.
 - `--debug`, `-v`: enable verbose debug error output including JVM stack traces.
-- `--json`: format errors and boolean results as machine-readable JSON.
+- `--json`: format errors and boolean results as machine-readable JSON. Under `--json`, a document or schema parse failure (including `parse.invalid-encoding` at `1:1` for input that is not valid UTF-8, on stdin and file input alike) is reported as a `{"ok":false,"errors":[{"path","code","message"}]}` payload on **stdout** with exit code 2; previously such failures printed a plain message to stderr. Without `--json`, errors still go to stderr.
 
 ## Commands & Subcommands
 

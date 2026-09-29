@@ -28,32 +28,23 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class Osd14LabelPropertyTest {
 
-    private static Schema schemaWithLabel(String label) {
-        Record r = new Record("R", List.of(
-                new Field(label, new Type.Scalar(ScalarKind.STRING, false), 1, 1)
-        ));
-        Map<String, Record> records = new LinkedHashMap<>();
-        records.put("R", r);
-        return new Schema("R", records);
-    }
-
     @Property(tries = 2000, shrinking = ShrinkingMode.OFF)
     void arbitraryWritableLabelRoundTripsThroughCanonicalOsd(@ForAll("writableLabels") String label) {
-        Schema schema = schemaWithLabel(label);
+        Schema schema = OsdWriterTest.schemaWithLabel(label);
         String written = OsdWriter.write(schema);
         assertEquals(schema, OsdReader.read(written));
     }
 
     @Property(tries = 2000, shrinking = ShrinkingMode.OFF)
     void arbitraryWritableLabelRoundTripsThroughCompactOsd(@ForAll("writableLabels") String label) {
-        Schema schema = schemaWithLabel(label);
+        Schema schema = OsdWriterTest.schemaWithLabel(label);
         String written = OsdWriter.writeCompact(schema);
         assertEquals(schema, OsdReader.read(written));
     }
 
     @Property(tries = 500, shrinking = ShrinkingMode.OFF)
     void anyLabelContainingAC0ControlAlwaysFailsToWrite(@ForAll("labelsWithC0") String label) {
-        assertThrows(WriteException.class, () -> OsdWriter.write(schemaWithLabel(label)));
+        assertThrows(WriteException.class, () -> OsdWriter.write(OsdWriterTest.schemaWithLabel(label)));
     }
 
     @Provide

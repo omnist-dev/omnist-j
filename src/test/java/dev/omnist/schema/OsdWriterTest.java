@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class OsdWriterTest {
 
-    private static Schema schemaWithLabel(String label) {
+    static Schema schemaWithLabel(String label) {
         Record r = new Record("R", List.of(
                 new Field(label, new Type.Scalar(ScalarKind.STRING, false), 1, 1)
         ));

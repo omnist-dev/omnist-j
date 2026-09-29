@@ -22,14 +22,17 @@ loosening anywhere in the runner). **0 failures.**
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
 
 **v0.19.0-beta to v0.21.0-beta (2026-09-22).** Track 2 went from 215 pass / 0 fail / 34 skip
-(of 249 vectors) to 239 pass / 0 fail / 34 skip (of 273): +14 `bytes_hex` D-14 vectors (all
-presented through the CLI's byte-oriented entry point, per E-27; none decoded with
-replacement), +5 OML-26/OML-27 stray-token vectors (already satisfied, unmeasured before this
-sweep), +4 OSD-15 canonical-escaping vectors (already satisfied, unmeasured before this
-sweep). Skip count is unchanged at 34 (28 OSD-OML + 6 alias-expansion, DIV-3), though its
-composition shifted by +2 OSD-OML skips (parse_schema_oml/write_schema_oml still #105) net of
-the 14 bytes_hex vectors moving from unrunnable to passing. Fixed a real conformance-runner
-gap found during this sweep's comparison audit: `runParseSchemaVector` never compared
+(of 249 vectors) to 239 pass / 0 fail / 34 skip (of 273): 215 + 14 `bytes_hex` D-14 vectors
+(all presented through the CLI's byte-oriented entry point, per E-27; none decoded with
+replacement) + 5 OML-26/OML-27 stray-token vectors (4 `shape/*` + 1 `arrays/*`, already
+satisfied, unmeasured before this sweep) + 4 OSD-15 canonical-escaping vectors (already
+satisfied, unmeasured before this sweep) + 1
+`infer/allow-any/mixed-object-and-scalar-shapes-open-to-any-when-allowed` vector (already
+satisfied) = 239. Skip count and its breakdown are unchanged at 34 (28 OSD-OML + 6
+alias-expansion, DIV-3) -- both the pre-sweep and post-sweep runs give the identical
+25 `parse_schema_oml` + 3 `write_schema_oml` + 6 alias-expansion split. Fixed a real
+conformance-runner gap found during this sweep's comparison audit: `runParseSchemaVector`
+never compared
 `expect.schema` on a successful `parse_schema` vector at all (not even structurally) --
 confirmed by mutation, a corrupted `expect.schema` on
 `osd-grammar/canonical-output/declaration-order-round-trips-exactly` still reported PASS

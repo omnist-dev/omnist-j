@@ -93,9 +93,9 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 **`v0.2.5-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.21.0-beta.
 
-- **Conformance**: 244 passing, 0 failures, 34 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (215 pass), compared as (path, code) sets. The skips are the not-yet-implemented OSD-OML extension (28) and the YAML alias expansion limit D-18 (6, DIV-3); see [`docs/limitations.md`](docs/limitations.md).
-- **Tests**: 686 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
-- **Coverage**: 99.72% line / 99.27% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.
+- **Conformance**: 268 passing, 0 failures, 34 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (239 pass), compared as (path, code) sets. The skips are the not-yet-implemented OSD-OML extension (28) and the YAML alias expansion limit D-18 (6, DIV-3); see [`docs/limitations.md`](docs/limitations.md).
+- **Tests**: 704 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
+- **Coverage**: 99.66% line / 99.19% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.
 
 ## Sibling ports
 
