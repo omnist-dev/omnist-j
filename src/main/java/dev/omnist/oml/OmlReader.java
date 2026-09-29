@@ -197,12 +197,19 @@ public class OmlReader {
                 if (insideBraces && peekType() == TokenType.RBRACE) {
                     break;
                 }
-                if (!HadSep) {
+                if (!insideBraces) {
+                    // OML-26: after a complete TOP-LEVEL edge the list continues only if a separator
+                    // is followed by a STRING or IDENT (a label); anything else is leftover content,
+                    // with or without a separator in front of it.
+                    TokenType next = peekType();
+                    if (!HadSep || (next != TokenType.STRING && next != TokenType.IDENT)) {
+                        Token cur = peekToken();
+                        throw new OmlParseException(cur.line(), cur.col(), "parse.trailing-content", "Content after the end of the document");
+                    }
+                } else if (!HadSep) {
+                    // OML-27: a missing separator inside {...} is an unexpected token.
                     Token cur = peekToken();
-                    // Leftover content after a complete TOP-LEVEL edge is trailing content
-                    // (omnist-spec#103); a missing separator inside {...} is an unexpected token.
-                    String code = insideBraces ? "parse.unexpected-token" : "parse.trailing-content";
-                    throw new OmlParseException(cur.line(), cur.col(), code, "Edge separator (newline or ';') required between adjacent edges");
+                    throw new OmlParseException(cur.line(), cur.col(), "parse.unexpected-token", "Edge separator (newline or ';') required between adjacent edges");
                 }
             }
         }

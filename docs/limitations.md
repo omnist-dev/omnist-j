@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.2.5-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.2.6-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -9,17 +9,36 @@ interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.21.0-beta**'s pinned suite, comparing diagnostics as **(path, code) sets**
+**v0.22.0-beta**'s pinned suite, comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 239 | 0 | 34 |
+| 2: JSON vectors | 253 | 0 | 34 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.21.0-beta to v0.22.0-beta (2026-09-29).** Track 2 went from 241 pass / 12 fail / 34 skip
+(of 287 vectors, measured with the bump applied and no code change) to 253 pass / 0 fail / 34 skip;
+the harness headline from 270 / 12 / 34 to 282 / 0 / 34 (Track 1 unchanged at 29 / 0 / 0). The 12
+failures were DIV-7's: ten OML-26 separator-then-stray-token vectors
+(`shape/separator-then-closing-brace-...`, `semicolon-then-closing-brace-...`,
+`separator-then-comma-...`, `separator-then-closing-bracket-...`, `separator-then-a-non-label-token-...`,
+`separator-then-nan-...`, `separator-then-opening-brace-...`, `separator-then-an-array-...`,
+`separator-then-colon-...`, and `closing-brace-after-a-braced-edge-value-...`, all reported
+`parse.unexpected-token`) and the two E-28 code-point column vectors
+(`oml-grammar/errors/column-counts-code-points-after-an-astral-character` at `1:13` for `1:12`,
+`osd-grammar/errors/...` at `2:19` for `2:18`). Changes: after a complete top-level edge the edge
+list continues only if a separator is followed by a `STRING` or `IDENT`, and any other leftover token
+is `parse.trailing-content` with or without a separator (OML-26, OML-25); inside `{...}` and `[...]`
+it stays `parse.unexpected-token` (OML-27); the OML and OSD lexers count the column in Unicode code
+points (E-28), so the second half of a surrogate pair adds nothing. Skips are unchanged at 34.
+Measured on one-line inputs of about 1.9 million characters (the input cap is 2,000,000), before
+and after, best of three: 200k-token array 207 ms / 184 ms, 100k edges 347 ms / 285 ms, a 1.9M-character
+string 19 ms / 21 ms, an OSD line of 100k fields 98 ms / 73 ms. The column computation stays linear.
 
 **v0.19.0-beta to v0.21.0-beta (2026-09-22).** Track 2 went from 215 pass / 0 fail / 34 skip
 (of 249 vectors) to 239 pass / 0 fail / 34 skip (of 273): 215 + 14 `bytes_hex` D-14 vectors
@@ -69,9 +88,11 @@ list: the CI gate fails on any nonzero fail count (E-22).
   - The cap is deliberately not changed in this release: raising it would let a bomb burn that CPU
     before the node limit fires, and it is the only protection until D-18 exists.
 - **D-14 (input must be valid UTF-8).** The library API takes `String`, so decoding is the caller's.
-  `Cli` reads files with `Files.readString` (rejects malformed input) but decodes **stdin** with
-  `new String(bytes, UTF_8)`, which silently substitutes U+FFFD. There is no conformance vector for
-  D-14 yet (omnist-spec#105).
+  `Cli` decodes both files and stdin strictly (`CharsetDecoder` with `REPORT`) and refuses malformed
+  input with `parse.invalid-encoding` at `1:1`; the `bytes_hex` vectors (E-27) cover it.
+- **Codec syntax positions (JSON/YAML/TOML/XML)** keep each codec library's own position
+  arithmetic. E-28's code-point column is implemented for OML and OSD text only; the codec
+  positions are the open question [omnist-spec#114](https://github.com/omnist-dev/omnist-spec/issues/114).
 - **Nesting past the parsers' own limits.** JSON and YAML nesting of 1000 or more levels is refused
   by Jackson / SnakeYAML before this port's depth limit (200) is consulted, and is reported as
   `parse.codec-syntax` rather than `document.limit.depth`.
@@ -83,7 +104,7 @@ list: the CI gate fails on any nonzero fail count (E-22).
 
 ## Testing
 
-**686 tests passing**, 0 failures — JUnit unit/integration tests plus
+**737 tests passing**, 0 failures — JUnit unit/integration tests plus
 jqwik property-based and fuzz tests (grammar-aware generators for TOML
 radix literals, OML lexing, and YAML timestamp shapes; raw-input fuzzers
 for every codec reader) run at thousands of iterations per property with
@@ -95,13 +116,13 @@ contains a raw U+FEFF.
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 `CliMain`, which is a thin argument-parsing entry point). Numbers are from
 `target/site/jacoco/jacoco.xml` after a fresh `mvn clean test`, measured twice
-(v0.21.0-beta adoption sweep, 2026-09-22): both runs gave identical figures.
+(v0.22.0-beta adoption, 2026-09-29): both runs gave identical figures.
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.66%** (11 of 3208 missed) | **99.19%** (18 of 2210 missed) |
+| Overall | **99.66%** (11 of 3214 missed) | **99.19%** (18 of 2228 missed) |
 | `dev.omnist.document` | 100.0% | 98.6% |
-| `dev.omnist.schema` | 100.0% | 99.5% |
+| `dev.omnist.schema` | 100.0% | 99.6% |
 | `dev.omnist.algebra` | 99.8% | 99.4% |
 | `dev.omnist.cli` | 99.4% | 98.0% |
 | `dev.omnist.codec` | 99.6% | 99.2% |
@@ -111,9 +132,10 @@ Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
 
 **The margin is thin, and this is a known risk.** At these numbers the gate has headroom of
-only 1 more missed line (12 allowed, 11 missed) and 1 more missed branch (19 allowed, 18
-missed) -- thinner than the previous v0.19.0-beta measurement (3 lines / 3 branches), because
-this sweep's new code (Cli.java's D-14 strict-UTF-8 decode and its `--json` structured-error
+only 1 more missed line (12 allowed, 11 missed) and 2 more missed branches (20 allowed, 18
+missed). The v0.22.0-beta adoption added lines and branches (3208 to 3214 lines, 2210 to 2228
+branches) and every one is covered: the missed counts are unchanged at 11 / 18. The headroom was thinner at v0.21.0-beta than at
+v0.19.0-beta (3 lines / 3 branches), because that sweep's new code (Cli.java's D-14 strict-UTF-8 decode and its `--json` structured-error
 branches, Track2Runner's bytes_hex routing and its canonical-schema byte-for-byte comparison)
 added lines faster than the new CliTest/Osd14Osd15/property-test coverage could close every
 branch. Two consecutive `mvn clean test` runs gave identical numbers (11 missed lines, 18

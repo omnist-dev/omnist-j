@@ -59,7 +59,10 @@ class ConformanceTest {
         // Skip breakdown is unchanged from v0.19.0-beta: 34 total, 28 OSD-OML
         // (25 parse_schema_oml + 3 write_schema_oml, still #105) + 6 alias-expansion
         // (unchanged, DIV-3 untouched).
-        assertEquals(239, results[0], "Track 2 should pass 239 real JSON test vectors");
+        // Bumped to omnist-spec v0.22.0-beta: 287 vectors in this track. 253 = 239 + 14 new
+        // vectors (12 OML-26/OML-25 separator-then-stray-token, and 2 E-28 code-point column
+        // vectors, which failed before the OML/OSD lexers counted code points). Skips unchanged.
+        assertEquals(253, results[0], "Track 2 should pass 253 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
         assertEquals(34, results[2], "Track 2 should skip 28 OSD-OML vectors and 6 alias-expansion vectors");
     }
