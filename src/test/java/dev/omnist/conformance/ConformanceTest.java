@@ -48,7 +48,18 @@ class ConformanceTest {
         // Bumped to omnist-spec v0.19.0-beta: 249 vectors, none failing. Skips are exactly the 28
         // not-yet-implemented OSD-OML vectors (omnist-j#105) and the 6 alias-expansion vectors
         // (D-18, DIV-3) that carry declared_max_alias_expansion.
-        assertEquals(215, results[0], "Track 2 should pass 215 real JSON test vectors");
+        // Bumped to omnist-spec v0.21.0-beta: 273 vectors in this track. 239 = 215 + 14 new
+        // bytes_hex D-14 vectors (Cli.readInput now decodes strictly via
+        // CharsetDecoder.REPORT and the runner presents them through the CLI's
+        // byte-oriented entry point, omnist-j D-14/DIV-6 sweep) + 5 new OML-26/OML-27
+        // stray-token vectors (4 shape/* + 1 arrays/*, already satisfied ahead of the
+        // spec text) + 4 new OSD-15 canonical-escaping vectors (already satisfied) + 1
+        // new infer/allow-any/mixed-object-and-scalar-shapes-open-to-any-when-allowed
+        // vector (already satisfied). 215 + 14 + 5 + 4 + 1 = 239.
+        // Skip breakdown is unchanged from v0.19.0-beta: 34 total, 28 OSD-OML
+        // (25 parse_schema_oml + 3 write_schema_oml, still #105) + 6 alias-expansion
+        // (unchanged, DIV-3 untouched).
+        assertEquals(239, results[0], "Track 2 should pass 239 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
         assertEquals(34, results[2], "Track 2 should skip 28 OSD-OML vectors and 6 alias-expansion vectors");
     }

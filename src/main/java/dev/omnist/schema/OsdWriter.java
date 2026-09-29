@@ -1,5 +1,7 @@
 package dev.omnist.schema;
 
+import dev.omnist.codec.WriteException;
+import dev.omnist.codec.WriteReport;
 import java.util.Map;
 
 /**
@@ -63,6 +65,7 @@ public final class OsdWriter {
         sb.append("record ").append(record.name()).append(" {\n");
 
         for (Field field : record.fields()) {
+            checkLabel(field.label(), record.name());
             sb.append("    ");
             writeQuotedString(sb, field.label());
             writeCardinality(sb, field.min(), field.max());
@@ -79,6 +82,7 @@ public final class OsdWriter {
 
         boolean first = true;
         for (Field field : record.fields()) {
+            checkLabel(field.label(), record.name());
             if (!first) {
                 sb.append(" ");
             } else {
@@ -139,6 +143,32 @@ public final class OsdWriter {
             }
             case Type.Ref ref -> sb.append(ref.name());
             case Type.Any ignored -> sb.append("any");
+        }
+    }
+
+    /**
+     * Rejects a field label that OSD cannot spell (omnist-spec OSD-14, §5.9/§8.3.9):
+     * a C0 control character (U+0000–U+001F) in a label has no OSD text at all, since
+     * §5.3.1 bans the raw byte in a string body — escape context included — and OSD's
+     * unescaping is weak. Fails unconditionally, regardless of strict mode, with
+     * {@code write.unsupported-value} whose path is the Schema path of the record
+     * holding the field (never {@code record.label}, since a path cannot quote a
+     * label containing the very byte that has no spelling).
+     *
+     * @param label      the field label to check
+     * @param recordPath the Schema path of the record holding this field, e.g. {@code "R"}
+     * @throws WriteException if {@code label} contains a C0 control character
+     */
+    private static void checkLabel(String label, String recordPath) {
+        for (int i = 0; i < label.length(); i++) {
+            char c = label.charAt(i);
+            if (c <= 0x1F) {
+                WriteReport rep = new WriteReport();
+                rep.add(recordPath, "write.unsupported-value",
+                        "field label contains a C0 control character (U+" + String.format("%04X", (int) c)
+                                + "), which has no OSD spelling", "error");
+                throw new WriteException(rep.toString(), rep);
+            }
         }
     }
 

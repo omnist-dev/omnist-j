@@ -112,4 +112,23 @@ class RunnerHonestyTest {
         assertEquals(1, results[0]);
         assertEquals(1, Track1Runner.refereeSelfTestCount());
     }
+
+    @Test
+    void aParseSchemaVectorsExpectedCanonicalSchemaTextIsCheckedByteForByte(@TempDir Path dir) throws Exception {
+        // omnist-spec Sec3.3/Sec5.9: the canonical OSD `expect.schema` on a successful
+        // parse_schema vector is byte-for-byte, not merely structural. This is the exact
+        // defect a real PR fixed (runParseSchemaVector never compared expect.schema on
+        // success at all): a vector whose expect.schema does not match what the writer
+        // actually produces must fail, not silently pass.
+        String schemaVector = "{\"name\":\"correct\",\"operation\":\"parse_schema\","
+            + "\"input\":{\"text\":\"record R {\\n    \\\"a\\\": string,\\n}\\nroot R\\n\"},"
+            + "\"expect\":{\"ok\":true,\"schema\":\"record R {\\n    \\\"a\\\": string,\\n}\\nroot R\\n\"}}";
+        String corruptedSchemaVector = "{\"name\":\"corrupted\",\"operation\":\"parse_schema\","
+            + "\"input\":{\"text\":\"record R {\\n    \\\"a\\\": string,\\n}\\nroot R\\n\"},"
+            + "\"expect\":{\"ok\":true,\"schema\":\"record R {\\n    \\\"a\\\": integer,\\n}\\nroot R\\n\"}}";
+        int[] results = run(dir, schemaVector + "," + corruptedSchemaVector);
+        assertEquals(1, results[0], "the vector with a matching expect.schema must pass");
+        assertEquals(1, results[1], "the vector with a corrupted expect.schema must fail, "
+            + "not silently pass on a runner that never checks expect.schema at all");
+    }
 }
