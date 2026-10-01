@@ -60,6 +60,10 @@ public final class Track2Runner {
     private static final Set<String> HANDLED_LIMIT_KEYS = Set.of(
         "declared_max_depth", "declared_max_nodes", "declared_max_int_digits");
 
+    /** The YAML alias limits (D-18, D-22): honoured by configuring {@code YamlCodec.read}, YAML vectors only. */
+    private static final Set<String> YAML_ALIAS_LIMIT_KEYS = Set.of(
+        "declared_max_alias_expansion", "declared_max_expanded_slots");
+
     private Track2Runner() {}
 
     /** Returns a copy of the skip tally by reason, for the harness summary. */
@@ -84,9 +88,12 @@ public final class Track2Runner {
             if (!key.startsWith("declared_max_")) {
                 continue;
             }
-            if ("declared_max_alias_expansion".equals(key)) {
-                return "E-20 not yet implemented: YAML alias expansion limit, D-18/D-19/D-20 (omnist-spec section 9.4, DIV-3); "
-                    + "declared_max_alias_expansion is allowlisted so the vector is not run against the default";
+            if (YAML_ALIAS_LIMIT_KEYS.contains(key)) {
+                if (!"yaml".equalsIgnoreCase(format)) {
+                    return "no configuration surface for " + key + " on " + format
+                        + " (only the YAML reader has an alias mechanism): skipped, never run against the default";
+                }
+                continue;
             }
             if (!HANDLED_LIMIT_KEYS.contains(key)) {
                 return "unrecognised limit key " + key + ": not run against this port's default";
@@ -199,11 +206,23 @@ public final class Track2Runner {
             limits = new dev.omnist.document.Limits(limits.maxDepth(), limits.maxNodeCount(), dig);
         }
 
+        // The alias limits are passed only for a vector that carries the key; otherwise the
+        // reference defaults apply, and a vector never runs against a number it did not declare.
+        dev.omnist.codec.YamlLimits yamlLimits = dev.omnist.codec.YamlLimits.DEFAULT;
+        if (input.has("declared_max_alias_expansion")) {
+            yamlLimits = new dev.omnist.codec.YamlLimits(
+                input.get("declared_max_alias_expansion").asInt(), yamlLimits.maxExpandedSlots());
+        }
+        if (input.has("declared_max_expanded_slots")) {
+            yamlLimits = new dev.omnist.codec.YamlLimits(
+                yamlLimits.maxAliasExpansion(), input.get("declared_max_expanded_slots").asLong());
+        }
+
         Document actualDoc = null;
         Throwable thrown = null;
         WriteReport readReport = new WriteReport();
         try {
-            actualDoc = parseFormat(text, format, limits, readReport);
+            actualDoc = parseFormat(text, format, limits, yamlLimits, readReport);
         } catch (Throwable ex) {
             thrown = ex;
         }
@@ -748,16 +767,36 @@ public final class Track2Runner {
 
     private static record JsonDiagnostic(String path, String code) {}
 
+    private static final String LINE_COL_PLACEHOLDER = "line:col";
+    private static final java.util.regex.Pattern TEXT_POSITION =
+        java.util.regex.Pattern.compile("^[1-9][0-9]*:[1-9][0-9]*$");
+
     private static void compareJsonDiagnostics(List<JsonDiagnostic> actual, JsonNode expectedNode) {
         // omnist-spec section 8.5.2 (E-17): compare the diagnostics as a SET of (path, code);
         // no partial matching, no path or code loosening.
+        // E-32/E-32a/E-32b: an expected path of the placeholder "line:col", on a parse.codec-syntax
+        // entry only, is satisfied by a reported entry with the same code at any well-formed text
+        // position (^[1-9][0-9]*:[1-9][0-9]*$); nothing closer is compared. Everything else is exact.
         Set<String> act = actual.stream()
             .map(d -> d.path() + "|" + d.code())
             .collect(Collectors.toSet());
         Set<String> exp = new HashSet<>();
         if (expectedNode != null) {
             for (JsonNode n : expectedNode) {
-                exp.add(n.get("path").asText() + "|" + n.get("code").asText());
+                String path = n.get("path").asText();
+                String code = n.get("code").asText();
+                if (LINE_COL_PLACEHOLDER.equals(path)) {
+                    if (!"parse.codec-syntax".equals(code)) {
+                        throw new RuntimeException("E-32a: the line:col placeholder is only allowed on parse.codec-syntax, not " + code);
+                    }
+                    for (JsonDiagnostic d : actual) {
+                        if (code.equals(d.code()) && TEXT_POSITION.matcher(d.path()).matches()) {
+                            path = d.path();
+                            break;
+                        }
+                    }
+                }
+                exp.add(path + "|" + code);
             }
         }
         if (!act.equals(exp)) {
@@ -919,12 +958,17 @@ public final class Track2Runner {
     }
 
     private static Document parseFormat(String text, String format, dev.omnist.document.Limits limits, WriteReport report) throws Exception {
+        return parseFormat(text, format, limits, dev.omnist.codec.YamlLimits.DEFAULT, report);
+    }
+
+    private static Document parseFormat(String text, String format, dev.omnist.document.Limits limits,
+            dev.omnist.codec.YamlLimits yamlLimits, WriteReport report) throws Exception {
         if ("oml".equalsIgnoreCase(format)) {
             return dev.omnist.oml.OmlReader.read(text, limits);
         } else if ("json".equalsIgnoreCase(format)) {
             return dev.omnist.codec.JsonCodec.read(text);
         } else if ("yaml".equalsIgnoreCase(format)) {
-            return dev.omnist.codec.YamlCodec.read(text);
+            return dev.omnist.codec.YamlCodec.readWithLimits(text, yamlLimits);
         } else if ("toml".equalsIgnoreCase(format)) {
             return dev.omnist.codec.TomlCodec.read(text);
         } else if ("xml".equalsIgnoreCase(format)) {

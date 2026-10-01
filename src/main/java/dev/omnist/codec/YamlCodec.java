@@ -30,6 +30,13 @@ import java.util.*;
  * needed. Timestamps are custom-resolved to distinguish a bare date from a full
  * date-time before falling back to SnakeYAML's own timestamp construction.
  *
+ * <p><b>Aliases and merge keys</b> are bounded (omnist-spec §2.4.1, D-18 to D-22): the expansion
+ * factor of every mapping and sequence (default 50, {@code document.limit.alias-expansion}) and,
+ * for an input that contains an alias or a merge key, the expanded size of the document (default
+ * 1 000 000 value slots, {@code document.limit.expanded-size}). Both are checked on the composed
+ * node graph before anything is constructed from it; see {@link #readWithLimits(String, YamlLimits)}
+ * and {@link YamlLimits}.
+ *
  * <p><b>Writing</b>: cannot achieve round-trip fidelity for {@code time}-kind
  * scalars — no safe bare YAML spelling exists for a time-of-day that doesn't
  * collide with YAML's sexagesimal (base-60) number notation — so {@code time}
@@ -56,6 +63,11 @@ public final class YamlCodec {
         public CustomConstructor(LoaderOptions loaderOptions) {
             super(loaderOptions);
             this.yamlConstructors.put(Tag.TIMESTAMP, new ConstructTimestamp());
+        }
+
+        /** Constructs the Java value of an already-composed (and already-checked) document root. */
+        Object constructRoot(Node root) {
+            return constructDocument(root);
         }
 
         private class ConstructTimestamp extends AbstractConstruct {
@@ -90,13 +102,53 @@ public final class YamlCodec {
     public static final int MAX_INPUT_LENGTH = 2_000_000;
 
     /**
-     * Parses YAML text into a {@link Document}.
+     * Parses YAML text into a {@link Document}, with the reference alias limits
+     * ({@link YamlLimits#DEFAULT}). Equivalent to {@code readWithLimits(text, YamlLimits.DEFAULT)}.
      *
      * @param text the YAML text; must not be {@code null}
      * @return the parsed document
-     * @throws RuntimeException if the YAML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the YAML is syntactically invalid, exceeds {@link #MAX_INPUT_LENGTH},
+     *         or crosses a safety limit (see {@link #readWithLimits(String, YamlLimits)})
      */
     public static Document read(String text) {
+        return readWithLimits(text, YamlLimits.DEFAULT);
+    }
+
+    /**
+     * Parses YAML text into a {@link Document}, bounding what its anchors and aliases may expand to
+     * (omnist-spec section 2.4.1).
+     *
+     * <p>The text is composed into SnakeYAML's node graph, which describes the anchors and aliases
+     * without expanding them, and that graph is checked <em>before</em> anything is constructed from
+     * it (D-19), in time linear in the input. In this order:
+     * <ol>
+     *   <li>A merge key whose value is not a mapping or a sequence of mappings is
+     *       {@code parse.codec-syntax}, and wins over every limit code below (D-18a).</li>
+     *   <li>An anchored definition that refers to itself, directly or through other definitions,
+     *       is {@code document.limit.alias-expansion} (D-20).</li>
+     *   <li>If any mapping or sequence (the root, an inline merge source and an anchored definition
+     *       included) has an expansion factor {@code W / S} above
+     *       {@link YamlLimits#maxAliasExpansion()}, the input is
+     *       {@code document.limit.alias-expansion} at {@code $} (D-18).</li>
+     *   <li>If the input contains an alias or a merge key and its root materializes more than
+     *       {@link YamlLimits#maxExpandedSlots()} value slots, the input is
+     *       {@code document.limit.expanded-size} at {@code $} (D-22). An input with neither is
+     *       exempt however large; one that fails both limits reports step 3.</li>
+     * </ol>
+     *
+     * <p>{@code W} is the structural count of the spec: it ignores key collisions, so a document
+     * whose merged keys are overridden can be refused though it materializes fewer slots. A merge
+     * of a large block is not free either: a mapping that merges a {@code k}-key block and writes
+     * one key of its own has an expansion factor of about {@code (k + 2) / 3}.
+     *
+     * @param text   the YAML text; must not be {@code null}
+     * @param limits the alias limits; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException if the YAML is syntactically invalid, exceeds {@link #MAX_INPUT_LENGTH},
+     *         or crosses a safety limit
+     */
+    public static Document readWithLimits(String text, YamlLimits limits) {
+        Objects.requireNonNull(limits, "limits");
         // D-15 / D-21: SnakeYAML would swallow a second leading mark on its own (it treats it as
         // the start of a plain scalar), so the check happens here, before the library sees the text.
         text = CodecInput.prepare(text, "YAML", MAX_INPUT_LENGTH);
@@ -107,6 +159,13 @@ public final class YamlCodec {
         // Limits.DEFAULT.maxDepth() so the port's own check, with its document.limit.depth code
         // (D-12, D-13), is the one that decides. Deeper than this the library still refuses first.
         loaderOptions.setNestingDepthLimit(YAML_NESTING_DEPTH_LIMIT);
+        // SnakeYAML also refuses more than 50 aliases to collections in one document, a global count
+        // that rejects ordinary configs (100 services merging one defaults block). That is not what
+        // D-18 specifies, so the library's cap is lifted and YamlAliasCheck decides, from the node
+        // graph, before anything is constructed. Composing is linear in the input either way: an
+        // alias is a reference to the anchored node, not a copy. The code point limit (3 MiB by
+        // default) is above MAX_INPUT_LENGTH and is left alone.
+        loaderOptions.setMaxAliasesForCollections(Integer.MAX_VALUE);
         CustomConstructor constructor = new CustomConstructor(loaderOptions);
         org.yaml.snakeyaml.resolver.Resolver resolver = new org.yaml.snakeyaml.resolver.Resolver();
         DumperOptions dumperOptions = new DumperOptions();
@@ -114,15 +173,16 @@ public final class YamlCodec {
 
         Object raw;
         try {
-            Iterable<Object> docs = yaml.loadAll(text);
-            Iterator<Object> it = docs.iterator();
-            if (!it.hasNext()) {
+            Iterator<Node> docs = yaml.composeAll(new java.io.StringReader(text)).iterator();
+            if (!docs.hasNext()) {
                 throw CodecInput.syntax("YAML", "no document found", 1, 1, null);
             }
-            raw = it.next();
-            if (it.hasNext()) {
+            Node root = docs.next();
+            if (docs.hasNext()) {
                 throw CodecInput.syntax("YAML", "expected a single document in the stream but found another document", 1, 1, null);
             }
+            YamlAliasCheck.check(root, limits, YAML_NESTING_DEPTH_LIMIT);
+            raw = constructor.constructRoot(root);
         } catch (DocumentParseException dpe) {
             throw dpe;
         } catch (Exception e) {

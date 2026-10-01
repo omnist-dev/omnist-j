@@ -13,7 +13,7 @@ A curated overview of `omnist-j`'s public API, verified directly against the und
 - [`dev.omnist.schema`](#osd-reader--writer): OSD schema definition types (`Schema`, `Record`, `Field`, `Cardinality`, `TargetType`, `OsdReader`, `OsdWriter`, `OsdParseException`).
 - [`dev.omnist.validation`](#validation--materialization): Validation engine (`Validator`, `ValidationResult`, `ValidationDiagnostic`, `Materializer`).
 - [`dev.omnist.algebra`](#schema-algebra): Formal schema algebra operations (`SchemaAlgebra`, `InferResult`, `AnyFallback`, `LintFinding`).
-- [`dev.omnist.codec`](#format-codecs): External format codecs (`JsonCodec`, `YamlCodec`, `TomlCodec`, `XmlCodec`).
+- [`dev.omnist.codec`](#format-codecs): External format codecs (`JsonCodec`, `YamlCodec`, `YamlLimits`, `TomlCodec`, `XmlCodec`).
 
 ---
 
@@ -327,8 +327,45 @@ assertNotNull(res.schema());
 - `public static String write(Document doc)`
 
 ### `YamlCodec`
-- `public static Document read(String text)` (bounded by 2MB `MAX_INPUT_LENGTH` cap)
+- `public static Document read(String text)` (bounded by 2MB `MAX_INPUT_LENGTH` cap; alias limits at the reference defaults)
+- `public static Document readWithLimits(String text, YamlLimits limits)` (the same, with the alias limits you choose)
 - `public static String write(Document doc)`
+
+### `YamlLimits`
+`public record YamlLimits(int maxAliasExpansion, long maxExpandedSlots)`
+
+The two limits that bound what YAML anchors and aliases may expand to (omnist-spec §2.4.1). Defaults:
+`maxAliasExpansion = 50` (D-18, the expansion factor `E = W / S` of any mapping or sequence, root and inline merge
+sources included; accepted at the limit, refused above it with `document.limit.alias-expansion`) and
+`maxExpandedSlots = 1_000_000` (D-22, the value slots `W(root)` of an input that contains an alias or a merge key;
+refused above it with `document.limit.expanded-size`; an input with neither is exempt). Both are checked on
+SnakeYAML's composed node graph before anything is constructed from it, in time linear in the input. An input that
+crosses both reports `document.limit.alias-expansion`. A merge key whose value is not a mapping or a sequence of
+mappings is `parse.codec-syntax`, and a self-referential anchor is `document.limit.alias-expansion`. Like `Limits`, the
+constructor throws `IllegalArgumentException` for a value that is not positive; it also refuses
+`maxAliasExpansion` above 10 000 and `maxExpandedSlots` above 10 000 000. A merge of a large block is not free: a
+mapping that merges a `k`-key block and writes one key of its own has `E` of about `(k + 2) / 3`. See
+[`limitations.md`](limitations.md) for the measured shapes.
+
+<!-- test-backed: dev.omnist.DocTest#testYamlLimitsExample -->
+```java
+String yaml = "base: &b {k1: 1, k2: 2, k3: 3, k4: 4, k5: 5, k6: 6, k7: 7, k8: 8}\n"
+        + "job: {<<: *b, script: x}\n";
+// E(job) = W / S = 10 / 3 = 3.33
+Document doc = YamlCodec.readWithLimits(yaml, new YamlLimits(4, 1_000));
+assertTrue(doc instanceof Node);
+DocumentParseException tooBig = assertThrows(DocumentParseException.class,
+        () -> YamlCodec.readWithLimits(yaml, new YamlLimits(3, 1_000)));
+assertEquals("document.limit.alias-expansion", tooBig.getCode());
+assertEquals("$", tooBig.getPath());
+// W(root) = 1 + 9 + 10 = 20 value slots
+DocumentParseException tooLarge = assertThrows(DocumentParseException.class,
+        () -> YamlCodec.readWithLimits(yaml, new YamlLimits(4, 19)));
+assertEquals("document.limit.expanded-size", tooLarge.getCode());
+assertNotNull(YamlCodec.readWithLimits(yaml, new YamlLimits(4, 20)));
+assertEquals(50, YamlLimits.DEFAULT.maxAliasExpansion());
+assertEquals(1_000_000L, YamlLimits.DEFAULT.maxExpandedSlots());
+```
 
 ### `TomlCodec`
 - `public static Document read(String text)` (bounded by 2MB `MAX_INPUT_LENGTH` cap)

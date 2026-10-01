@@ -195,20 +195,22 @@ class CodecSweepTest {
     @Test
     void aYamlAliasToAnAnchorStillBeingBuiltFailsCleanlyAndQuickly() {
         assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+            // D-20: a self-referential anchor is document.limit.alias-expansion at $.
             DocumentParseException ex = fail(YamlCodec::read, "a: &A\n  b: *A\n");
-            assertTrue(ex.getCode().equals("document.limit.depth") || ex.getCode().equals("parse.codec-syntax"), ex.getCode());
+            assertEquals("document.limit.alias-expansion", ex.getCode());
+            assertEquals("$", ex.getPath());
             DocumentParseException top = fail(YamlCodec::read, "&A\nk: *A\n");
-            assertTrue(top.getCode().equals("document.limit.depth") || top.getCode().equals("parse.codec-syntax"), top.getCode());
+            assertEquals("document.limit.alias-expansion", top.getCode());
         });
     }
 
     @Test
-    void aSelfReferentialMergeDoesNotHangOrThrowAnUncheckedException() {
+    void aSelfReferentialMergeIsRefusedUnderTheAliasExpansionCode() {
         assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
-            // Accepted today (the reference accepts it too: D-20 is not enforced anywhere yet, DIV-3),
-            // but it must terminate and must not materialise a cyclic structure.
-            Document doc = YamlCodec.read("a: &A\n  <<: *A\n  x: 1\n");
-            assertEquals(new Node(List.of(new Edge("a", new Node(List.of(new Edge("x", new Scalar.IntegerScalar(java.math.BigInteger.ONE))))))), doc);
+            // D-20: the self-merging form is refused too, not silently accepted as {x: 1}.
+            DocumentParseException ex = fail(YamlCodec::read, "a: &A\n  <<: *A\n  x: 1\n");
+            assertEquals("document.limit.alias-expansion", ex.getCode());
+            assertEquals("$", ex.getPath());
         });
     }
 
@@ -241,21 +243,19 @@ class CodecSweepTest {
     }
 
     @Test
-    void anAliasBombIsRefusedByTheLibraryWithoutAMarkAndReportedAtOneOne() {
+    void anAliasBombIsRefusedWithTheAliasExpansionCodeAtTheRoot() {
         StringBuilder sb = new StringBuilder("l0: &a0\n");
         for (int i = 0; i < 10; i++) sb.append("  k").append(i).append(": x\n");
         for (int l = 1; l < 10; l++) {
             sb.append("l").append(l).append(": &a").append(l).append("\n");
             for (int i = 0; i < 10; i++) sb.append("  k").append(i).append(": *a").append(l - 1).append("\n");
         }
-        // SnakeYAML's own cap (50 aliases to collections) refuses this before any expansion. The
-        // spec's code for it is document.limit.alias-expansion (D-18), which this port does not
-        // implement yet (DIV-3); until it does, the refusal is parse.codec-syntax and, crucially,
-        // nothing is expanded.
+        // D-18: refused before any expansion, with the spec's code. (Until D-18 was implemented
+        // SnakeYAML's own global cap of 50 aliases refused this as parse.codec-syntax at 1:1.)
         DocumentParseException ex = assertTimeoutPreemptively(Duration.ofSeconds(10),
             () -> fail(YamlCodec::read, sb.toString()));
-        assertEquals("parse.codec-syntax", ex.getCode());
-        assertEquals("1:1", ex.getPath());
+        assertEquals("document.limit.alias-expansion", ex.getCode());
+        assertEquals("$", ex.getPath());
     }
 
     @Test
