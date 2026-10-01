@@ -112,8 +112,10 @@ Two limits, two codes, both finite and both configurable through `YamlLimits` (D
 - **Exemption.** `document.limit.expanded-size` applies only to an input that contains at least one
   alias or merge key (a `<<` key, as the spec uses the term; a quoted `"<<"` is a plain key). A YAML
   input with neither is treated as a JSON or OML input of the same size is: the 2,000,000-character
-  input cap and the node limit govern it. The cliff is deliberate: a plain 2 000 000-slot file passes,
-  and adding one alias subjects it to the cap.
+  input cap and the node limit govern it. The cliff is deliberate in the spec: a plain file of
+  two million slots passes and adding one alias subjects it to the cap. In this port the exemption
+  applies regardless, but a plain file that large cannot reach the reader: the 2,000,000-character input cap
+  and the 1,000,000-node limit refuse it first, so in practice no YAML input here is exempt from a cap.
 - **`W` is conservative.** It ignores key collisions, so a document whose merged keys are overridden
   can be refused though it materializes fewer slots (D-19).
 - **Malformed merges** (`<<: 1`, `<<: [1]`, `<<: [[{a: 1}]]`, `<<: *s` over scalars) are
@@ -133,7 +135,10 @@ Two limits, two codes, both finite and both configurable through `YamlLimits` (D
   default 50) is lifted so that the spec's per-node ratio decides. Its `codePointLimit` (3 MiB) sits above
   this port's 2 000 000-character cap and never fires first. Its nesting cap is 1000 levels, as before; an
   alias chain can nest the materialized tree deeper than anything that can be written, and one deeper than
-  1000 levels is refused as `document.limit.depth` at `$` instead of being constructed.
+  1000 levels is refused as `document.limit.depth` at `$` instead of being constructed. **This guard is a
+  port-specific addition beyond the spec**, there to avoid a stack overflow in SnakeYAML's constructor when the
+  alias maximum is raised. Up to 1000 levels the document model's own depth limit (200) decides, with the real
+  path of the offending node; only above 1000 is the path `$`.
 - **Complex keys.** A mapping or sequence used as a key (`? [a, b]`) is counted as if it were a value, so
   it cannot hide an expansion; the document model refuses such a key afterwards in any case.
 - **Surfaces.** Every YAML read goes through `YamlCodec`: `YamlCodec.read` (reference defaults),

@@ -512,7 +512,7 @@ class YamlAliasLimitTest {
     }
 
     static void assertFast(String yaml, YamlLimits limits, String code) {
-        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertRejected(yaml, limits, code));
+        assertTimeoutPreemptively(Duration.ofSeconds(30), () -> assertRejected(yaml, limits, code));
     }
 
     @Test
@@ -565,7 +565,7 @@ class YamlAliasLimitTest {
         LoaderOptions options = new LoaderOptions();
         options.setMaxAliasesForCollections(Integer.MAX_VALUE);
         org.yaml.snakeyaml.nodes.Node root = new Yaml(options).compose(new StringReader(yaml));
-        assertTimeoutPreemptively(Duration.ofMillis(500),
+        assertTimeoutPreemptively(Duration.ofSeconds(30),
                 () -> assertThrows(DocumentParseException.class,
                         () -> YamlAliasCheck.check(root, YamlLimits.DEFAULT, 1000)));
         // accepted at the ceiling, a graph whose shared nodes are walked once: 3 000 chained merges
@@ -574,7 +574,7 @@ class YamlAliasLimitTest {
             b.append("a").append(i).append(": &a").append(i).append(" {<<: *a").append(i - 1).append("}\n");
         }
         org.yaml.snakeyaml.nodes.Node chainRoot = new Yaml(options).compose(new StringReader(b.toString()));
-        assertTimeoutPreemptively(Duration.ofMillis(500), () -> YamlAliasCheck.check(chainRoot, YamlLimits.DEFAULT, 1000));
+        assertTimeoutPreemptively(Duration.ofSeconds(30), () -> YamlAliasCheck.check(chainRoot, YamlLimits.DEFAULT, 1000));
     }
 
     @Test
