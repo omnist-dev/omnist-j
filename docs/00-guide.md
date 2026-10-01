@@ -73,7 +73,7 @@ assertTrue(json.contains("\"Alice\""));
 ### Reading & Writing Formats
 - **OML**: `OmlReader.read(text)` / `OmlWriter.write(doc)`
 - **JSON**: `JsonCodec.read(text)` / `JsonCodec.write(doc)`
-- **YAML**: `YamlCodec.read(text)` / `YamlCodec.write(doc)`
+- **YAML**: `YamlCodec.read(text)` / `YamlCodec.write(doc)` (aliases and merge keys are bounded: `YamlCodec.readWithLimits(text, new YamlLimits(maxFactor, maxSlots))` sets the limits, defaults 50 and 1,000,000; see the [API reference](01-api-reference.md#yamllimits))
 - **TOML**: `TomlCodec.read(text)` / `TomlCodec.write(doc)`
 - **XML**: `XmlCodec.read(text)` / `XmlCodec.write(doc)`
 

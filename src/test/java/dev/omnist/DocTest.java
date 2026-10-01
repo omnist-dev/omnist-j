@@ -124,6 +124,26 @@ public class DocTest {
     }
 
     @Test
+    void testYamlLimitsExample() {
+        String yaml = "base: &b {k1: 1, k2: 2, k3: 3, k4: 4, k5: 5, k6: 6, k7: 7, k8: 8}\n"
+                + "job: {<<: *b, script: x}\n";
+        // E(job) = W / S = 10 / 3 = 3.33
+        Document doc = YamlCodec.readWithLimits(yaml, new YamlLimits(4, 1_000));
+        assertTrue(doc instanceof Node);
+        DocumentParseException tooBig = assertThrows(DocumentParseException.class,
+                () -> YamlCodec.readWithLimits(yaml, new YamlLimits(3, 1_000)));
+        assertEquals("document.limit.alias-expansion", tooBig.getCode());
+        assertEquals("$", tooBig.getPath());
+        // W(root) = 1 + 9 + 10 = 20 value slots
+        DocumentParseException tooLarge = assertThrows(DocumentParseException.class,
+                () -> YamlCodec.readWithLimits(yaml, new YamlLimits(4, 19)));
+        assertEquals("document.limit.expanded-size", tooLarge.getCode());
+        assertNotNull(YamlCodec.readWithLimits(yaml, new YamlLimits(4, 20)));
+        assertEquals(50, YamlLimits.DEFAULT.maxAliasExpansion());
+        assertEquals(1_000_000L, YamlLimits.DEFAULT.maxExpandedSlots());
+    }
+
+    @Test
     void testValidatorExample() {
         Schema schema = OsdReader.read(PERSON_SCHEMA);
         Document validDoc = OmlReader.read("name: \"Bob\"\nage: 25\n");
@@ -281,7 +301,7 @@ public class DocTest {
             OsdReader.class, OsdWriter.class,
             Document.class, Node.class, Edge.class, Value.class, Scalar.class, Limits.class,
             TimeValue.class, DateTimeValue.class,
-            Validator.class, Materializer.class,
+            Validator.class, Materializer.class, YamlLimits.class,
             SchemaAlgebra.class,
             JsonCodec.class, YamlCodec.class, TomlCodec.class, XmlCodec.class
         };

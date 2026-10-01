@@ -67,7 +67,7 @@ class RunnerHonestyTest {
 
     @Test
     void declaredLimitKeysTheRunnerCannotHonourAreSkippedWithATrueReason(@TempDir Path dir) throws Exception {
-        String alias = parseVector("alias", "{\"format\":\"yaml\",\"declared_max_alias_expansion\":3,\"text\":\"a: 1\\n\"}", "{\"ok\":true,\"document\":{\"edges\":[[\"a\",{\"scalar\":{\"kind\":\"integer\",\"value\":1}}]]}}");
+        String alias = parseVector("alias", "{\"format\":\"json\",\"declared_max_alias_expansion\":3,\"text\":\"{}\"}", "{\"ok\":true,\"document\":{\"edges\":[[\"a\",{\"scalar\":{\"kind\":\"integer\",\"value\":1}}]]}}");
         String unknownKey = parseVector("unknown-key", "{\"format\":\"oml\",\"declared_max_widgets\":3,\"text\":\"a: 1\\n\"}", "{\"ok\":true,\"document\":{\"edges\":[]}}");
         String codecLimit = parseVector("codec-limit", "{\"format\":\"json\",\"declared_max_depth\":3,\"text\":\"{}\"}", "{\"ok\":true,\"document\":{\"edges\":[]}}");
         int[] results = run(dir, alias + "," + unknownKey + "," + codecLimit);
@@ -77,9 +77,40 @@ class RunnerHonestyTest {
 
         Map<String, Integer> reasons = Track2Runner.skipReasons();
         assertEquals(3, reasons.size());
-        assertTrue(reasons.keySet().stream().anyMatch(r -> r.contains("DIV-3") && r.contains("declared_max_alias_expansion")), reasons.toString());
+        assertTrue(reasons.keySet().stream().anyMatch(r -> r.contains("no configuration surface for declared_max_alias_expansion on json")), reasons.toString());
         assertTrue(reasons.keySet().stream().anyMatch(r -> r.contains("unrecognised limit key declared_max_widgets")), reasons.toString());
         assertTrue(reasons.keySet().stream().anyMatch(r -> r.contains("no configuration surface for declared_max_depth on json")), reasons.toString());
+    }
+
+    private static final String BOMB_TEXT = "b: &b {k1: 1, k2: 2, k3: 3}\\nt: {<<: [*b, *b, *b, *b]}\\n";
+
+    @Test
+    void theYamlAliasLimitsAreRunAgainstTheDeclaredNumberOnlyForAVectorThatCarriesTheKey(@TempDir Path dir) throws Exception {
+        String rejected = "{\"ok\":false,\"diagnostics\":[{\"path\":\"$\",\"code\":\"document.limit.alias-expansion\"}]}";
+        String sizeRejected = "{\"ok\":false,\"diagnostics\":[{\"path\":\"$\",\"code\":\"document.limit.expanded-size\"}]}";
+        // W(t) = 13, S(t) = 2, E = 6.5: over a declared 6, under the default of 50
+        String declared = parseVector("declared", "{\"format\":\"yaml\",\"declared_max_alias_expansion\":6,\"text\":\"" + BOMB_TEXT + "\"}", rejected);
+        String cap = parseVector("cap", "{\"format\":\"yaml\",\"declared_max_expanded_slots\":17,\"text\":\"" + BOMB_TEXT + "\"}", sizeRejected);
+        String wrongCode = parseVector("wrong-code", "{\"format\":\"yaml\",\"declared_max_expanded_slots\":17,\"text\":\"" + BOMB_TEXT + "\"}", rejected);
+        int[] results = run(dir, declared + "," + cap + "," + wrongCode);
+        assertEquals(2, results[0], "each declared number is the one the reader runs against");
+        assertEquals(1, results[1]);
+        assertEquals(0, results[2]);
+    }
+
+    @Test
+    void theLineColPlaceholderMatchesAWellFormedPositionOfTheSameCodeOnly(@TempDir Path dir) throws Exception {
+        String bad = "{\"format\":\"yaml\",\"text\":\"a: [1\"}";
+        String placeholder = parseVector("placeholder", bad,
+            "{\"ok\":false,\"diagnostics\":[{\"path\":\"line:col\",\"code\":\"parse.codec-syntax\"}]}");
+        String wrongCode = parseVector("wrong-code", bad,
+            "{\"ok\":false,\"diagnostics\":[{\"path\":\"line:col\",\"code\":\"parse.unexpected-token\"}]}");
+        // E-32a: the placeholder is for parse.codec-syntax only, so another code is a defect in the vector
+        String exact = parseVector("exact-still-compared", bad,
+            "{\"ok\":false,\"diagnostics\":[{\"path\":\"9:9\",\"code\":\"parse.codec-syntax\"}]}");
+        int[] results = run(dir, placeholder + "," + wrongCode + "," + exact);
+        assertEquals(1, results[0]);
+        assertEquals(2, results[1]);
     }
 
     @Test
