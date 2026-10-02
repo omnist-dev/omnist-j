@@ -102,7 +102,31 @@ class SchemaV028Test {
         for (String bad : BAD_NAMES) {
             SchemaException ex = assertThrows(SchemaException.class, () -> new Type.Ref(bad));
             assertEquals("$", ex.getPath());
-            assertTrue(ex.getMessage().contains("'" + bad + "'"), bad);
+            assertTrue(ex.getMessage().contains("'" + bad.replace("\u00e9", "\\u00E9").replace("\uD800", "\\uD800") + "'"), bad);
+        }
+    }
+
+    @Test
+    void s8MessageEscapesNonPrintableCharactersInTheName() {
+        SchemaException ex = assertThrows(SchemaException.class, () -> new Type.Ref("a\nb\r\u0000"));
+        assertFalse(ex.getMessage().contains("\n"));
+        assertFalse(ex.getMessage().contains("\r"));
+        assertFalse(ex.getMessage().contains("\u0000"));
+        assertTrue(ex.getMessage().contains("a\\u000Ab\\u000D\\u0000"));
+        assertEquals("$", ex.getPath());
+    }
+
+    @Test
+    void inferRecordNameMatrixMatchesPythonAndTypeScript() {
+        String[][] cases = {{"123", "Rec"}, {"9", "Rec"}, {"\u65e5\u672c", "Rec"}, {"\u00e9clair", "Clair"},
+            {"a b", "A_b"}, {"", "Rec"}};
+        dev.omnist.document.Node child = new dev.omnist.document.Node(List.of(new dev.omnist.document.Edge("x",
+                new dev.omnist.document.Scalar.IntegerScalar(java.math.BigInteger.ONE))));
+        for (String[] c : cases) {
+            dev.omnist.document.Node sample = new dev.omnist.document.Node(List.of(
+                    new dev.omnist.document.Edge(c[0], child)));
+            Schema s = SchemaAlgebra.infer(List.of(sample));
+            assertTrue(s.records().containsKey(c[1]), c[0] + " -> " + s.records().keySet());
         }
     }
 

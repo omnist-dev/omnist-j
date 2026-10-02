@@ -13,19 +13,19 @@ Available on [Maven Central](https://central.sonatype.com/artifact/dev.omnist/om
 <dependency>
     <groupId>dev.omnist</groupId>
     <artifactId>omnist-j</artifactId>
-    <version>0.3.2-alpha</version>
+    <version>0.4.0-alpha</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'dev.omnist:omnist-j:0.3.2-alpha'
+implementation 'dev.omnist:omnist-j:0.4.0-alpha'
 ```
 
 This is a plain library jar with its real dependencies (Jackson, SnakeYAML, tomlj) resolved normally — nothing bundled or shaded. If you want to run `omnist` as a standalone CLI instead of using it as a library, use the `cli` classifier, which is a self-contained fat jar:
 ```bash
-curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.3.2-alpha/omnist-j-0.3.2-alpha-cli.jar
-java -jar omnist-j-0.3.2-alpha-cli.jar format sample.oml --to json
+curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.4.0-alpha/omnist-j-0.4.0-alpha-cli.jar
+java -jar omnist-j-0.4.0-alpha-cli.jar format sample.oml --to json
 ```
 
 ## Quickstart
@@ -91,12 +91,12 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 ## Status
 
-**`v0.3.2-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.28.0-beta (commit `1a7d0de`).
+**`v0.4.0-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.28.0-beta (commit `1a7d0de`).
 
 - **Conformance**: 339 passing, 0 failures, 28 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (310 pass), compared as (path, code) sets. The only skips are the not-yet-implemented OSD-OML extension (28); see [`docs/limitations.md`](docs/limitations.md).
 - **YAML aliases**: bounded by the spec's two limits (D-18 expansion factor, default 50; D-22 expanded size, default 1,000,000 slots, only for input that uses an alias or merge key), checked on the parsed node graph before anything is expanded; configurable with `YamlCodec.readWithLimits(text, new YamlLimits(...))`. A mapping that merges a large block reads an expansion factor of about `(keys + 2) / 3`, so very large merges can need a higher maximum; see [`docs/limitations.md`](docs/limitations.md).
 - **Tests**: 802 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
-- **Coverage**: 99.71% line / 99.29% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.
+- **Coverage**: 99.71% line / 99.30% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.
 
 ## Sibling ports
 

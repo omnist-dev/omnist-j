@@ -147,17 +147,14 @@ public final class OsdWriter {
     }
 
     /**
-     * Rejects a field label that OSD cannot spell (omnist-spec OSD-14, §5.9/§8.3.9):
-     * a C0 control character (U+0000–U+001F) in a label has no OSD text at all, since
-     * §5.3.1 bans the raw byte in a string body — escape context included — and OSD's
-     * unescaping is weak. Fails unconditionally, regardless of strict mode, with
-     * {@code write.unsupported-value} whose path is the Schema path of the record
-     * holding the field (never {@code record.label}, since a path cannot quote a
-     * label containing the very byte that has no spelling).
+     * Rejects a field the OSD writer cannot spell: a label with a C0 control character (OSD-14)
+     * or a {@code max = 0} cardinality (OSD-16, S-24). Both fail with {@code write.unsupported-value}
+     * at the Schema path of the record holding the field, and the {@code max = 0} case has no
+     * spelling in OSD text; callers {@code prune} first.
      *
-     * @param label      the field label to check
+     * @param field      the field to check
      * @param recordPath the Schema path of the record holding this field, e.g. {@code "R"}
-     * @throws WriteException if {@code label} contains a C0 control character
+     * @throws WriteException if the label or cardinality has no OSD spelling
      */
     private static void checkField(Field field, String recordPath) {
         checkLabel(field.label(), recordPath);
@@ -170,6 +167,19 @@ public final class OsdWriter {
         }
     }
 
+    /**
+     * Rejects a field label that OSD cannot spell (omnist-spec OSD-14, §5.9/§8.3.9):
+     * a C0 control character (U+0000–U+001F) in a label has no OSD text at all, since
+     * §5.3.1 bans the raw byte in a string body — escape context included — and OSD's
+     * unescaping is weak. Fails unconditionally, regardless of strict mode, with
+     * {@code write.unsupported-value} whose path is the Schema path of the record
+     * holding the field (never {@code record.label}, since a path cannot quote a
+     * label containing the very byte that has no spelling).
+     *
+     * @param label      the field label to check
+     * @param recordPath the Schema path of the record holding this field, e.g. {@code "R"}
+     * @throws WriteException if {@code label} contains a C0 control character
+     */
     private static void checkLabel(String label, String recordPath) {
         for (int i = 0; i < label.length(); i++) {
             char c = label.charAt(i);

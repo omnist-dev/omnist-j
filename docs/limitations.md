@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.3.2-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.4.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -157,7 +157,7 @@ Two limits, two codes, both finite and both configurable through `YamlLimits` (D
 
 ## Programmatic schema rules (S-8, S-22, S-23, S-24, OSD-16)
 
-Implemented in `0.3.2-alpha` against omnist-spec v0.28.0-beta (commit `1a7d0de`). No conformance vector
+Implemented in `0.4.0-alpha` against omnist-spec v0.28.0-beta (commit `1a7d0de`). No conformance vector
 reaches any of them (DIV-5: OSD text arrives as declaration order and no text carries `max = 0`), so the
 only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema built through the Java API
 (`new Schema`, `new Record`, `new Type.Ref`) is checked at construction, and the violation is a
@@ -205,7 +205,7 @@ only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema buil
 
 ## Testing
 
-**834 tests passing**, 0 failures — JUnit unit/integration tests plus
+**836 tests passing**, 0 failures — JUnit unit/integration tests plus
 jqwik property-based and fuzz tests (grammar-aware generators for TOML
 radix literals, OML lexing, and YAML timestamp shapes; raw-input fuzzers
 for every codec reader) run at thousands of iterations per property with
@@ -232,7 +232,7 @@ Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
 
-**v0.28.0-beta (2026-10-02):** 834 tests; 10 of 3443 lines and 17 of 2408 branches missed, three runs identical
+**v0.28.0-beta (2026-10-02):** 836 tests; 10 of 3451 lines and 17 of 2414 branches missed, three runs identical
 (headroom 3 lines and 4 branches). The new `SchemaRules`, `SchemaException` and writer paths are fully covered.
 
 **The margin is thin, and this is a known risk.** At these numbers the gate has headroom of

@@ -20,8 +20,22 @@ final class SchemaRules {
         }
         if (!ok) {
             throw new SchemaException("schema.invalid-name", "$",
-                    what + " is not a valid name (must match [A-Za-z_][A-Za-z0-9_]*): '" + name + "'");
+                    what + " is not a valid name (must match [A-Za-z_][A-Za-z0-9_]*): '" + escape(name) + "'");
         }
+    }
+
+    /** Escapes non-printable and non-ASCII characters so a malformed name cannot break the message. */
+    private static String escape(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 0x20 && c < 0x7F) {
+                sb.append(c);
+            } else {
+                sb.append(String.format("\\u%04X", (int) c));
+            }
+        }
+        return sb.toString();
     }
 
     private static boolean isStart(char c) {
