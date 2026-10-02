@@ -1,0 +1,1059 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A from-scratch, spec-first Java implementation of Omnist.">
+      
+      
+      
+        <link rel="canonical" href="https://j.omnist.dev/limitations/">
+      
+      
+        <link rel="prev" href="../02-cli-reference/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Status & limitations - omnist-j</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#status-and-limitations" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="omnist-j" class="md-header__button md-logo" aria-label="omnist-j" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            omnist-j
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Status & limitations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/omnist-dev/omnist-j" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    omnist-dev/omnist-j
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="omnist-j" class="md-nav__button md-logo" aria-label="omnist-j" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    omnist-j
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/omnist-dev/omnist-j" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    omnist-dev/omnist-j
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide & quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://j.omnist.dev/javadoc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Javadoc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-cli-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status & limitations
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status & limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#yaml-alias-limits-d-18-d-18a-d-19-d-20-d-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        YAML alias limits (D-18, D-18a, D-19, D-20, D-22)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#programmatic-schema-rules-s-8-s-22-s-23-s-24-osd-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Programmatic schema rules (S-8, S-22, S-23, S-24, OSD-16)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-coverage-jacoco" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code coverage (JaCoCo)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#yaml-alias-limits-d-18-d-18a-d-19-d-20-d-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        YAML alias limits (D-18, D-18a, D-19, D-20, D-22)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#programmatic-schema-rules-s-8-s-22-s-23-s-24-osd-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Programmatic schema rules (S-8, S-22, S-23, S-24, OSD-16)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-coverage-jacoco" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code coverage (JaCoCo)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="status-and-limitations">Status and limitations<a class="headerlink" href="#status-and-limitations" title="Permanent link">&para;</a></h1>
+<p><strong><code>v0.4.0-alpha</code>.</strong> <code>omnist-j</code> implements the full Document model, Schema model, OML and OSD
+grammars (read and write), <code>validate</code>, <code>materialize</code>, the full schema
+algebra (<code>satisfiable_set</code>, <code>is_empty</code>, <code>prune</code>, <code>compatible_with</code>,
+<code>equivalent</code>, <code>normalize</code>, <code>extract</code>, <code>lint</code>, <code>infer</code>), all four
+interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.</p>
+<h2 id="conformance">Conformance<a class="headerlink" href="#conformance" title="Permanent link">&para;</a></h2>
+<p>Both tracks of the conformance harness run against <code>vendor/omnist-spec</code>
+<strong>v0.28.0-beta</strong>'s pinned suite (commit <code>1a7d0de</code>), comparing diagnostics as <strong>(path, code) sets</strong>
+(omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
+loosening anywhere in the runner). <strong>0 failures.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Track</th>
+<th>Pass</th>
+<th>Fail</th>
+<th>Skip</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1: OML/OSD CLI fixtures</td>
+<td>29 (19 comparable*)</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>2: JSON vectors</td>
+<td>310</td>
+<td>0</td>
+<td>28</td>
+</tr>
+</tbody>
+</table>
+<p>* The Java harness folds the 10 <code>_referee-self-test/*</code> fixtures into its Track 1
+headline (<a href="https://github.com/omnist-dev/omnist-j/issues/110">omnist-j#110</a>); the other ports report 19.</p>
+<p><strong>v0.27.0-beta to v0.28.0-beta (2026-10-02).</strong> No vector changed: Track 2 stays 310 pass / 0 fail / 28 skip
+of 338, Track 1 29 / 0 / 0, headline 339 / 0 / 28. The release adds four rules about programmatically built
+schemas that no vector can reach (DIV-5), so they are pinned by <code>SchemaV028Test</code> only; see
+<a href="#programmatic-schema-rules-s-8-s-22-s-23-s-24-osd-16">Programmatic schema rules</a> below.</p>
+<p><strong>v0.26.0-beta to v0.27.0-beta (2026-10-02).</strong> Track 2 went from 303 pass / 0 fail / 28 skip (of 331
+vectors) to 310 / 0 / 28 (of 338); the harness headline from 332 / 0 / 28 to 339 / 0 / 28. The 7 new vectors pin the
+empty merge sequence <code>&lt;&lt;: []</code> (D-18a), a carrier that merges nothing; they passed with no code change.</p>
+<p><strong>v0.22.0-beta to v0.26.0-beta (2026-10-01).</strong> Track 2 went from 253 pass / 0 fail / 34 skip (of 287
+vectors) to 303 pass / 0 fail / 28 skip (of 331); the harness headline from 282 / 0 / 34 to 332 / 0 / 28
+(Track 1 unchanged at 29 / 0 / 0). Measured red to green: the bump alone, with the old runner, gave 264 pass /
+8 fail / 59 skip (the 8 are the E-32 <code>line:col</code> placeholder vectors the runner did not yet understand, 4 of them
+in YAML's alias-expansion file; 31 vectors carrying <code>declared_max_alias_expansion</code> or <code>declared_max_expanded_slots</code>
+were skipped); with the runner honouring both keys and the E-32 placeholder, but D-18 and D-22 not yet
+enforced, 287 pass / 16 fail / 28 skip (the 16 are every alias-expansion and expanded-size vector that expects
+a refusal); with D-18, D-18a, D-19, D-20 and D-22 enforced, 303 / 0 / 28. The only skips left are the 28
+OSD-OML vectors (omnist-j#105). All 35 vectors of <code>formats-yaml/alias-expansion.json</code> run and pass,
+each against the number it declares (the runner passes a declared maximum to the reader only for a vector
+that carries the key), including the 5 expanded-size ones and the 5 malformed-merge syntax ones; the E-32
+placeholder is matched as the spec's E-32b says (same code, a well-formed <code>line:col</code>, nothing closer).</p>
+<p><strong>v0.21.0-beta to v0.22.0-beta (2026-09-29).</strong> Track 2 went from 241 pass / 12 fail / 34 skip
+(of 287 vectors, measured with the bump applied and no code change) to 253 pass / 0 fail / 34 skip;
+the harness headline from 270 / 12 / 34 to 282 / 0 / 34 (Track 1 unchanged at 29 / 0 / 0). The 12
+failures were DIV-7's: ten OML-26 separator-then-stray-token vectors
+(<code>shape/separator-then-closing-brace-...</code>, <code>semicolon-then-closing-brace-...</code>,
+<code>separator-then-comma-...</code>, <code>separator-then-closing-bracket-...</code>, <code>separator-then-a-non-label-token-...</code>,
+<code>separator-then-nan-...</code>, <code>separator-then-opening-brace-...</code>, <code>separator-then-an-array-...</code>,
+<code>separator-then-colon-...</code>, and <code>closing-brace-after-a-braced-edge-value-...</code>, all reported
+<code>parse.unexpected-token</code>) and the two E-28 code-point column vectors
+(<code>oml-grammar/errors/column-counts-code-points-after-an-astral-character</code> at <code>1:13</code> for <code>1:12</code>,
+<code>osd-grammar/errors/...</code> at <code>2:19</code> for <code>2:18</code>). Changes: after a complete top-level edge the edge
+list continues only if a separator is followed by a <code>STRING</code> or <code>IDENT</code>, and any other leftover token
+is <code>parse.trailing-content</code> with or without a separator (OML-26, OML-25); inside <code>{...}</code> and <code>[...]</code>
+it stays <code>parse.unexpected-token</code> (OML-27); the OML and OSD lexers count the column in Unicode code
+points (E-28), so the second half of a surrogate pair adds nothing. Skips are unchanged at 34.
+Measured on one-line inputs of about 1.9 million characters (the input cap is 2,000,000), before
+and after, best of three: 200k-token array 207 ms / 184 ms, 100k edges 347 ms / 285 ms, a 1.9M-character
+string 19 ms / 21 ms, an OSD line of 100k fields 98 ms / 73 ms. The column computation stays linear.</p>
+<p><strong>v0.19.0-beta to v0.21.0-beta (2026-09-22).</strong> Track 2 went from 215 pass / 0 fail / 34 skip
+(of 249 vectors) to 239 pass / 0 fail / 34 skip (of 273): 215 + 14 <code>bytes_hex</code> D-14 vectors
+(all presented through the CLI's byte-oriented entry point, per E-27; none decoded with
+replacement) + 5 OML-26/OML-27 stray-token vectors (4 <code>shape/*</code> + 1 <code>arrays/*</code>, already
+satisfied, unmeasured before this sweep) + 4 OSD-15 canonical-escaping vectors (already
+satisfied, unmeasured before this sweep) + 1
+<code>infer/allow-any/mixed-object-and-scalar-shapes-open-to-any-when-allowed</code> vector (already
+satisfied) = 239. Skip count and its breakdown are unchanged at 34 (28 OSD-OML + 6
+alias-expansion, DIV-3) -- both the pre-sweep and post-sweep runs give the identical
+25 <code>parse_schema_oml</code> + 3 <code>write_schema_oml</code> + 6 alias-expansion split. Fixed a real
+conformance-runner gap found during this sweep's comparison audit: <code>runParseSchemaVector</code>
+never compared
+<code>expect.schema</code> on a successful <code>parse_schema</code> vector at all (not even structurally) --
+confirmed by mutation, a corrupted <code>expect.schema</code> on
+<code>osd-grammar/canonical-output/declaration-order-round-trips-exactly</code> still reported PASS
+before the fix. Now compared byte-for-byte per Sec3.3/Sec5.9, and the same mutation now
+fails as expected.</p>
+<p>Every skip is a real, cited reason (omnist-spec §8.5.5, E-20), never a run against a wrong default:</p>
+<table>
+<thead>
+<tr>
+<th>Skips</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>28</td>
+<td>Not yet implemented: the OSD-OML extension (<a href="https://github.com/omnist-dev/omnist-j/issues/105">omnist-j#105</a>); 25 <code>parse_schema_oml</code>, 3 <code>write_schema_oml</code></td>
+</tr>
+</tbody>
+</table>
+<p>A vector whose operation the runner has never heard of is a failure, and a failure whose exception
+carries no structured <code>code</code>/<code>path</code> is a failure, not a guess. There is no runner-side "known failing"
+list: the CI gate fails on any nonzero fail count (E-22).</p>
+<h2 id="yaml-alias-limits-d-18-d-18a-d-19-d-20-d-22">YAML alias limits (D-18, D-18a, D-19, D-20, D-22)<a class="headerlink" href="#yaml-alias-limits-d-18-d-18a-d-19-d-20-d-22" title="Permanent link">&para;</a></h2>
+<p>Implemented in <code>0.3.0-alpha</code> (<a href="https://github.com/omnist-dev/omnist-j/issues/113">omnist-j#113</a>),
+against omnist-spec v0.26.0-beta (commit <code>7744a5c</code>). <code>YamlCodec.read(text)</code> composes the text into
+SnakeYAML's node graph, which describes anchors and aliases without expanding them, and checks that
+graph <strong>before</strong> anything is constructed from it. The check is one iterative pass in time linear in
+the input, with each container's counts memoized, and saturating arithmetic.</p>
+<p>Two limits, two codes, both finite and both configurable through <code>YamlLimits</code> (D-10, D-11):</p>
+<table>
+<thead>
+<tr>
+<th>Limit</th>
+<th>Default</th>
+<th>Option range</th>
+<th>Code</th>
+<th>What it bounds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Expansion factor <code>E = W / S</code> of every mapping and sequence</td>
+<td>50</td>
+<td>1 to 10 000</td>
+<td><code>document.limit.alias-expansion</code></td>
+<td>Amplification: how many value slots a written construct materializes per slot written</td>
+</tr>
+<tr>
+<td>Expanded size <code>W(root)</code></td>
+<td>1 000 000</td>
+<td>1 to 10 000 000</td>
+<td><code>document.limit.expanded-size</code></td>
+<td>Absolute size of an input that uses anchors</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>What is checked.</strong> Every mapping and every sequence in a value position, the document root, an
+  inline merge source and every anchored definition. Scalars are never checked. A sequence in
+  merge-value position (<code>&lt;&lt;: [*a, *b]</code>, anchored or not) is a carrier: no slot, not a candidate (D-18a).</li>
+<li><strong>The ratio of a merge is not 1.00.</strong> A mapping that merges a block of <code>k</code> keys and writes one key of
+  its own has <code>E</code> of about <code>(k + 2) / 3</code>: <code>job: {&lt;&lt;: *base, script: x}</code> writes three slots and
+  materializes <code>k + 2</code>. So 100 services merging a 20-key block read at most 7.33 and 100 merging a
+  60-key block 20.67, but one <code>job</code> merging a 150-key base reads 50.67 and is refused at the default,
+  and so is a 100-key block aliased 100 times at the root (50.50). A workload that needs more raises
+  the maximum (up to 10 000); the previous behaviour, SnakeYAML's global count of 50 aliases to
+  collections, refused any configuration that held more than 50 of them, however harmless.</li>
+<li><strong>The two limits are independent.</strong> An input can pass the ratio and fail the size (a large document
+  whose every container sits under 50), or pass the size and fail the ratio (a small, very amplifying
+  one). An input that fails both is reported as <code>document.limit.alias-expansion</code>.</li>
+<li><strong>Exemption.</strong> <code>document.limit.expanded-size</code> applies only to an input that contains at least one
+  alias or merge key (a <code>&lt;&lt;</code> key, as the spec uses the term; a quoted <code>"&lt;&lt;"</code> is a plain key). A YAML
+  input with neither is treated as a JSON or OML input of the same size is: the 2,000,000-character
+  input cap and the node limit govern it. The cliff is deliberate in the spec: a plain file of
+  two million slots passes and adding one alias subjects it to the cap. In this port the exemption
+  applies regardless, but a plain file that large cannot reach the reader: the 2,000,000-character input cap
+  and the 1,000,000-node limit refuse it first, so in practice no YAML input here is exempt from a cap.</li>
+<li><strong><code>W</code> is conservative.</strong> It ignores key collisions, so a document whose merged keys are overridden
+  can be refused though it materializes fewer slots (D-19).</li>
+<li><strong>Malformed merges</strong> (<code>&lt;&lt;: 1</code>, <code>&lt;&lt;: [1]</code>, <code>&lt;&lt;: [[{a: 1}]]</code>, <code>&lt;&lt;: *s</code> over scalars) are
+  <code>parse.codec-syntax</code> and win over both limit codes, wherever they sit in the document.</li>
+<li><strong>Cycles.</strong> An anchor that refers to itself, directly, through other anchors or through a merge
+  key (<code>a: &amp;a {&lt;&lt;: *a}</code>), is <code>document.limit.alias-expansion</code> (D-20).</li>
+<li><strong>Parse cost.</strong> The check is cheap next to composing the text, which is SnakeYAML's own work and is paid
+  first, in proportion to the input; for an input near the 2,000,000-character cap composing is the dominant cost
+  of refusing it. Measured (best of seven, on the composed graph, JDK 21, this repository's test JVM): the
+  fan-out bombs 4^10, 2^30 and 50^4 (465 to 2 009 characters) compose in 2.7 to 3.8 ms and are checked in 0.2 to
+  0.5 ms; the unanchored merge fan-in of 2 000 merges of a 2 000-key block (31 803 characters) composes in
+  15 ms and is checked in 2.7 ms; a root list of 100 000 <code>{k: *b}</code> over 1 000 scalars (1.2 MB) composes in 325 ms
+  and is checked in 56 ms (the merge-shape pass reads the whole document before counting); a legitimate 1 MB
+  file of 40 000 services merging a 20-key block composes in 295 ms, is checked in 50 ms and is accepted, and
+  its full read, which materializes about 880 000 slots, takes 0.9 s.</li>
+<li><strong>Interaction with SnakeYAML's own limits.</strong> The library's global cap (<code>maxAliasesForCollections</code>,
+  default 50) is lifted so that the spec's per-node ratio decides. Its <code>codePointLimit</code> (3 MiB) sits above
+  this port's 2 000 000-character cap and never fires first. Its nesting cap is 1000 levels, as before; an
+  alias chain can nest the materialized tree deeper than anything that can be written, and one deeper than
+  1000 levels is refused as <code>document.limit.depth</code> at <code>$</code> instead of being constructed. <strong>This guard is a
+  port-specific addition beyond the spec</strong>, there to avoid a stack overflow in SnakeYAML's constructor when the
+  alias maximum is raised. Up to 1000 levels the document model's own depth limit (200) decides, with the real
+  path of the offending node; only above 1000 is the path <code>$</code>.</li>
+<li><strong>Complex keys.</strong> A mapping or sequence used as a key (<code>? [a, b]</code>) is counted as if it were a value, so
+  it cannot hide an expansion; the document model refuses such a key afterwards in any case.</li>
+<li><strong>Surfaces.</strong> Every YAML read goes through <code>YamlCodec</code>: <code>YamlCodec.read</code> (reference defaults),
+  <code>YamlCodec.readWithLimits</code> (configured), the CLI (defaults; there is no flag, and an over-limit input
+  exits 2 with <code>Error: ...</code> or, with <code>--json</code>, the code and path) and the conformance runner. The OML and
+  OSD readers have no alias mechanism.</li>
+</ul>
+<h2 id="programmatic-schema-rules-s-8-s-22-s-23-s-24-osd-16">Programmatic schema rules (S-8, S-22, S-23, S-24, OSD-16)<a class="headerlink" href="#programmatic-schema-rules-s-8-s-22-s-23-s-24-osd-16" title="Permanent link">&para;</a></h2>
+<p>Implemented in <code>0.4.0-alpha</code> against omnist-spec v0.28.0-beta (commit <code>1a7d0de</code>). No conformance vector
+reaches any of them (DIV-5: OSD text arrives as declaration order and no text carries <code>max = 0</code>), so the
+only pin is <code>src/test/java/dev/omnist/schema/SchemaV028Test.java</code>. A schema built through the Java API
+(<code>new Schema</code>, <code>new Record</code>, <code>new Type.Ref</code>) is checked at construction, and the violation is a
+<code>dev.omnist.schema.SchemaException</code> (an <code>IllegalArgumentException</code>) carrying <code>getCode()</code> and <code>getPath()</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Code</th>
+<th>Path</th>
+<th>Raised by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S-8: a record name, the root name or a <code>Ref</code> target is not <code>[A-Za-z_][A-Za-z0-9_]*</code></td>
+<td><code>schema.invalid-name</code></td>
+<td><code>$</code>, the name in the message only</td>
+<td><code>Record</code>, <code>Type.Ref</code>, <code>Schema</code> constructors</td>
+</tr>
+<tr>
+<td>S-22: a field label does not encode to valid UTF-8 (a lone UTF-16 surrogate)</td>
+<td><code>schema.invalid-label</code></td>
+<td>the record name <code>R</code>; the label is never put in the path</td>
+<td><code>Record</code> constructor</td>
+</tr>
+<tr>
+<td>OSD-16 / S-24: a field has <code>max = 0</code></td>
+<td><code>write.unsupported-value</code></td>
+<td>the record name <code>R</code></td>
+<td><code>OsdWriter.write</code> and <code>OsdWriter.writeCompact</code> (a <code>WriteException</code>)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>S-23 (<code>schema.unknown-record</code>) cannot arise.</strong> The Java API has no caller-supplied record ordering:
+  <code>Schema(root, records)</code> takes one map and keeps its iteration order, so no ordering entry can name a record
+  absent from it.</li>
+<li><strong><code>[0,0]</code> stays representable.</strong> <code>new Field(label, type, 0, 0)</code> is accepted (S-15, omnist-spec#83 is open);
+  only the OSD writer refuses it. <code>SchemaAlgebra.prune</code> removes such fields (an unsatisfiable root record is
+  kept intact, as the spec says), <code>extract</code> and <code>normalize</code> never produce one, so <code>prune</code> before writing is the
+  way to clear it. There is no OSD-OML schema writer in this port (omnist-j#105), so the OSD-OML half of
+  OSD-16 does not apply yet.</li>
+<li><strong>OSD text from a <code>String</code>.</strong> <code>OsdReader.read</code> of text holding a lone surrogate reports
+  <code>schema.invalid-label</code> at the record name as an <code>OsdParseException</code>. Input bytes are a different matter:
+  a malformed byte sequence is decoded or refused before the reader sees it (D-14, <code>parse.invalid-encoding</code>).</li>
+<li><strong>Several violations.</strong> Construction reports the first one found; which is implementation-defined.</li>
+<li><strong><code>infer</code> record names are ASCII.</strong> Because a record name is a Name (S-8), <code>infer</code> now maps every
+  character outside <code>[A-Za-z0-9_]</code> to <code>_</code> when it derives a record name from a label (a label with an accented
+  letter used to yield a non-ASCII name, which S-8 rejects), and an all-digit label yields <code>Rec</code>. A malformed
+  <code>rootName</code> passed to <code>infer</code> is <code>schema.invalid-name</code> at <code>$</code>.</li>
+</ul>
+<h2 id="known-gaps">Known gaps<a class="headerlink" href="#known-gaps" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>D-14 (input must be valid UTF-8).</strong> The library API takes <code>String</code>, so decoding is the caller's.
+  <code>Cli</code> decodes both files and stdin strictly (<code>CharsetDecoder</code> with <code>REPORT</code>) and refuses malformed
+  input with <code>parse.invalid-encoding</code> at <code>1:1</code>; the <code>bytes_hex</code> vectors (E-27) cover it.</li>
+<li><strong>Codec syntax positions (JSON/YAML/TOML/XML)</strong> keep each codec library's own position
+  arithmetic. E-28's code-point column is implemented for OML and OSD text only; the codec
+  positions are the open question <a href="https://github.com/omnist-dev/omnist-spec/issues/114">omnist-spec#114</a>.</li>
+<li><strong>Nesting past the parsers' own limits.</strong> JSON and YAML nesting of 1000 or more levels is refused
+  by Jackson / SnakeYAML before this port's depth limit (200) is consulted, and is reported as
+  <code>parse.codec-syntax</code> rather than <code>document.limit.depth</code>.</li>
+<li><strong>Input-size guard.</strong> Input over 2,000,000 characters is refused with <code>document.parse-error</code>
+  (OML/OSD: <code>parse.input-too-large</code> / <code>schema.input-too-large</code>), codes that are not in the §8.3
+  taxonomy; the spec has no code for this cap.</li>
+<li><strong>OSD field label with a control character</strong> has no OSD spelling (OSD-14): <code>OsdWriter</code> fails with
+  <code>write.unsupported-value</code> at the record path, unconditionally.</li>
+</ul>
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<p><strong>836 tests passing</strong>, 0 failures — JUnit unit/integration tests plus
+jqwik property-based and fuzz tests (grammar-aware generators for TOML
+radix literals, OML lexing, and YAML timestamp shapes; raw-input fuzzers
+for every codec reader) run at thousands of iterations per property with
+zero crashes. <code>NoRawByteOrderMarkTest</code> fails the build if any source file, tests included,
+contains a raw U+FEFF.</p>
+<h2 id="code-coverage-jacoco">Code coverage (JaCoCo)<a class="headerlink" href="#code-coverage-jacoco" title="Permanent link">&para;</a></h2>
+<p>Gate-scoped (excludes <code>dev.omnist.conformance</code>, the harness itself, and
+<code>CliMain</code>, which is a thin argument-parsing entry point). Numbers are from
+<code>target/site/jacoco/jacoco.xml</code> after a fresh <code>mvn clean test</code>, measured three times
+(spec v0.28.0-beta adoption, 2026-10-02): the three runs gave identical figures.</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Line</th>
+<th>Branch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Overall</td>
+<td><strong>99.71%</strong> (10 of 3443 missed)</td>
+<td><strong>99.29%</strong> (17 of 2408 missed)</td>
+</tr>
+<tr>
+<td><code>dev.omnist.document</code></td>
+<td>100.0%</td>
+<td>98.6%</td>
+</tr>
+<tr>
+<td><code>dev.omnist.schema</code></td>
+<td>100.0%</td>
+<td>99.6%</td>
+</tr>
+<tr>
+<td><code>dev.omnist.algebra</code></td>
+<td>100.0%</td>
+<td>99.7%</td>
+</tr>
+<tr>
+<td><code>dev.omnist.cli</code></td>
+<td>99.4%</td>
+<td>98.0%</td>
+</tr>
+<tr>
+<td><code>dev.omnist.codec</code></td>
+<td>99.7%</td>
+<td>99.3%</td>
+</tr>
+<tr>
+<td><code>dev.omnist.validation</code></td>
+<td>100.0%</td>
+<td>100.0%</td>
+</tr>
+<tr>
+<td><code>dev.omnist.oml</code></td>
+<td>99.3%</td>
+<td>99.3%</td>
+</tr>
+</tbody>
+</table>
+<p>The CI gate (<code>pom.xml</code>) is set at 99.6% line / 99.1% branch.</p>
+<p><strong>v0.28.0-beta (2026-10-02):</strong> 836 tests; 10 of 3451 lines and 17 of 2414 branches missed, three runs identical
+(headroom 3 lines and 4 branches). The new <code>SchemaRules</code>, <code>SchemaException</code> and writer paths are fully covered.</p>
+<p><strong>The margin is thin, and this is a known risk.</strong> At these numbers the gate has headroom of
+only 2 more missed lines (13 allowed, 11 missed) and 3 more missed branches (21 allowed, 18
+missed). The YAML alias limits added lines and branches (3214 to 3404 lines, 2228 to 2354
+branches), and every new line and branch of <code>YamlAliasCheck</code>, <code>YamlLimits</code> and the new <code>YamlCodec</code> path is
+covered: the missed counts are unchanged at 11 / 18. (A first draft of <code>YamlAliasCheck</code> left 3 lines and 7
+branches uncovered, all defensive null or default arms that no input can reach; they were removed rather than
+excluded, which brought the branch ratio from 98.94%, under the gate, to 99.24%.) The headroom was thinner at v0.21.0-beta than at
+v0.19.0-beta (3 lines / 3 branches), because that sweep's new code (Cli.java's D-14 strict-UTF-8 decode and its <code>--json</code> structured-error
+branches, Track2Runner's bytes_hex routing and its canonical-schema byte-for-byte comparison)
+added lines faster than the new CliTest/Osd14Osd15/property-test coverage could close every
+branch. Two consecutive <code>mvn clean test</code> runs gave identical numbers (11 missed lines, 18
+missed branches both times), so this is not run-to-run jqwik seed noise -- it is a real,
+reproducible margin that the next behavior-changing PR should watch closely. <code>dev.omnist.cli</code>
+in particular dropped from 100.0%/98.9% to 99.4%/98.0% branch: one defensive catch
+(<code>Cli.java</code>'s <code>MAPPER.writeValueAsString</code> failure path inside the new <code>--json</code> error handler)
+is confirmed-unreachable in practice (the <code>JsonResponse</code>/<code>JsonError</code> shapes serialize
+unconditionally), the same class of documented trip-wire as the pre-existing gaps below.</p>
+<p>The handful of remaining uncovered lines are documented trip-wires:
+branches that are defensively correct but not reachable given the real
+runtime behavior of the underlying libraries under this codebase's exact
+configuration (verified empirically, not assumed) — e.g. a TOML parser
+error path that can't be triggered without a malformed upstream parser
+result, or an XML DOM check for a node type that <code>setCoalescing(true)</code>
+already rules out before the DOM is exposed. Each is annotated in place
+with the reasoning and, where relevant, the diagnostic that confirmed it.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
