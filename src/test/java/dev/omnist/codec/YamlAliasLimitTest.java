@@ -586,4 +586,45 @@ class YamlAliasLimitTest {
         }
         assertAccepted(b.toString(), slots(1));
     }
+
+    // omnist-spec v0.27.0-beta, D-18a: an empty merge sequence is a carrier that merges nothing
+    // (W 0, S one slot for the `<<` entry); an empty sequence elsewhere is an ordinary node.
+
+    @Test
+    @DisplayName("`config: {<<: []}` is an empty mapping")
+    void emptyMergeSequenceLeavesAnEmptyMapping() {
+        assertEquals(YamlCodec.read("config: {}\n"), YamlCodec.read("config: {<<: []}\n"));
+    }
+
+    @Test
+    @DisplayName("`t: {<<: [], c: 3}` keeps only its own key")
+    void emptyMergeSequenceKeepsOwnKeys() {
+        assertEquals(YamlCodec.read("t: {c: 3}\n"), YamlCodec.read("t: {<<: [], c: 3}\n"));
+    }
+
+    @Test
+    @DisplayName("an aliased empty sequence in merge position merges nothing")
+    void aliasedEmptyCarrierMergesNothing() {
+        assertEquals(YamlCodec.read("t: {c: 3}\n"), YamlCodec.read("s: &s []\nt: {<<: *s, c: 3}\n"));
+    }
+
+    @Test
+    @DisplayName("an anchored empty carrier in merge position merges nothing")
+    void anchoredEmptyCarrierMergesNothing() {
+        assertEquals(YamlCodec.read("t: {c: 3}\n"), YamlCodec.read("t: {<<: &s [], c: 3}\n"));
+    }
+
+    @Test
+    @DisplayName("an empty sequence outside merge position yields no edge")
+    void emptySequenceOutsideMergeYieldsNoEdge() {
+        assertEquals(YamlCodec.read("a: 1\n"), YamlCodec.read("a: 1\nk: []\n"));
+        assertEquals(YamlCodec.read("t: {}\n"), YamlCodec.read("t: {<<: [], k: []}\n"));
+    }
+
+    @Test
+    @DisplayName("an empty carrier counts W 0 and one slot: `t: {<<: []}` has W(root) 2, S(root) 3")
+    void emptyCarrierSizeCapBoundary() {
+        String yaml = "t: {<<: []}\n";
+        pinSlots(yaml, 2);
+    }
 }
