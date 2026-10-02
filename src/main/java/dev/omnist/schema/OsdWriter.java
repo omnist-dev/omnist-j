@@ -65,7 +65,7 @@ public final class OsdWriter {
         sb.append("record ").append(record.name()).append(" {\n");
 
         for (Field field : record.fields()) {
-            checkLabel(field.label(), record.name());
+            checkField(field, record.name());
             sb.append("    ");
             writeQuotedString(sb, field.label());
             writeCardinality(sb, field.min(), field.max());
@@ -82,7 +82,7 @@ public final class OsdWriter {
 
         boolean first = true;
         for (Field field : record.fields()) {
-            checkLabel(field.label(), record.name());
+            checkField(field, record.name());
             if (!first) {
                 sb.append(" ");
             } else {
@@ -159,6 +159,17 @@ public final class OsdWriter {
      * @param recordPath the Schema path of the record holding this field, e.g. {@code "R"}
      * @throws WriteException if {@code label} contains a C0 control character
      */
+    private static void checkField(Field field, String recordPath) {
+        checkLabel(field.label(), recordPath);
+        if (field.max() != null && field.max() == 0) {
+            WriteReport rep = new WriteReport();
+            rep.add(recordPath, "write.unsupported-value",
+                    "a field with max = 0 has no OSD spelling (OSD-16); prune the schema before writing",
+                    "error");
+            throw new WriteException(rep.toString(), rep);
+        }
+    }
+
     private static void checkLabel(String label, String recordPath) {
         for (int i = 0; i < label.length(); i++) {
             char c = label.charAt(i);

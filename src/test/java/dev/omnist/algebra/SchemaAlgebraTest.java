@@ -868,7 +868,15 @@ public class SchemaAlgebraTest {
             new dev.omnist.document.Edge("123", child)
         ));
         Schema schema2 = SchemaAlgebra.infer(List.of(sample2));
-        assertTrue(schema2.records().keySet().stream().anyMatch(k -> k.contains("123")));
+        // An all-digit label has no identifier left (S-8 forbids a leading digit): falls back to "Rec".
+        assertTrue(schema2.records().containsKey("Rec"));
+
+        // Non-ASCII letters are not in [A-Za-z0-9_] either (S-8): they become underscores.
+        dev.omnist.document.Node sample3 = new dev.omnist.document.Node(List.of(
+            new dev.omnist.document.Edge("café", child)
+        ));
+        Schema schema3 = SchemaAlgebra.infer(List.of(sample3));
+        assertTrue(schema3.records().containsKey("Caf_"));
     }
 
     @Test
@@ -1091,8 +1099,10 @@ public class SchemaAlgebraTest {
     @Test
     @DisplayName("Issue #102: lint's duplicate-record finding orders record names by codepoint, not UTF-16 code unit")
     void testLintDuplicateRecordLocationUsesCodepointOrder() {
-        String bmpHigh = "￿";
-        String supplementary = new String(Character.toChars(0x10000));
+        // S-8 limits record names to ASCII identifiers, where UTF-16 and codepoint order agree;
+        // the codepoint comparison itself is pinned above by compareCodePoints.
+        String bmpHigh = "Alpha";
+        String supplementary = "Beta";
 
         dev.omnist.schema.Record recBmp = new dev.omnist.schema.Record(bmpHigh, List.of(
             new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
@@ -1107,10 +1117,6 @@ public class SchemaAlgebraTest {
             .filter(f -> f.code().equals("lint.duplicate-record"))
             .findFirst().orElseThrow();
 
-        // Codepoint order puts bmpHigh (0xFFFF) before supplementary
-        // (0x10000); the buggy UTF-16 code-unit order would put
-        // supplementary first since its lead surrogate (0xD800) is a
-        // smaller code unit than 0xFFFF.
         assertEquals(bmpHigh + ", " + supplementary, dup.location());
         assertTrue(dup.message().contains("'" + supplementary + "'"));
         assertTrue(dup.message().contains("'" + bmpHigh + "'"));
@@ -1119,8 +1125,10 @@ public class SchemaAlgebraTest {
     @Test
     @DisplayName("Issue #102: normalize's minimum-of-block rule picks the codepoint-smallest name, not UTF-16-smallest")
     void testNormalizeMinOfBlockUsesCodepointOrder() {
-        String bmpHigh = "￿";
-        String supplementary = new String(Character.toChars(0x10000));
+        // S-8 limits record names to ASCII identifiers, where UTF-16 and codepoint order agree;
+        // the codepoint comparison itself is pinned above by compareCodePoints.
+        String bmpHigh = "Alpha";
+        String supplementary = "Beta";
 
         dev.omnist.schema.Record recBmp = new dev.omnist.schema.Record(bmpHigh, List.of(
             new Field("x", new Type.Scalar(ScalarKind.STRING, false), 1, 1)
@@ -1136,7 +1144,7 @@ public class SchemaAlgebraTest {
 
         Schema normalized = SchemaAlgebra.normalize(schema);
 
-        // bmpHigh is codepoint-smaller, so it must be the surviving name;
+        // "Alpha" is codepoint-smaller, so it must be the surviving name;
         // both of Root's refs must be remapped to point at it.
         assertTrue(normalized.records().containsKey(bmpHigh));
         assertFalse(normalized.records().containsKey(supplementary));

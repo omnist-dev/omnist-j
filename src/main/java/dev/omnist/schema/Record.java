@@ -12,10 +12,17 @@ import java.util.Objects;
  * @param fields the ordered list of field declarations; {@code null} is normalized to an empty list
  */
 public record Record(String name, List<Field> fields) {
-    /** @throws NullPointerException if {@code name} is {@code null} */
+    /**
+     * @throws NullPointerException if {@code name} is {@code null}
+     * @throws SchemaException      {@code schema.invalid-name} at {@code $} if {@code name} does not match
+     *                              {@code [A-Za-z_][A-Za-z0-9_]*} (S-8); {@code schema.invalid-label} at the
+     *                              record path if a field label does not encode to valid UTF-8 (S-22)
+     */
     public Record {
         Objects.requireNonNull(name, "name must not be null");
+        SchemaRules.checkName("record name", name);
         fields = fields != null ? List.copyOf(fields) : List.of();
+        SchemaRules.checkLabels(name, fields);
     }
 
     /**

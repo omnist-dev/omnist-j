@@ -622,7 +622,8 @@ public final class SchemaAlgebra {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (Character.isLetterOrDigit(c) || c == '_') {
+            // ASCII only: a record name is a Name (S-8), [A-Za-z_][A-Za-z0-9_]*.
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
                 sb.append(c);
             } else {
                 sb.append('_');
@@ -633,19 +634,16 @@ public final class SchemaAlgebra {
         while (start < out.length()) {
             char c = out.charAt(start);
             // c >= '0' is always true here: every char in `out` came from the
-            // sanitization loop above, which only ever appends a
-            // Character.isLetterOrDigit char or '_' (95) -- no Unicode letter,
-            // digit, or '_' has a code point below '0' (48) -- so the redundant
-            // lower bound is dropped rather than left as an unreachable branch.
+            // sanitization loop above, which only ever appends an ASCII letter,
+            // digit or '_' (95) -- none has a code point below '0' (48) -- so the
+            // redundant lower bound is dropped rather than left as an unreachable branch.
             if (c <= '9' || c == '_') {
                 start++;
             } else {
                 break;
             }
         }
-        if (start == out.length()) {
-            return out;
-        }
+        // Nothing left (e.g. an all-digit label): the caller falls back to "Rec" (S-8 forbids a leading digit).
         return out.substring(start);
     }
 
@@ -793,10 +791,8 @@ public final class SchemaAlgebra {
         List<Field> kept = new ArrayList<>();
         for (Field f : rec.fields()) {
             if (f.max() != null && f.max() == 0) {
-                // Confirmed-unreachable as of omnist-j#87 (schema.invalid-cardinality now
-                // rejects [0,0] at OSD parse time, the only path that used to produce a
-                // max==0 field here) -- kept as defensive code per the LINE-gate convention
-                // documented on the jacoco-maven-plugin check rule in pom.xml.
+                // OSD text cannot produce max == 0 (schema.invalid-cardinality, omnist-j#87), but a
+                // hand-built Field can (S-15): prune removes it (S-24).
                 continue; // max == 0 can never be emitted
             }
             if (f.min() == 0 && f.type() instanceof Type.Ref ref && !sat.contains(ref.name())) {

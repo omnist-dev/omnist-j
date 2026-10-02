@@ -26,9 +26,14 @@ public sealed interface Type {
      * @param name the referenced record's name; resolved against {@link Schema#records()}
      */
     record Ref(String name) implements Type {
-        /** @throws NullPointerException if {@code name} is {@code null} */
+        /**
+         * @throws NullPointerException if {@code name} is {@code null}
+         * @throws SchemaException      {@code schema.invalid-name} at {@code $} if {@code name} is not a
+         *                              valid name (S-8)
+         */
         public Ref {
             Objects.requireNonNull(name, "name must not be null");
+            SchemaRules.checkName("reference target", name);
         }
     }
 

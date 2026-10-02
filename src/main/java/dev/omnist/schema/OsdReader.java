@@ -212,7 +212,12 @@ public class OsdReader {
         }
         consumeToken(); // consume '}'
 
-        return new Record(recordName, fields);
+        try {
+            return new Record(recordName, fields);
+        } catch (SchemaException ex) {
+            // Only reachable for a String input carrying an unpaired surrogate (S-22); bytes decode to U+FFFD.
+            throw new OsdParseException(1, 1, ex.getCode(), ex.getPath(), ex.getMessage());
+        }
     }
 
     private record CardBound(int min, Integer max) {}
