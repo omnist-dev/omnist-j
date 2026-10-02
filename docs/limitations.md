@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.3.1-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.4.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -9,7 +9,7 @@ interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.27.0-beta**'s pinned suite (commit `a6a6090`), comparing diagnostics as **(path, code) sets**
+**v0.28.0-beta**'s pinned suite (commit `1a7d0de`), comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
@@ -20,6 +20,11 @@ loosening anywhere in the runner). **0 failures.**
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.27.0-beta to v0.28.0-beta (2026-10-02).** No vector changed: Track 2 stays 310 pass / 0 fail / 28 skip
+of 338, Track 1 29 / 0 / 0, headline 339 / 0 / 28. The release adds four rules about programmatically built
+schemas that no vector can reach (DIV-5), so they are pinned by `SchemaV028Test` only; see
+[Programmatic schema rules](#programmatic-schema-rules-s-8-s-22-s-23-s-24-osd-16) below.
 
 **v0.26.0-beta to v0.27.0-beta (2026-10-02).** Track 2 went from 303 pass / 0 fail / 28 skip (of 331
 vectors) to 310 / 0 / 28 (of 338); the harness headline from 332 / 0 / 28 to 339 / 0 / 28. The 7 new vectors pin the
@@ -150,6 +155,37 @@ Two limits, two codes, both finite and both configurable through `YamlLimits` (D
   exits 2 with `Error: ...` or, with `--json`, the code and path) and the conformance runner. The OML and
   OSD readers have no alias mechanism.
 
+## Programmatic schema rules (S-8, S-22, S-23, S-24, OSD-16)
+
+Implemented in `0.4.0-alpha` against omnist-spec v0.28.0-beta (commit `1a7d0de`). No conformance vector
+reaches any of them (DIV-5: OSD text arrives as declaration order and no text carries `max = 0`), so the
+only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema built through the Java API
+(`new Schema`, `new Record`, `new Type.Ref`) is checked at construction, and the violation is a
+`dev.omnist.schema.SchemaException` (an `IllegalArgumentException`) carrying `getCode()` and `getPath()`:
+
+| Rule | Code | Path | Raised by |
+|---|---|---|---|
+| S-8: a record name, the root name or a `Ref` target is not `[A-Za-z_][A-Za-z0-9_]*` | `schema.invalid-name` | `$`, the name in the message only | `Record`, `Type.Ref`, `Schema` constructors |
+| S-22: a field label does not encode to valid UTF-8 (a lone UTF-16 surrogate) | `schema.invalid-label` | the record name `R`; the label is never put in the path | `Record` constructor |
+| OSD-16 / S-24: a field has `max = 0` | `write.unsupported-value` | the record name `R` | `OsdWriter.write` and `OsdWriter.writeCompact` (a `WriteException`) |
+
+- **S-23 (`schema.unknown-record`) cannot arise.** The Java API has no caller-supplied record ordering:
+  `Schema(root, records)` takes one map and keeps its iteration order, so no ordering entry can name a record
+  absent from it.
+- **`[0,0]` stays representable.** `new Field(label, type, 0, 0)` is accepted (S-15, omnist-spec#83 is open);
+  only the OSD writer refuses it. `SchemaAlgebra.prune` removes such fields (an unsatisfiable root record is
+  kept intact, as the spec says), `extract` and `normalize` never produce one, so `prune` before writing is the
+  way to clear it. There is no OSD-OML schema writer in this port (omnist-j#105), so the OSD-OML half of
+  OSD-16 does not apply yet.
+- **OSD text from a `String`.** `OsdReader.read` of text holding a lone surrogate reports
+  `schema.invalid-label` at the record name as an `OsdParseException`. Input bytes are a different matter:
+  a malformed byte sequence is decoded or refused before the reader sees it (D-14, `parse.invalid-encoding`).
+- **Several violations.** Construction reports the first one found; which is implementation-defined.
+- **`infer` record names are ASCII.** Because a record name is a Name (S-8), `infer` now maps every
+  character outside `[A-Za-z0-9_]` to `_` when it derives a record name from a label (a label with an accented
+  letter used to yield a non-ASCII name, which S-8 rejects), and an all-digit label yields `Rec`. A malformed
+  `rootName` passed to `infer` is `schema.invalid-name` at `$`.
+
 ## Known gaps
 
 - **D-14 (input must be valid UTF-8).** The library API takes `String`, so decoding is the caller's.
@@ -164,12 +200,12 @@ Two limits, two codes, both finite and both configurable through `YamlLimits` (D
 - **Input-size guard.** Input over 2,000,000 characters is refused with `document.parse-error`
   (OML/OSD: `parse.input-too-large` / `schema.input-too-large`), codes that are not in the §8.3
   taxonomy; the spec has no code for this cap.
-- **OSD field label with a control character** has no OSD spelling (omnist-spec#104); the OSD writer's
-  behaviour for such labels is left as is.
+- **OSD field label with a control character** has no OSD spelling (OSD-14): `OsdWriter` fails with
+  `write.unsupported-value` at the record path, unconditionally.
 
 ## Testing
 
-**796 tests passing**, 0 failures — JUnit unit/integration tests plus
+**836 tests passing**, 0 failures — JUnit unit/integration tests plus
 jqwik property-based and fuzz tests (grammar-aware generators for TOML
 radix literals, OML lexing, and YAML timestamp shapes; raw-input fuzzers
 for every codec reader) run at thousands of iterations per property with
@@ -181,20 +217,23 @@ contains a raw U+FEFF.
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 `CliMain`, which is a thin argument-parsing entry point). Numbers are from
 `target/site/jacoco/jacoco.xml` after a fresh `mvn clean test`, measured three times
-(YAML alias limits, 2026-10-01): the three runs gave identical figures.
+(spec v0.28.0-beta adoption, 2026-10-02): the three runs gave identical figures.
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.68%** (11 of 3404 missed) | **99.24%** (18 of 2354 missed) |
+| Overall | **99.71%** (10 of 3443 missed) | **99.29%** (17 of 2408 missed) |
 | `dev.omnist.document` | 100.0% | 98.6% |
 | `dev.omnist.schema` | 100.0% | 99.6% |
-| `dev.omnist.algebra` | 99.8% | 99.4% |
+| `dev.omnist.algebra` | 100.0% | 99.7% |
 | `dev.omnist.cli` | 99.4% | 98.0% |
 | `dev.omnist.codec` | 99.7% | 99.3% |
 | `dev.omnist.validation` | 100.0% | 100.0% |
 | `dev.omnist.oml` | 99.3% | 99.3% |
 
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
+
+**v0.28.0-beta (2026-10-02):** 836 tests; 10 of 3451 lines and 17 of 2414 branches missed, three runs identical
+(headroom 3 lines and 4 branches). The new `SchemaRules`, `SchemaException` and writer paths are fully covered.
 
 **The margin is thin, and this is a known risk.** At these numbers the gate has headroom of
 only 2 more missed lines (13 allowed, 11 missed) and 3 more missed branches (21 allowed, 18

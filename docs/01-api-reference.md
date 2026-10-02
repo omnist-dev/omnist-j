@@ -129,6 +129,12 @@ message text is for humans and is never a stable contract. The `path` follows §
 | `document.*`, `format.*` | a Document path such as `$` or `$.order.items[2].sku` |
 | `schema.*` | a schema path such as `Record.field`, or `$` for whole-schema cases |
 
+`SchemaException` (an `IllegalArgumentException`) is thrown by the `Schema`, `Record` and `Type.Ref`
+constructors for a programmatically built schema: `schema.invalid-name` at `$` (S-8; the name is in the
+message only) and `schema.invalid-label` at the record name (S-22; a field label with a lone surrogate).
+`OsdWriter` throws `WriteException` with `write.unsupported-value` at the record name for a field with
+`max = 0` (OSD-16) or a label holding a C0 control character (OSD-14).
+
 String-body errors (`parse.control-character`, `parse.invalid-escape`, `parse.unterminated-string`,
 `parse.unpaired-surrogate`) report the position of the string's opening quote (E-23).
 

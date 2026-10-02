@@ -65,7 +65,7 @@ public final class OsdWriter {
         sb.append("record ").append(record.name()).append(" {\n");
 
         for (Field field : record.fields()) {
-            checkLabel(field.label(), record.name());
+            checkField(field, record.name());
             sb.append("    ");
             writeQuotedString(sb, field.label());
             writeCardinality(sb, field.min(), field.max());
@@ -82,7 +82,7 @@ public final class OsdWriter {
 
         boolean first = true;
         for (Field field : record.fields()) {
-            checkLabel(field.label(), record.name());
+            checkField(field, record.name());
             if (!first) {
                 sb.append(" ");
             } else {
@@ -143,6 +143,27 @@ public final class OsdWriter {
             }
             case Type.Ref ref -> sb.append(ref.name());
             case Type.Any ignored -> sb.append("any");
+        }
+    }
+
+    /**
+     * Rejects a field the OSD writer cannot spell: a label with a C0 control character (OSD-14)
+     * or a {@code max = 0} cardinality (OSD-16, S-24). Both fail with {@code write.unsupported-value}
+     * at the Schema path of the record holding the field, and the {@code max = 0} case has no
+     * spelling in OSD text; callers {@code prune} first.
+     *
+     * @param field      the field to check
+     * @param recordPath the Schema path of the record holding this field, e.g. {@code "R"}
+     * @throws WriteException if the label or cardinality has no OSD spelling
+     */
+    private static void checkField(Field field, String recordPath) {
+        checkLabel(field.label(), recordPath);
+        if (field.max() != null && field.max() == 0) {
+            WriteReport rep = new WriteReport();
+            rep.add(recordPath, "write.unsupported-value",
+                    "a field with max = 0 has no OSD spelling (OSD-16); prune the schema before writing",
+                    "error");
+            throw new WriteException(rep.toString(), rep);
         }
     }
 
