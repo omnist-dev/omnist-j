@@ -69,7 +69,9 @@ class ConformanceTest {
         // port had not run (all passing), 6 more D-18/D-18a ones, the 5 D-22 expanded-size vectors
         // (+3 pinning the exemption and the order), 5 malformed-merge syntax vectors, and 3 E-32
         // "line:col" vectors in the other formats. The only skips left are the 28 OSD-OML ones.
-        assertEquals(303, results[0], "Track 2 should pass 303 real JSON test vectors");
+        // Bumped to omnist-spec v0.27.0-beta (commit a6a6090): 338 vectors. 310 = 303 + 7 new D-18a
+        // empty-merge-sequence vectors, all passing with no code change.
+        assertEquals(310, results[0], "Track 2 should pass 310 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
         assertEquals(28, results[2], "Track 2 should skip only the 28 OSD-OML vectors");
     }

@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.3.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.3.1-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -9,17 +9,21 @@ interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.26.0-beta**'s pinned suite (commit `7744a5c`; the tag was not pushed when this was written), comparing diagnostics as **(path, code) sets**
+**v0.27.0-beta**'s pinned suite (commit `a6a6090`), comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 303 | 0 | 28 |
+| 2: JSON vectors | 310 | 0 | 28 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.26.0-beta to v0.27.0-beta (2026-10-02).** Track 2 went from 303 pass / 0 fail / 28 skip (of 331
+vectors) to 310 / 0 / 28 (of 338); the harness headline from 332 / 0 / 28 to 339 / 0 / 28. The 7 new vectors pin the
+empty merge sequence `<<: []` (D-18a), a carrier that merges nothing; they passed with no code change.
 
 **v0.22.0-beta to v0.26.0-beta (2026-10-01).** Track 2 went from 253 pass / 0 fail / 34 skip (of 287
 vectors) to 303 pass / 0 fail / 28 skip (of 331); the harness headline from 282 / 0 / 34 to 332 / 0 / 28
