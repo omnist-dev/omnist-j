@@ -1,5 +1,7 @@
 package dev.omnist.schema;
 
+import dev.omnist.document.InputSize;
+import dev.omnist.document.Limits;
 import dev.omnist.schema.OsdLexer.Token;
 import dev.omnist.schema.OsdLexer.TokenType;
 
@@ -11,8 +13,6 @@ import java.util.*;
  */
 public class OsdReader {
 
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     private final List<Token> tokens;
     private int index = 0;
 
@@ -23,8 +23,21 @@ public class OsdReader {
      * @param source the OSD text to parse; {@code null} is treated as empty
      */
     public OsdReader(String source) {
-        if (source != null && source.length() > MAX_INPUT_LENGTH) {
-            throw new OsdParseException(1, 1, "schema.input-too-large", "$", "Input exceeds maximum length of " + MAX_INPUT_LENGTH + " characters");
+        this(source, Limits.DEFAULT);
+    }
+
+    /**
+     * Constructs a reader that refuses source of more than {@link Limits#maxInputBytes()} bytes
+     * (D-23). Only {@code maxInputBytes} is read from {@code limits}.
+     *
+     * @param source the OSD text to parse; {@code null} is treated as empty
+     * @param limits the limits; must not be {@code null}
+     */
+    public OsdReader(String source, Limits limits) {
+        int maxInputBytes = Objects.requireNonNull(limits, "limits").maxInputBytes();
+        // D-23: the size check comes first, on the text as received (a byte-order mark counts).
+        if (InputSize.exceeds(source, maxInputBytes)) {
+            throw new OsdParseException(1, 1, InputSize.CODE, "$", InputSize.message(source, maxInputBytes));
         }
         // D-15 / D-21: one leading U+FEFF is consumed, a second is rejected at 1:1 of what remains.
         source = dev.omnist.document.Bom.strip(source, () -> new OsdParseException(1, 1, "parse.unexpected-token", "1:1",
@@ -43,6 +56,19 @@ public class OsdReader {
      */
     public static Schema read(String source) {
         return new OsdReader(source).parseSchema();
+    }
+
+    /**
+     * Parses OSD text as {@link #read(String)} does, refusing source of more than
+     * {@link Limits#maxInputBytes()} bytes with {@code document.limit.input-size} at {@code $} (D-23).
+     *
+     * @param source the OSD text; {@code null} is treated as empty
+     * @param limits the limits; must not be {@code null}
+     * @return the fully-validated {@link Schema}
+     * @throws OsdParseException if the text is too large, or syntactically or structurally invalid
+     */
+    public static Schema read(String source, Limits limits) {
+        return new OsdReader(source, limits).parseSchema();
     }
 
     /**

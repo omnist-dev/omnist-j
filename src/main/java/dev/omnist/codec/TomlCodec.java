@@ -228,18 +228,31 @@ public final class TomlCodec {
         return true;
     }
 
-    /** Maximum accepted input length in characters, guarding against oversized TOML input. */
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     /**
      * Parses TOML text into a {@link Document}.
      *
      * @param text the TOML text; must not be {@code null}
      * @return the parsed document
-     * @throws RuntimeException if the TOML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the TOML is syntactically invalid or is larger than
+     *         {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text) {
-        text = CodecInput.prepare(text, "TOML", MAX_INPUT_LENGTH);
+        return readWithLimits(text, Limits.DEFAULT);
+    }
+
+    /**
+     * Parses TOML text into a {@link Document}, refusing input larger than
+     * {@link Limits#maxInputBytes()} bytes (D-23). Only {@code maxInputBytes} is read from
+     * {@code limits}; depth, node count and integer digits stay at the reference defaults.
+     *
+     * @param text   the TOML text; must not be {@code null}
+     * @param limits the limits; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException as {@link #read(String)}, with {@code document.limit.input-size}
+     *         at {@code $} for an input over the maximum
+     */
+    public static Document readWithLimits(String text, Limits limits) {
+        text = CodecInput.prepare(text, "TOML", java.util.Objects.requireNonNull(limits, "limits").maxInputBytes());
 
         String preprocessed;
         TomlParseResult result;

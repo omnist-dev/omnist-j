@@ -24,6 +24,7 @@ omnist <command> [subcommand] [options]
 
 - `--compact`: write output in compact single-line form where supported.
 - `-o <file>`: write output to a file instead of standard output.
+- `--max-input-bytes N`: refuse an input of more than `N` bytes (a document or a schema, from a file or from `-`) with `document.limit.input-size` at `$` (omnist-spec D-23). `N` is an integer from 1 to 1073741824; the default is 67108864 (64 MiB). An input of exactly `N` bytes is accepted; the bytes are counted as received, so a leading byte-order mark counts, and at most `N + 1` bytes are ever read. The refusal message says to re-run with a larger `--max-input-bytes`. A value that is not a positive integer in that range is a usage error (exit code 2).
 - `--debug`, `-v`: enable verbose debug error output including JVM stack traces.
 - `--json`: format errors and boolean results as machine-readable JSON. Under `--json`, a document or schema parse failure (including `parse.invalid-encoding` at `1:1` for input that is not valid UTF-8, on stdin and file input alike) is reported as a `{"ok":false,"errors":[{"path","code","message"}]}` payload on **stdout** with exit code 2; previously such failures printed a plain message to stderr. Without `--json`, errors still go to stderr.
 

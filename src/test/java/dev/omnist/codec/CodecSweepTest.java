@@ -80,8 +80,11 @@ class CodecSweepTest {
     @Test
     void oversizedAndNullInputAreRefusedBeforeParsing() {
         assertThrows(IllegalArgumentException.class, () -> JsonCodec.read(null));
-        String huge = "x".repeat(JsonCodec.MAX_INPUT_LENGTH + 1);
-        assertEquals("document.parse-error", fail(JsonCodec::read, huge).getCode());
+        // D-23: refused by size, with the registered code, at $, before the text is parsed.
+        DocumentParseException refusal = fail(
+                text -> JsonCodec.readWithLimits(text, dev.omnist.document.Limits.DEFAULT.withMaxInputBytes(5)), "{\"a\": 1}");
+        assertEquals("document.limit.input-size", refusal.getCode());
+        assertEquals("$", refusal.getPath());
     }
 
     // ---------------------------------------------------------------- data-XML profile

@@ -522,9 +522,10 @@ class FinalCoverageTest {
 
     @Test
     void yamlCodec_tooLargeInputThrows() {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 2_000_001; i++) sb.append('a');
-        assertThrows(RuntimeException.class, () -> YamlCodec.read(sb.toString()));
+        // D-23: over the maximum is refused, with the registered code at $.
+        dev.omnist.document.DocumentParseException ex = assertThrows(dev.omnist.document.DocumentParseException.class,
+                () -> YamlCodec.readWithLimits("aaaaaa", YamlLimits.DEFAULT, dev.omnist.document.Limits.DEFAULT.withMaxInputBytes(5)));
+        assertEquals("document.limit.input-size", ex.getCode());
     }
 
     @Test
@@ -624,9 +625,9 @@ class FinalCoverageTest {
 
     @Test
     void tomlCodec_tooLargeInputThrows() {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 2_000_001; i++) sb.append('a');
-        assertThrows(RuntimeException.class, () -> TomlCodec.read(sb.toString()));
+        dev.omnist.document.DocumentParseException ex = assertThrows(dev.omnist.document.DocumentParseException.class,
+                () -> TomlCodec.readWithLimits("a = 1\n", dev.omnist.document.Limits.DEFAULT.withMaxInputBytes(5)));
+        assertEquals("document.limit.input-size", ex.getCode());
     }
 
     @Test
@@ -876,10 +877,9 @@ class FinalCoverageTest {
 
     @Test
     void xmlCodec_tooLargeInputThrows() {
-        StringBuilder sb = new StringBuilder("<r>");
-        for (int i = 0; i < 2_000_001; i++) sb.append('a');
-        sb.append("</r>");
-        assertThrows(RuntimeException.class, () -> XmlCodec.read(sb.toString()));
+        dev.omnist.document.DocumentParseException ex = assertThrows(dev.omnist.document.DocumentParseException.class,
+                () -> XmlCodec.readWithLimits("<r>aaaa</r>", null, null, dev.omnist.document.Limits.DEFAULT.withMaxInputBytes(10)));
+        assertEquals("document.limit.input-size", ex.getCode());
     }
 
     @Test

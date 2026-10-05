@@ -43,16 +43,13 @@ public final class XmlCodec {
 
     private XmlCodec() {}
 
-    /** Maximum accepted input length in characters, guarding against oversized XML input. */
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     /**
      * Parses XML text into a {@link Document} without schema guidance.
      * Equivalent to {@code read(text, null)}.
      *
      * @param text the XML text; must not be {@code null}
      * @return the parsed document
-     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the XML is not well-formed or is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text) {
         return read(text, null, null);
@@ -77,7 +74,7 @@ public final class XmlCodec {
      *               ambiguous string content as described above; if {@code null},
      *               every scalar is read as a plain string
      * @return the parsed document
-     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the XML is not well-formed or is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text, Schema schema) {
         return read(text, schema, null);
@@ -99,10 +96,27 @@ public final class XmlCodec {
      * @param schema if non-{@code null}, guides scalar-kind resolution as described above
      * @param report if non-{@code null}, every read-side adjustment is appended here
      * @return the parsed document
-     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the XML is not well-formed or is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text, Schema schema, WriteReport report) {
-        text = CodecInput.prepare(text, "XML", MAX_INPUT_LENGTH);
+        return readWithLimits(text, schema, report, Limits.DEFAULT);
+    }
+
+    /**
+     * Parses XML text as {@link #read(String, Schema, WriteReport)} does, refusing input larger
+     * than {@link Limits#maxInputBytes()} bytes (D-23). Only {@code maxInputBytes} is read from
+     * {@code limits}; depth, node count and integer digits stay at the reference defaults.
+     *
+     * @param text   the XML text; must not be {@code null}
+     * @param schema if non-{@code null}, guides scalar-kind resolution
+     * @param report if non-{@code null}, every read-side adjustment is appended here
+     * @param limits the limits; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException as {@link #read(String, Schema, WriteReport)}, with
+     *         {@code document.limit.input-size} at {@code $} for an input over the maximum
+     */
+    public static Document readWithLimits(String text, Schema schema, WriteReport report, Limits limits) {
+        text = CodecInput.prepare(text, "XML", java.util.Objects.requireNonNull(limits, "limits").maxInputBytes());
 
         // Data-XML profile (docs/formats/xml.md): DOCTYPE and non-predefined entity references are
         // refused on sight. They are well-formed XML, so they are reported only AFTER the rest of

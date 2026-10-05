@@ -16,8 +16,6 @@ import java.util.Set;
  */
 public class OmlReader {
 
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     private static final Set<String> RESERVED_WORDS = Set.of("null", "true", "false");
 
     private final List<Token> tokens;
@@ -51,10 +49,11 @@ public class OmlReader {
      *               {@code null} defaults to {@link Limits#DEFAULT}
      */
     public OmlReader(String source, Limits limits) {
-        if (source != null && source.length() > MAX_INPUT_LENGTH) {
-            throw new OmlParseException(1, 1, "parse.input-too-large", "Input exceeds maximum length of " + MAX_INPUT_LENGTH + " characters");
-        }
         this.limits = limits != null ? limits : Limits.DEFAULT;
+        // D-23: the size check comes first, on the text as received (a byte-order mark counts).
+        if (InputSize.exceeds(source, this.limits.maxInputBytes())) {
+            throw new OmlParseException(1, 1, InputSize.CODE, "$", InputSize.message(source, this.limits.maxInputBytes()));
+        }
         // D-15 / D-21: one leading U+FEFF is consumed, a second is rejected at 1:1 of what remains.
         source = Bom.strip(source, () -> new OmlParseException(1, 1, "parse.unexpected-token",
                 "Unexpected second leading byte-order mark (U+FEFF); exactly one is consumed"));

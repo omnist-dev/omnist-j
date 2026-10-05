@@ -54,8 +54,8 @@ public final class Track2Runner {
 
     /**
      * The {@code declared_max_*} keys this runner can honour by configuring the OML reader.
-     * Every other {@code declared_max_*} key is skipped, never run against this port's defaults
-     * (test-suite/README.md, "Declared-limit keys").
+     * Every other {@code declared_*} key is skipped, never run against this port's defaults
+     * (test-suite/README.md, "Declared-limit keys"; E-20a).
      */
     private static final Set<String> HANDLED_LIMIT_KEYS = Set.of(
         "declared_max_depth", "declared_max_nodes", "declared_max_int_digits");
@@ -63,6 +63,12 @@ public final class Track2Runner {
     /** The YAML alias limits (D-18, D-22): honoured by configuring {@code YamlCodec.read}, YAML vectors only. */
     private static final Set<String> YAML_ALIAS_LIMIT_KEYS = Set.of(
         "declared_max_alias_expansion", "declared_max_expanded_slots");
+
+    /**
+     * The input-size maximum (D-23): honoured by every reader through {@code Limits.maxInputBytes},
+     * for a {@code parse} vector whose input is text.
+     */
+    private static final String INPUT_SIZE_KEY = "declared_max_input_bytes";
 
     private Track2Runner() {}
 
@@ -78,14 +84,26 @@ public final class Track2Runner {
     }
 
     /**
-     * Returns the reason a vector must be skipped because of a declared-limit key this runner
-     * cannot honour, or {@code null} if it can run.
+     * Returns the reason a vector must be skipped because of a {@code declared_*} key this runner
+     * cannot honour, or {@code null} if it can run (E-20a: a runner MUST fail or skip, with a
+     * reason, a vector that carries a declared key it does not understand, and never run it
+     * against this port's default). Only a {@code parse} operation reads any declared key, so a
+     * declared key on any other operation is skipped too.
      */
-    private static String unhonouredLimitKey(JsonNode input) {
+    static String unhonouredDeclaredKey(String op, JsonNode input) {
         String format = input.has("format") ? input.get("format").asText() : "oml";
         for (Iterator<String> it = input.fieldNames(); it.hasNext(); ) {
             String key = it.next();
-            if (!key.startsWith("declared_max_")) {
+            if (!key.startsWith("declared_")) {
+                continue;
+            }
+            if (!"parse".equals(op)) {
+                return "operation " + op + " does not honour " + key + ": skipped, never run against the default";
+            }
+            if (INPUT_SIZE_KEY.equals(key)) {
+                if (input.has("bytes_hex")) {
+                    return key + " on a bytes_hex input is not honoured (the size is checked on text): skipped, never run against the default";
+                }
                 continue;
             }
             if (YAML_ALIAS_LIMIT_KEYS.contains(key)) {
@@ -149,7 +167,7 @@ public final class Track2Runner {
         JsonNode input = vector.get("input");
         JsonNode expect = vector.get("expect");
 
-        String limitSkip = unhonouredLimitKey(input);
+        String limitSkip = unhonouredDeclaredKey(op, input);
         if (limitSkip != null) {
             skip(name, limitSkip);
             return;
@@ -195,15 +213,19 @@ public final class Track2Runner {
         dev.omnist.document.Limits limits = dev.omnist.document.Limits.DEFAULT;
         if (input.has("declared_max_depth")) {
             int d = input.get("declared_max_depth").asInt();
-            limits = new dev.omnist.document.Limits(d, limits.maxNodeCount(), limits.maxIntegerDigits());
+            limits = new dev.omnist.document.Limits(d, limits.maxNodeCount(), limits.maxIntegerDigits(), limits.maxInputBytes());
         }
         if (input.has("declared_max_nodes")) {
             int n = input.get("declared_max_nodes").asInt();
-            limits = new dev.omnist.document.Limits(limits.maxDepth(), n, limits.maxIntegerDigits());
+            limits = new dev.omnist.document.Limits(limits.maxDepth(), n, limits.maxIntegerDigits(), limits.maxInputBytes());
         }
         if (input.has("declared_max_int_digits")) {
             int dig = input.get("declared_max_int_digits").asInt();
-            limits = new dev.omnist.document.Limits(limits.maxDepth(), limits.maxNodeCount(), dig);
+            limits = new dev.omnist.document.Limits(limits.maxDepth(), limits.maxNodeCount(), dig, limits.maxInputBytes());
+        }
+
+        if (input.has(INPUT_SIZE_KEY)) {
+            limits = limits.withMaxInputBytes(input.get(INPUT_SIZE_KEY).asInt());
         }
 
         // The alias limits are passed only for a vector that carries the key; otherwise the
@@ -966,13 +988,13 @@ public final class Track2Runner {
         if ("oml".equalsIgnoreCase(format)) {
             return dev.omnist.oml.OmlReader.read(text, limits);
         } else if ("json".equalsIgnoreCase(format)) {
-            return dev.omnist.codec.JsonCodec.read(text);
+            return dev.omnist.codec.JsonCodec.readWithLimits(text, limits);
         } else if ("yaml".equalsIgnoreCase(format)) {
-            return dev.omnist.codec.YamlCodec.readWithLimits(text, yamlLimits);
+            return dev.omnist.codec.YamlCodec.readWithLimits(text, yamlLimits, limits);
         } else if ("toml".equalsIgnoreCase(format)) {
-            return dev.omnist.codec.TomlCodec.read(text);
+            return dev.omnist.codec.TomlCodec.readWithLimits(text, limits);
         } else if ("xml".equalsIgnoreCase(format)) {
-            return dev.omnist.codec.XmlCodec.read(text, null, report);
+            return dev.omnist.codec.XmlCodec.readWithLimits(text, null, report, limits);
         } else {
             throw new IllegalArgumentException("Unknown format: " + format);
         }

@@ -98,16 +98,13 @@ public final class YamlCodec {
     /** SnakeYAML's own nesting cap, set well above {@link Limits#DEFAULT}'s depth limit. */
     private static final int YAML_NESTING_DEPTH_LIMIT = 1000;
 
-    /** Maximum accepted input length in characters, guarding against oversized YAML input. */
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     /**
      * Parses YAML text into a {@link Document}, with the reference alias limits
      * ({@link YamlLimits#DEFAULT}). Equivalent to {@code readWithLimits(text, YamlLimits.DEFAULT)}.
      *
      * @param text the YAML text; must not be {@code null}
      * @return the parsed document
-     * @throws RuntimeException if the YAML is syntactically invalid, exceeds {@link #MAX_INPUT_LENGTH},
+     * @throws RuntimeException if the YAML is syntactically invalid, is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes,
      *         or crosses a safety limit (see {@link #readWithLimits(String, YamlLimits)})
      */
     public static Document read(String text) {
@@ -144,14 +141,31 @@ public final class YamlCodec {
      * @param text   the YAML text; must not be {@code null}
      * @param limits the alias limits; must not be {@code null}
      * @return the parsed document
-     * @throws RuntimeException if the YAML is syntactically invalid, exceeds {@link #MAX_INPUT_LENGTH},
+     * @throws RuntimeException if the YAML is syntactically invalid, is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes,
      *         or crosses a safety limit
      */
     public static Document readWithLimits(String text, YamlLimits limits) {
+        return readWithLimits(text, limits, Limits.DEFAULT);
+    }
+
+    /**
+     * Parses YAML text as {@link #readWithLimits(String, YamlLimits)} does, and refuses input larger
+     * than {@link Limits#maxInputBytes()} bytes first (D-23). Only {@code maxInputBytes} is read from
+     * {@code documentLimits}; depth, node count and integer digits stay at the reference defaults.
+     *
+     * @param text           the YAML text; must not be {@code null}
+     * @param limits         the alias limits; must not be {@code null}
+     * @param documentLimits the document limits; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException as {@link #readWithLimits(String, YamlLimits)}, with
+     *         {@code document.limit.input-size} at {@code $} for an input over the maximum
+     */
+    public static Document readWithLimits(String text, YamlLimits limits, Limits documentLimits) {
         Objects.requireNonNull(limits, "limits");
+        Objects.requireNonNull(documentLimits, "documentLimits");
         // D-15 / D-21: SnakeYAML would swallow a second leading mark on its own (it treats it as
         // the start of a plain scalar), so the check happens here, before the library sees the text.
-        text = CodecInput.prepare(text, "YAML", MAX_INPUT_LENGTH);
+        text = CodecInput.prepare(text, "YAML", documentLimits.maxInputBytes());
 
         LoaderOptions loaderOptions = new LoaderOptions();
         // SnakeYAML refuses nesting deeper than 50 by default, which would report a document that
@@ -163,8 +177,11 @@ public final class YamlCodec {
         // that rejects ordinary configs (100 services merging one defaults block). That is not what
         // D-18 specifies, so the library's cap is lifted and YamlAliasCheck decides, from the node
         // graph, before anything is constructed. Composing is linear in the input either way: an
-        // alias is a reference to the anchored node, not a copy. The code point limit (3 MiB by
-        // default) is above MAX_INPUT_LENGTH and is left alone.
+        // alias is a reference to the anchored node, not a copy. The library's own code point limit
+        // (3 MiB by default) would refuse, as a syntax error, an input the D-23 maximum accepts, so it is
+        // raised to the maximum: a code point is at least one byte, so an input within maxInputBytes
+        // never exceeds it, and D-23 alone decides how large an input may be.
+        loaderOptions.setCodePointLimit(documentLimits.maxInputBytes());
         loaderOptions.setMaxAliasesForCollections(Integer.MAX_VALUE);
         CustomConstructor constructor = new CustomConstructor(loaderOptions);
         org.yaml.snakeyaml.resolver.Resolver resolver = new org.yaml.snakeyaml.resolver.Resolver();

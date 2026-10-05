@@ -6,6 +6,8 @@ import dev.omnist.algebra.InferResult;
 import dev.omnist.algebra.LintFinding;
 import dev.omnist.algebra.SchemaAlgebra;
 import dev.omnist.document.Document;
+import dev.omnist.document.InputSize;
+import dev.omnist.document.Limits;
 import dev.omnist.schema.OsdReader;
 import dev.omnist.schema.OsdWriter;
 import dev.omnist.schema.Schema;
@@ -48,6 +50,10 @@ public final class Cli {
      * @param allowAny     {@code --allow-any}: for {@code infer}, fall back to {@code any} on
      *                     conflicting scalar kinds instead of failing
      * @param outputPath   {@code -o}: write output to this path instead of stdout
+     * @param maxInputBytes {@code --max-input-bytes}: refuse an input (document or schema, file or
+     *                     standard input) of more than this many bytes with
+     *                     {@code document.limit.input-size} (D-23); defaults to
+     *                     {@link Limits#DEFAULT_MAX_INPUT_BYTES}
      * @param severity     {@code --severity}: for {@code schema lint}, the minimum finding
      *                     severity ({@code info} or {@code warning}) to report; {@code null}
      *                     defaults to {@code info} (i.e. everything)
@@ -63,7 +69,8 @@ public final class Cli {
         boolean allowAny,
         String outputPath,
         String severity,
-        boolean debug
+        boolean debug,
+        int maxInputBytes
     ) {}
 
     /**
@@ -91,6 +98,7 @@ public final class Cli {
             boolean allowAny = false;
             String outputPath = null;
             String severity = null;
+            int maxInputBytes = Limits.DEFAULT_MAX_INPUT_BYTES;
 
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
@@ -138,6 +146,19 @@ public final class Cli {
                     json = true;
                 } else if (arg.equals("--allow-any")) {
                     allowAny = true;
+                } else if (arg.equals("--max-input-bytes")) {
+                    if (i + 1 >= args.length) {
+                        err.println("Missing value for option: " + arg);
+                        return 2;
+                    }
+                    String value = args[++i];
+                    try {
+                        maxInputBytes = Limits.DEFAULT.withMaxInputBytes(Integer.parseInt(value)).maxInputBytes();
+                    } catch (IllegalArgumentException ex) {
+                        err.println("Invalid value for --max-input-bytes: " + value + " (expected an integer from 1 to "
+                                + Limits.MAX_INPUT_BYTES_CEILING + ")");
+                        return 2;
+                    }
                 } else if (arg.equals("--severity")) {
                     if (i + 1 >= args.length) {
                         err.println("Missing value for option: " + arg);
@@ -158,7 +179,7 @@ public final class Cli {
             }
 
             Options opts = new Options(compact, fromFormat, toFormat, schemaPath, keepLabels,
-                resultFormat, json, allowAny, outputPath, severity, debug);
+                resultFormat, json, allowAny, outputPath, severity, debug, maxInputBytes);
             String cmd = positionals.get(0);
 
             return switch (cmd) {
@@ -218,8 +239,8 @@ public final class Cli {
             err.println("Missing format input file");
             return 2;
         }
-        String content = readInput(positionals.get(1), in);
-        Document doc = readDocument(opts.fromFormat(), content, null);
+        String content = readInput(positionals.get(1), in, opts);
+        Document doc = readDocument(opts.fromFormat(), content, null, opts);
         String formatted = writeDocument(opts.toFormat(), doc, opts.compact());
         writeOutput(opts.outputPath(), formatted, out);
         return 0;
@@ -238,8 +259,8 @@ public final class Cli {
             err.println("Missing --schema parameter");
             return 2;
         }
-        Schema schema = OsdReader.read(readInput(opts.schemaPath(), in));
-        Document doc = readDocument(opts.fromFormat(), readInput(positionals.get(1), in), schema);
+        Schema schema = readSchema(opts.schemaPath(), in, opts);
+        Document doc = readDocument(opts.fromFormat(), readInput(positionals.get(1), in, opts), schema, opts);
         ValidationResult res = Validator.validate(doc, schema);
 
         if (opts.json()) {
@@ -279,8 +300,8 @@ public final class Cli {
             err.println("Missing --schema parameter");
             return 2;
         }
-        Schema schema = OsdReader.read(readInput(opts.schemaPath(), in));
-        Document doc = readDocument(opts.fromFormat(), readInput(positionals.get(1), in), schema);
+        Schema schema = readSchema(opts.schemaPath(), in, opts);
+        Document doc = readDocument(opts.fromFormat(), readInput(positionals.get(1), in, opts), schema, opts);
 
         try {
             Document materialized = Materializer.materialize(doc, schema);
@@ -337,7 +358,7 @@ public final class Cli {
             err.println("Missing schema input file");
             return 2;
         }
-        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Schema s = readSchema(positionals.get(2), in, opts);
         Schema normalized = SchemaAlgebra.normalize(s);
         writeOutput(opts.outputPath(), writeOsd(normalized, opts.compact()), out);
         return 0;
@@ -349,7 +370,7 @@ public final class Cli {
             err.println("Missing schema input file");
             return 2;
         }
-        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Schema s = readSchema(positionals.get(2), in, opts);
         Schema pruned = SchemaAlgebra.prune(s);
         writeOutput(opts.outputPath(), writeOsd(pruned, opts.compact()), out);
         return 0;
@@ -365,7 +386,7 @@ public final class Cli {
             err.println("Missing --keep labels parameter");
             return 2;
         }
-        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Schema s = readSchema(positionals.get(2), in, opts);
         Set<String> keep = new LinkedHashSet<>(Arrays.asList(opts.keepLabels().split(",")));
         try {
             Schema extracted = SchemaAlgebra.extract(s, keep);
@@ -389,7 +410,7 @@ public final class Cli {
             err.println("Missing schema input file");
             return 2;
         }
-        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Schema s = readSchema(positionals.get(2), in, opts);
         boolean empty = SchemaAlgebra.isEmpty(s);
         if ("json".equals(opts.resultFormat())) {
             out.println("{\"empty\":" + empty + "}");
@@ -403,8 +424,8 @@ public final class Cli {
             err.println("Missing schema input files");
             return 2;
         }
-        Schema a = OsdReader.read(readInput(positionals.get(2), in));
-        Schema b = OsdReader.read(readInput(positionals.get(3), in));
+        Schema a = readSchema(positionals.get(2), in, opts);
+        Schema b = readSchema(positionals.get(3), in, opts);
         boolean comp = SchemaAlgebra.compatibleWith(a, b);
         if ("json".equals(opts.resultFormat())) {
             out.println("{\"compatible\":" + comp + "}");
@@ -418,8 +439,8 @@ public final class Cli {
             err.println("Missing schema input files");
             return 2;
         }
-        Schema a = OsdReader.read(readInput(positionals.get(2), in));
-        Schema b = OsdReader.read(readInput(positionals.get(3), in));
+        Schema a = readSchema(positionals.get(2), in, opts);
+        Schema b = readSchema(positionals.get(3), in, opts);
         boolean equiv = SchemaAlgebra.equivalent(a, b);
         if ("json".equals(opts.resultFormat())) {
             out.println("{\"equivalent\":" + equiv + "}");
@@ -439,7 +460,7 @@ public final class Cli {
             err.println("Missing schema input file");
             return 2;
         }
-        Schema s = OsdReader.read(readInput(positionals.get(2), in));
+        Schema s = readSchema(positionals.get(2), in, opts);
         String severityArg = opts.severity() == null ? "info" : opts.severity();
         int threshold = SEVERITY_ORDER.getOrDefault(severityArg, 0);
         List<LintFinding> findings = SchemaAlgebra.lint(s).stream()
@@ -476,7 +497,7 @@ public final class Cli {
 
         List<Document> samples = new ArrayList<>();
         for (int idx = 1; idx < positionals.size(); idx++) {
-            samples.add(readDocument(opts.fromFormat(), readInput(positionals.get(idx), in), null));
+            samples.add(readDocument(opts.fromFormat(), readInput(positionals.get(idx), in, opts), null, opts));
         }
 
         try {
@@ -502,10 +523,23 @@ public final class Cli {
         }
     }
 
-    private static String readInput(String path, InputStream in) throws Exception {
-        byte[] bytes = "-".equals(path)
-                ? in.readAllBytes()
-                : java.nio.file.Files.readAllBytes(java.nio.file.Path.of(path));
+    private static Schema readSchema(String path, InputStream in, Options opts) throws Exception {
+        return OsdReader.read(readInput(path, in, opts), Limits.DEFAULT.withMaxInputBytes(opts.maxInputBytes()));
+    }
+
+    private static String readInput(String path, InputStream in, Options opts) throws Exception {
+        // D-23: at most max + 1 bytes are ever read, and the size is checked on the raw bytes, before
+        // the strict UTF-8 decode and before any byte-order mark is stripped.
+        String advice = "re-run with --max-input-bytes N to accept a larger input (the maximum is "
+                + Limits.MAX_INPUT_BYTES_CEILING + ")";
+        byte[] bytes;
+        if ("-".equals(path)) {
+            bytes = InputSize.readBounded(in, opts.maxInputBytes(), advice);
+        } else {
+            try (InputStream file = java.nio.file.Files.newInputStream(java.nio.file.Path.of(path))) {
+                bytes = InputSize.readBounded(file, opts.maxInputBytes(), advice);
+            }
+        }
         return decodeStrictUtf8(bytes);
     }
 
@@ -541,16 +575,17 @@ public final class Cli {
         }
     }
 
-    private static Document readDocument(String format, String text, Schema schema) throws Exception {
+    private static Document readDocument(String format, String text, Schema schema, Options opts) throws Exception {
+        Limits limits = Limits.DEFAULT.withMaxInputBytes(opts.maxInputBytes());
         if (format == null) {
             format = "oml";
         }
         return switch (format.toLowerCase()) {
-            case "oml" -> dev.omnist.oml.OmlReader.read(text);
-            case "json" -> dev.omnist.codec.JsonCodec.read(text);
-            case "yaml" -> dev.omnist.codec.YamlCodec.read(text);
-            case "toml" -> dev.omnist.codec.TomlCodec.read(text);
-            case "xml" -> schema != null ? dev.omnist.codec.XmlCodec.read(text, schema) : dev.omnist.codec.XmlCodec.read(text);
+            case "oml" -> dev.omnist.oml.OmlReader.read(text, limits);
+            case "json" -> dev.omnist.codec.JsonCodec.readWithLimits(text, limits);
+            case "yaml" -> dev.omnist.codec.YamlCodec.readWithLimits(text, dev.omnist.codec.YamlLimits.DEFAULT, limits);
+            case "toml" -> dev.omnist.codec.TomlCodec.readWithLimits(text, limits);
+            case "xml" -> dev.omnist.codec.XmlCodec.readWithLimits(text, schema, null, limits);
             default -> throw new IllegalArgumentException("Unsupported input format: " + format);
         };
     }

@@ -16,15 +16,18 @@ loosening anywhere in the runner). **0 failures.**
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 329 | 0 | 38 |
+| 2: JSON vectors | 339 | 0 | 28 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
 
-**v0.28.0-beta to v0.33.0-beta (2026-10-05), first step (spec pin only).** The suite grows from 338 to 367 vectors.
-Track 2 is 329 pass / 0 fail / 38 skip: the 29 new vectors are 19 that already pass (7 E-10 repeated-label paths, 7 OML-29
-colon-separator, 5 C-10 XML null leaf) and the 10 `document-model/input-size/*` vectors, which skip because the runner did
-not yet honour `declared_max_input_bytes`. The red state by cause is 0 failures; the 10 skips are the only gap.
+**v0.28.0-beta to v0.33.0-beta (2026-10-05).** The suite grows from 338 to 367 vectors; Track 2 goes from 310 pass /
+0 fail / 28 skip to 339 / 0 / 28, the headline from 339 / 0 / 28 to 368 / 0 / 28. Of the 29 new vectors, 19 passed with no
+code change (7 E-10 repeated-label paths, 7 OML-29 colon separators, 5 C-10 XML null leaf) and 10 are the
+`document-model/input-size/*` vectors: with the pin alone they skipped (the runner did not honour
+`declared_max_input_bytes`); now they run and pass (D-23, [Input size](#input-size-d-23-to-d-26)). The runner now also
+follows E-20a: a vector with any `declared_*` key it does not honour, or on an operation other than `parse`, is skipped
+with a reason, never run against a default.
 
 **v0.27.0-beta to v0.28.0-beta (2026-10-02).** No vector changed: Track 2 stays 310 pass / 0 fail / 28 skip
 of 338, Track 1 29 / 0 / 0, headline 339 / 0 / 28. The release adds four rules about programmatically built
@@ -202,11 +205,43 @@ only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema buil
 - **Nesting past the parsers' own limits.** JSON and YAML nesting of 1000 or more levels is refused
   by Jackson / SnakeYAML before this port's depth limit (200) is consulted, and is reported as
   `parse.codec-syntax` rather than `document.limit.depth`.
-- **Input-size guard.** Input over 2,000,000 characters is refused with `document.parse-error`
-  (OML/OSD: `parse.input-too-large` / `schema.input-too-large`), codes that are not in the §8.3
-  taxonomy; the spec has no code for this cap.
+- **Input size (D-23 to D-26).** See [Input size](#input-size-d-23-to-d-26) below. Before `0.5.0-alpha`
+  the readers refused input over 2,000,000 characters with codes that are not in the §8.3 taxonomy
+  (`document.parse-error`, `parse.input-too-large`, `schema.input-too-large`); that cap is gone, replaced by the
+  configurable byte maximum with the registered code `document.limit.input-size`.
 - **OSD field label with a control character** has no OSD spelling (OSD-14): `OsdWriter` fails with
   `write.unsupported-value` at the record path, unconditionally.
+
+## Input size (D-23 to D-26)
+
+`omnist-spec` v0.30.0-beta added a bound on input size (§2.4.2). `omnist-j` enforces it in every reader
+(OML, OSD, JSON, YAML, TOML, XML) and in the CLI.
+
+| Item | Value |
+|---|---|
+| Code, path | `document.limit.input-size` at `$` |
+| Unit | UTF-8 bytes, not characters. A `String` is counted without allocating an encoded copy; a lone surrogate counts as the three bytes of U+FFFD |
+| Boundary | an input of exactly `maxInputBytes` is accepted; one byte more is refused |
+| Byte-order mark | counted (three bytes): the check runs before it is stripped |
+| Order | first: before decoding (CLI), before the BOM rules, before any parse. An oversized malformed input reports the size |
+| Default | **64 MiB** (`Limits.DEFAULT_MAX_INPUT_BYTES`) |
+| Range | 1 to 1 GiB (`Limits.MAX_INPUT_BYTES_CEILING`); anything else is `IllegalArgumentException`, as for the other limits |
+| Library | `Limits.maxInputBytes`; `OmlReader.read(text, limits)`, `OsdReader.read(text, limits)`, `JsonCodec`/`TomlCodec`/`XmlCodec.readWithLimits`, `YamlCodec.readWithLimits(text, yamlLimits, limits)` |
+| CLI | `--max-input-bytes N` on every command that reads input; stdin and files read at most `N + 1` bytes |
+
+**Why 64 MiB, and why this is a behaviour change.** The spec names no reference number (D-24) and says a
+cap SHOULD NOT exceed 10 MiB without measuring. Before `0.5.0-alpha` the readers refused anything over
+2,000,000 characters. The default is now 32 times larger, matching the Go port, so a document that was
+refused before is read. Measured on this port (`omnist format` on a flat mapping, JVM start-up included,
+default heap of a 6 GB machine, one run each, not a benchmark): JSON 10.3 MB 2.4 s and 32.4 MB 6.4 s; YAML
+9.0 MB 6.2 s and 27.7 MB 19.0 s. Parse time and memory grow with the input and with its shape (deep
+nesting, many keys, YAML anchors); the cap bounds them, it does not make a parse fast. Lower it for untrusted
+input. SnakeYAML's own 3 MiB code point limit is raised to the configured maximum, so it never refuses an
+input D-23 accepts.
+
+**What it does not bound (D-26).** The depth, node count and integer digit limits and the two YAML alias
+limits bound a different cost. Alias-free YAML is exempt from D-22 by design. String, label and schema size have
+no limit in this port.
 
 ## Testing
 
