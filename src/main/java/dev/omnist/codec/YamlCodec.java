@@ -352,6 +352,10 @@ public final class YamlCodec {
         if (report != null) {
             report.addAll(rep.adjustments());
         }
+        // C-9: a string or label with no UTF-8 encoding fails unconditionally, regardless of strict.
+        if (rep.adjustments().stream().anyMatch(a -> "write.unsupported-value".equals(a.code()))) {
+            throw new WriteException(rep.toString(), rep);
+        }
         if (strict && !rep.adjustments().isEmpty()) {
             throw new WriteException(rep.toString(), rep);
         }
@@ -378,6 +382,9 @@ public final class YamlCodec {
      */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
+        // C-9: a string or label with no UTF-8 encoding fails unconditionally. The fast pass builds no
+        // path; the Document path is built only for the failure.
+        Encodability.check(node, rep);
         scanYaml(node, "$", 0, rep, new boolean[]{false});
         return rep;
     }

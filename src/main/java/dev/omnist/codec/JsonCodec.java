@@ -272,11 +272,20 @@ public final class JsonCodec {
             Map<String, Integer> seen = new HashMap<>();
             for (Edge edge : node.edges()) {
                 String label = edge.label();
+                // C-9, folded into this pass (which already visits every node and builds its path):
+                // a label with no UTF-8 encoding fails at the node holding the edge.
+                if (!Encodability.isEncodable(label)) {
+                    rep.add(path, "write.unsupported-value", "edge label has no UTF-8 encoding (a lone surrogate)", "error");
+                }
                 int i = seen.getOrDefault(label, 0);
                 seen.put(label, i + 1);
                 int total = totals.getOrDefault(label, 1);
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
                 scanJson((Document) edge.target(), p, depth + 1, rep, interleavingFound);
+            }
+        } else if (doc instanceof StringScalar str) {
+            if (!Encodability.isEncodable(str.value())) {
+                rep.add(path, "write.unsupported-value", "string value has no UTF-8 encoding (a lone surrogate)", "error");
             }
         } else if (doc instanceof Scalar s) {
             if (s instanceof DateScalar || s instanceof TimeScalar || s instanceof DateTimeScalar) {

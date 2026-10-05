@@ -550,6 +550,9 @@ public final class XmlCodec {
      */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
+        // C-9: a string or label with no UTF-8 encoding fails unconditionally. The fast pass builds no
+        // path; the Document path is built only for the failure.
+        Encodability.check(node, rep);
         scanXml(node, "$", rep, 0);
         return rep;
     }
@@ -582,7 +585,7 @@ public final class XmlCodec {
                 seen.put(label, i + 1);
                 int total = totals.getOrDefault(label, 1);
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
-                if (!XML_NAME.matcher(label).matches()) {
+                if (!XML_NAME.matcher(label).matches() && Encodability.isEncodable(label)) {
                     // Issue #88: two different labels can sanitize to the same XML name
                     // (e.g. "my label" and "my_label" both -> <my_label>), silently
                     // colliding on read-back with no diagnostic -- fail unconditionally.
@@ -606,7 +609,7 @@ public final class XmlCodec {
             }
             
             String strVal = xmlText(doc);
-            if (XML_ILLEGAL_CHAR.matcher(strVal).find()) {
+            if (XML_ILLEGAL_CHAR.matcher(strVal).find() && Encodability.isEncodable(strVal)) {
                 // Issue #88: no substitute exists for a character XML 1.0 cannot
                 // represent at all (e.g. a C0 control other than tab/LF/CR) -- fail
                 // unconditionally rather than silently replacing it with U+FFFD.

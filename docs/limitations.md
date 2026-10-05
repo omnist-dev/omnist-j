@@ -243,6 +243,27 @@ input D-23 accepts.
 limits bound a different cost. Alias-free YAML is exempt from D-22 by design. String, label and schema size have
 no limit in this port.
 
+## Strings with no UTF-8 encoding (C-9)
+
+Every writer (`OmlWriter`, `JsonCodec`, `YamlCodec`, `TomlCodec`, `XmlCodec`) fails with
+`write.unsupported-value`, unconditionally (`strict` or not), on a string value or an edge label that has no UTF-8
+encoding. In Java that is a lone UTF-16 surrogate, for example `"a\uD800"`. A valid surrogate pair (an astral
+character) and U+FFFD are ordinary text and still write. Before `0.5.0-alpha` the lone surrogate was written raw in
+JSON, TOML and OML and as an escape in YAML (DIV-5); spelling it as an escape does not comply, so no writer emits it
+in any form now.
+
+- **Path.** The Document path of the node holding the string; for a label, the node holding the edge (a path cannot
+  quote a label), so `{"bad\uD800": 1}` fails at `$`, and a bad string in the second `item` of `$.r` at
+  `$.r.item[1]` (E-10). It is a `WriteException`; its `report()` carries the error.
+- **Cost.** No path is built unless there is a failure. OML checks inside the one loop that escapes strings; JSON and
+  TOML fold the test into the pass that already visits every node; YAML and XML run one extra pass
+  (`Encodability.allEncodable`, iterative, no path). Measured on a document of 120 000 edges (100 sections of 300
+  items; best of 20 iterations, three JVM runs, before and after, on a shared machine whose run-to-run noise is about
+  10%): OML 0%, JSON +7%, YAML +1%, TOML +10%, XML +5%. The extra pass alone costs 6.6 ms on that document.
+- **XML.** A label or string C-9 refuses is not reported a second time as an invalid XML name or character.
+- No conformance vector pins C-9 (an input cannot carry a lone surrogate into a Document); `Utf8WriterTest` does,
+  for all five writers.
+
 ## Testing
 
 **836 tests passing**, 0 failures — JUnit unit/integration tests plus
