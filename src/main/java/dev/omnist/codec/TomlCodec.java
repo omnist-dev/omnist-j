@@ -228,18 +228,31 @@ public final class TomlCodec {
         return true;
     }
 
-    /** Maximum accepted input length in characters, guarding against oversized TOML input. */
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     /**
      * Parses TOML text into a {@link Document}.
      *
      * @param text the TOML text; must not be {@code null}
      * @return the parsed document
-     * @throws RuntimeException if the TOML is syntactically invalid or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the TOML is syntactically invalid or is larger than
+     *         {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text) {
-        text = CodecInput.prepare(text, "TOML", MAX_INPUT_LENGTH);
+        return readWithLimits(text, Limits.DEFAULT);
+    }
+
+    /**
+     * Parses TOML text into a {@link Document}, refusing input larger than
+     * {@link Limits#maxInputBytes()} bytes (D-23). Only {@code maxInputBytes} is read from
+     * {@code limits}; depth, node count and integer digits stay at the reference defaults.
+     *
+     * @param text   the TOML text; must not be {@code null}
+     * @param limits the limits; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException as {@link #read(String)}, with {@code document.limit.input-size}
+     *         at {@code $} for an input over the maximum
+     */
+    public static Document readWithLimits(String text, Limits limits) {
+        text = CodecInput.prepare(text, "TOML", java.util.Objects.requireNonNull(limits, "limits").maxInputBytes());
 
         String preprocessed;
         TomlParseResult result;
@@ -638,11 +651,19 @@ public final class TomlCodec {
             Map<String, Integer> seen = new HashMap<>();
             for (Edge edge : node.edges()) {
                 String label = edge.label();
+                // C-9, folded into this pass (which already visits every node and builds its path):
+                // a label with no UTF-8 encoding fails at the node holding the edge.
+                if (!Encodability.isEncodable(label)) {
+                    rep.add(path, "write.unsupported-value", "edge label has no UTF-8 encoding (a lone surrogate)", "error");
+                }
                 int i = seen.getOrDefault(label, 0);
                 seen.put(label, i + 1);
                 int total = totals.getOrDefault(label, 1);
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
                 Document child = (Document) edge.target();
+                if (child instanceof StringScalar str && !Encodability.isEncodable(str.value())) {
+                    rep.add(p, "write.unsupported-value", "string value has no UTF-8 encoding (a lone surrogate)", "error");
+                }
                 if (child instanceof Value.NullValue) {
                     rep.add(p, "write.unsupported-value", "null has no representable TOML syntax", "error");
                     continue;

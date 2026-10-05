@@ -2,6 +2,7 @@ package dev.omnist.codec;
 
 import dev.omnist.document.Bom;
 import dev.omnist.document.DocumentParseException;
+import dev.omnist.document.InputSize;
 
 /**
  * What every codec does to its input text before its own parsing library sees it, and how every
@@ -15,21 +16,22 @@ final class CodecInput {
     private CodecInput() {}
 
     /**
-     * Validates and normalises input text: rejects {@code null} and oversized input, strips one
-     * leading byte-order mark (D-15) and rejects a second one (D-21, E-24) at {@code 1:1}.
+     * Validates and normalises input text: rejects {@code null}, refuses input of more than
+     * {@code maxInputBytes} UTF-8 bytes (D-23, before anything else sees the text, so a byte-order
+     * mark is counted), strips one leading byte-order mark (D-15) and rejects a second one (D-21,
+     * E-24) at {@code 1:1}.
      *
-     * @param text      the raw input text
-     * @param format    the format's display name, used in messages ({@code "JSON"}, {@code "XML"})
-     * @param maxLength the codec's input length cap
+     * @param text          the raw input text
+     * @param format        the format's display name, used in messages ({@code "JSON"}, {@code "XML"})
+     * @param maxInputBytes the maximum input size in bytes
      * @return the text the codec's own library should parse
      */
-    static String prepare(String text, String format, int maxLength) {
+    static String prepare(String text, String format, int maxInputBytes) {
         if (text == null) {
             throw new IllegalArgumentException("input text cannot be null");
         }
-        if (text.length() > maxLength) {
-            throw new DocumentParseException("$", "document.parse-error",
-                    "invalid " + format + ": input exceeds maximum size limit of " + maxLength + " characters");
+        if (InputSize.exceeds(text, maxInputBytes)) {
+            throw InputSize.refusal(text, maxInputBytes);
         }
         return Bom.strip(text, () -> syntax(format, "unexpected second leading byte-order mark (U+FEFF); "
                 + "exactly one is consumed (D-15, D-21)", 1, 1, null));

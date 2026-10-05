@@ -88,9 +88,11 @@ assertEquals("2024-01-01T12:30Z", dtv.format());
 ```
 
 ### `Limits`
-`public record Limits(int maxDepth, int maxNodeCount, int maxIntegerDigits)`
+`public record Limits(int maxDepth, int maxNodeCount, int maxIntegerDigits, int maxInputBytes)`
 
-Guard parameters for parser recursion depth, node count, and integer digit limits. Default limits: `maxDepth = 200`, `maxNodeCount = 1_000_000`, `maxIntegerDigits = 4300`.
+Guard parameters for parser recursion depth, node count, integer digit limits and input size. Default limits: `maxDepth = 200`, `maxNodeCount = 1_000_000`, `maxIntegerDigits = 4300`, `maxInputBytes = 67_108_864` (64 MiB). The three-argument constructor `new Limits(depth, nodes, digits)` keeps the default input size. The constructor throws `IllegalArgumentException` for a value that is not positive (it never falls back to the default and never reads a bad value as "no limit"), and for a `maxInputBytes` above 1 GiB (`Limits.MAX_INPUT_BYTES_CEILING`). `withMaxInputBytes(n)` returns a copy with another input size.
+
+`maxInputBytes` is omnist-spec D-23: an input of more than that many **bytes** is refused with `document.limit.input-size` at `$` before it is decoded or parsed, and an input of exactly that many is accepted. The bytes are counted before a leading byte-order mark is stripped, so the mark counts as three. It is applied by `OmlReader.read(text, limits)`, `OsdReader.read(text, limits)`, `JsonCodec.readWithLimits`, `TomlCodec.readWithLimits`, `XmlCodec.readWithLimits` and `YamlCodec.readWithLimits(text, yamlLimits, limits)`; the plain `read(text)` of each uses the default. The other three fields apply to `OmlReader`; the codecs keep their reference defaults. The CLI takes `--max-input-bytes N`.
 
 <!-- test-backed: dev.omnist.DocTest#testLimitsExample -->
 ```java
@@ -98,6 +100,17 @@ Limits limits = new Limits(2, 50, 100);
 assertEquals(2, limits.maxDepth());
 assertEquals(50, limits.maxNodeCount());
 assertEquals(100, limits.maxIntegerDigits());
+```
+
+<!-- test-backed: dev.omnist.DocTest#testInputSizeExample -->
+```java
+Limits small = Limits.DEFAULT.withMaxInputBytes(7);
+assertNotNull(JsonCodec.readWithLimits("{\"a\":1}", small));       // exactly 7 bytes: accepted
+DocumentParseException tooBig = assertThrows(DocumentParseException.class,
+        () -> JsonCodec.readWithLimits("{\"a\": 1}", small));      // 8 bytes: refused
+assertEquals("document.limit.input-size", tooBig.getCode());
+assertEquals("$", tooBig.getPath());
+assertEquals(64 * 1024 * 1024, Limits.DEFAULT.maxInputBytes());
 ```
 
 ---
@@ -329,12 +342,14 @@ assertNotNull(res.schema());
 ## Format Codecs (`dev.omnist.codec`)
 
 ### `JsonCodec`
-- `public static Document read(String text)`
+- `public static Document read(String text)` (input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB)
+- `public static Document readWithLimits(String text, Limits limits)` (the same, with the input size you choose)
 - `public static String write(Document doc)`
 
 ### `YamlCodec`
-- `public static Document read(String text)` (bounded by 2MB `MAX_INPUT_LENGTH` cap; alias limits at the reference defaults)
+- `public static Document read(String text)` (input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB; alias limits at the reference defaults)
 - `public static Document readWithLimits(String text, YamlLimits limits)` (the same, with the alias limits you choose)
+- `public static Document readWithLimits(String text, YamlLimits limits, Limits documentLimits)` (also with the input size you choose)
 - `public static String write(Document doc)`
 
 ### `YamlLimits`
@@ -374,9 +389,11 @@ assertEquals(1_000_000L, YamlLimits.DEFAULT.maxExpandedSlots());
 ```
 
 ### `TomlCodec`
-- `public static Document read(String text)` (bounded by 2MB `MAX_INPUT_LENGTH` cap)
+- `public static Document read(String text)` (input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB)
+- `public static Document readWithLimits(String text, Limits limits)` (the same, with the input size you choose)
 - `public static String write(Document doc)`
 
 ### `XmlCodec`
-- `public static Document read(String text)` (secure XXE/DTD protection, bounded by 2MB `MAX_INPUT_LENGTH` cap)
+- `public static Document read(String text)` (secure XXE/DTD protection, input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB)
+- `public static Document readWithLimits(String text, Schema schema, WriteReport report, Limits limits)` (the same, with the input size you choose)
 - `public static String write(Document doc)`

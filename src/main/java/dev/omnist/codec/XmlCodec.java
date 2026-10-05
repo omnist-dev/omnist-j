@@ -43,16 +43,13 @@ public final class XmlCodec {
 
     private XmlCodec() {}
 
-    /** Maximum accepted input length in characters, guarding against oversized XML input. */
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     /**
      * Parses XML text into a {@link Document} without schema guidance.
      * Equivalent to {@code read(text, null)}.
      *
      * @param text the XML text; must not be {@code null}
      * @return the parsed document
-     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the XML is not well-formed or is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text) {
         return read(text, null, null);
@@ -77,7 +74,7 @@ public final class XmlCodec {
      *               ambiguous string content as described above; if {@code null},
      *               every scalar is read as a plain string
      * @return the parsed document
-     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the XML is not well-formed or is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text, Schema schema) {
         return read(text, schema, null);
@@ -99,10 +96,27 @@ public final class XmlCodec {
      * @param schema if non-{@code null}, guides scalar-kind resolution as described above
      * @param report if non-{@code null}, every read-side adjustment is appended here
      * @return the parsed document
-     * @throws RuntimeException if the XML is not well-formed or exceeds {@link #MAX_INPUT_LENGTH}
+     * @throws RuntimeException if the XML is not well-formed or is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text, Schema schema, WriteReport report) {
-        text = CodecInput.prepare(text, "XML", MAX_INPUT_LENGTH);
+        return readWithLimits(text, schema, report, Limits.DEFAULT);
+    }
+
+    /**
+     * Parses XML text as {@link #read(String, Schema, WriteReport)} does, refusing input larger
+     * than {@link Limits#maxInputBytes()} bytes (D-23). Only {@code maxInputBytes} is read from
+     * {@code limits}; depth, node count and integer digits stay at the reference defaults.
+     *
+     * @param text   the XML text; must not be {@code null}
+     * @param schema if non-{@code null}, guides scalar-kind resolution
+     * @param report if non-{@code null}, every read-side adjustment is appended here
+     * @param limits the limits; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException as {@link #read(String, Schema, WriteReport)}, with
+     *         {@code document.limit.input-size} at {@code $} for an input over the maximum
+     */
+    public static Document readWithLimits(String text, Schema schema, WriteReport report, Limits limits) {
+        text = CodecInput.prepare(text, "XML", java.util.Objects.requireNonNull(limits, "limits").maxInputBytes());
 
         // Data-XML profile (docs/formats/xml.md): DOCTYPE and non-predefined entity references are
         // refused on sight. They are well-formed XML, so they are reported only AFTER the rest of
@@ -536,6 +550,9 @@ public final class XmlCodec {
      */
     public static WriteReport check(Document node) {
         WriteReport rep = new WriteReport();
+        // C-9: a string or label with no UTF-8 encoding fails unconditionally. The fast pass builds no
+        // path; the Document path is built only for the failure.
+        Encodability.check(node, rep);
         scanXml(node, "$", rep, 0);
         return rep;
     }
@@ -568,7 +585,7 @@ public final class XmlCodec {
                 seen.put(label, i + 1);
                 int total = totals.getOrDefault(label, 1);
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
-                if (!XML_NAME.matcher(label).matches()) {
+                if (!XML_NAME.matcher(label).matches() && Encodability.isEncodable(label)) {
                     // Issue #88: two different labels can sanitize to the same XML name
                     // (e.g. "my label" and "my_label" both -> <my_label>), silently
                     // colliding on read-back with no diagnostic -- fail unconditionally.
@@ -592,7 +609,7 @@ public final class XmlCodec {
             }
             
             String strVal = xmlText(doc);
-            if (XML_ILLEGAL_CHAR.matcher(strVal).find()) {
+            if (XML_ILLEGAL_CHAR.matcher(strVal).find() && Encodability.isEncodable(strVal)) {
                 // Issue #88: no substitute exists for a character XML 1.0 cannot
                 // represent at all (e.g. a C0 control other than tab/LF/CR) -- fail
                 // unconditionally rather than silently replacing it with U+FFFD.

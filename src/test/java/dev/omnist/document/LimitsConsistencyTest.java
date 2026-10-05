@@ -114,13 +114,16 @@ class LimitsConsistencyTest {
     }
 
     @Test
-    @DisplayName("Input length cap of 2,000,000 characters is enforced across JsonCodec, OmlReader, and OsdReader")
+    @DisplayName("The input size maximum (D-23) is enforced across JsonCodec, OmlReader, and OsdReader")
     void testInputLengthCaps() {
-        String oversized = " ".repeat(2_000_001);
+        Limits small = Limits.DEFAULT.withMaxInputBytes(100);
+        String oversized = " ".repeat(101);
 
-        assertThrows(RuntimeException.class, () -> JsonCodec.read(oversized));
-        assertThrows(RuntimeException.class, () -> dev.omnist.oml.OmlReader.read(oversized));
-        assertThrows(RuntimeException.class, () -> dev.omnist.schema.OsdReader.read(oversized));
+        assertThrows(RuntimeException.class, () -> JsonCodec.readWithLimits(oversized, small));
+        assertThrows(RuntimeException.class, () -> dev.omnist.oml.OmlReader.read(oversized, small));
+        assertThrows(RuntimeException.class, () -> dev.omnist.schema.OsdReader.read(oversized, small));
+        // An input exactly at the maximum is accepted.
+        assertNotNull(dev.omnist.oml.OmlReader.read(" ".repeat(100), small));
     }
 
     @Test

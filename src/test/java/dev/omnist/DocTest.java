@@ -124,6 +124,17 @@ public class DocTest {
     }
 
     @Test
+    void testInputSizeExample() {
+        Limits small = Limits.DEFAULT.withMaxInputBytes(7);
+        assertNotNull(JsonCodec.readWithLimits("{\"a\":1}", small));       // exactly 7 bytes: accepted
+        DocumentParseException tooBig = assertThrows(DocumentParseException.class,
+                () -> JsonCodec.readWithLimits("{\"a\": 1}", small));      // 8 bytes: refused
+        assertEquals("document.limit.input-size", tooBig.getCode());
+        assertEquals("$", tooBig.getPath());
+        assertEquals(64 * 1024 * 1024, Limits.DEFAULT.maxInputBytes());
+    }
+
+    @Test
     void testYamlLimitsExample() {
         String yaml = "base: &b {k1: 1, k2: 2, k3: 3, k4: 4, k5: 5, k6: 6, k7: 7, k8: 8}\n"
                 + "job: {<<: *b, script: x}\n";

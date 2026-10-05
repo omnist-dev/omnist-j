@@ -21,11 +21,11 @@ public class OmlWriter {
      *
      * @param doc the document to serialize; must not be {@code null}
      * @return the canonical OML text; never {@code null}
+     * @throws dev.omnist.codec.WriteException with {@code write.unsupported-value} (C-9) if a string value or
+     *         an edge label has no UTF-8 encoding (a lone surrogate)
      */
     public static String write(Document doc) {
-        StringBuilder sb = new StringBuilder();
-        writeValue(sb, doc, 0, "\n");
-        return sb.toString();
+        return writeChecked(doc, "\n");
     }
 
     /**
@@ -35,10 +35,24 @@ public class OmlWriter {
      *
      * @param doc the document to serialize; must not be {@code null}
      * @return the compact OML text; never {@code null}
+     * @throws dev.omnist.codec.WriteException with {@code write.unsupported-value} (C-9) if a string value or
+     *         an edge label has no UTF-8 encoding (a lone surrogate)
      */
     public static String writeCompact(Document doc) {
+        return writeChecked(doc, "; ");
+    }
+
+    /**
+     * Writes {@code doc}, enforcing C-9 inside the one pass that writes the strings: a string with no
+     * UTF-8 encoding stops the write, and only then is the document walked again to find its path.
+     */
+    private static String writeChecked(Document doc, String edgeSeparator) {
         StringBuilder sb = new StringBuilder();
-        writeValue(sb, doc, 0, "; ");
+        try {
+            writeValue(sb, doc, 0, edgeSeparator);
+        } catch (dev.omnist.codec.Encodability.LoneSurrogate e) {
+            throw dev.omnist.codec.Encodability.refusal(doc);
+        }
         return sb.toString();
     }
 
@@ -184,11 +198,7 @@ public class OmlWriter {
                 TimeValue tv = timeScalar.value();
                 sb.append(tv.time().toString());
                 if (tv.offset() != null) {
-                    if (ZoneOffset.UTC.equals(tv.offset())) {
-                        sb.append("Z");
-                    } else {
-                        sb.append(tv.offset().getId());
-                    }
+                    sb.append(offsetText(tv.offset()));
                 }
             } else {
                 // Scalar is sealed to 7 variants; the other 6 are handled above,
@@ -197,14 +207,19 @@ public class OmlWriter {
                 DateTimeValue dtv = dtScalar.value();
                 sb.append(dtv.dateTime().toString());
                 if (dtv.offset() != null) {
-                    if (ZoneOffset.UTC.equals(dtv.offset())) {
-                        sb.append("Z");
-                    } else {
-                        sb.append(dtv.offset().getId());
-                    }
+                    sb.append(offsetText(dtv.offset()));
                 }
             }
         }
+    }
+
+    /**
+     * The OML spelling of a UTC offset. The grammar's {@code tz-offset} is {@code ("+" / "-") HH ":" MM}
+     * and has no {@code Z}, so UTC is written {@code +00:00}: a {@code Z} would be text this port's own
+     * reader (and every other) rejects.
+     */
+    private static String offsetText(ZoneOffset offset) {
+        return ZoneOffset.UTC.equals(offset) ? "+00:00" : offset.getId();
     }
 
     /**
@@ -224,6 +239,13 @@ public class OmlWriter {
                 default -> {
                     if (c < 0x20) {
                         sb.append(String.format("\\u%04x", (int) c));
+                    } else if ((c & 0xF800) == 0xD800) {
+                        // C-9: only a valid surrogate pair has a UTF-8 encoding.
+                        if (Character.isHighSurrogate(c) && i + 1 < str.length() && Character.isLowSurrogate(str.charAt(i + 1))) {
+                            sb.append(c).append(str.charAt(++i));
+                        } else {
+                            throw dev.omnist.codec.Encodability.LoneSurrogate.INSTANCE;
+                        }
                     } else {
                         sb.append(c);
                     }

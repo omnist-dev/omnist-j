@@ -1,25 +1,46 @@
 # Status and limitations
 
-**`v0.4.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.5.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
 interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 
+## Changes in 0.5.0-alpha
+
+Breaking changes for library users (the version is an alpha minor bump for this reason):
+
+- `MAX_INPUT_LENGTH` is removed from `OmlReader`, `OsdReader`, `JsonCodec`, `YamlCodec`, `TomlCodec` and `XmlCodec`.
+- `Limits` gained a fourth component, `maxInputBytes`; the three-argument constructor is kept and uses the default.
+- The default maximum input is now 64 MiB, counted in bytes, instead of 2,000,000 characters.
+- The codes `parse.input-too-large` and `schema.input-too-large` (and `document.parse-error` for an oversized input) are
+  replaced by `document.limit.input-size` at `$`.
+- The OML writer now writes UTC as `+00:00` instead of `Z`, and the OML reader no longer accepts `Z`
+  ([omnist-j#122](https://github.com/omnist-dev/omnist-j/issues/122)).
+- Every writer now refuses a lone surrogate in a string or label with `write.unsupported-value` (C-9).
+
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.28.0-beta**'s pinned suite (commit `1a7d0de`), comparing diagnostics as **(path, code) sets**
+**v0.33.0-beta**'s pinned suite (commit `64cbb68`), comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 310 | 0 | 28 |
+| 2: JSON vectors | 339 | 0 | 28 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.28.0-beta to v0.33.0-beta (2026-10-05).** The suite grows from 338 to 367 vectors; Track 2 goes from 310 pass /
+0 fail / 28 skip to 339 / 0 / 28, the headline from 339 / 0 / 28 to 368 / 0 / 28. Of the 29 new vectors, 19 passed with no
+code change (7 E-10 repeated-label paths, 7 OML-29 colon separators, 5 C-10 XML null leaf) and 10 are the
+`document-model/input-size/*` vectors: with the pin alone they skipped (the runner did not honour
+`declared_max_input_bytes`); now they run and pass (D-23, [Input size](#input-size-d-23-to-d-26)). The runner now also
+follows E-20a: a vector with any `declared_*` key it does not honour, or on an operation other than `parse`, is skipped
+with a reason, never run against a default.
 
 **v0.27.0-beta to v0.28.0-beta (2026-10-02).** No vector changed: Track 2 stays 310 pass / 0 fail / 28 skip
 of 338, Track 1 29 / 0 / 0, headline 339 / 0 / 28. The release adds four rules about programmatically built
@@ -197,15 +218,80 @@ only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema buil
 - **Nesting past the parsers' own limits.** JSON and YAML nesting of 1000 or more levels is refused
   by Jackson / SnakeYAML before this port's depth limit (200) is consulted, and is reported as
   `parse.codec-syntax` rather than `document.limit.depth`.
-- **Input-size guard.** Input over 2,000,000 characters is refused with `document.parse-error`
-  (OML/OSD: `parse.input-too-large` / `schema.input-too-large`), codes that are not in the §8.3
-  taxonomy; the spec has no code for this cap.
+- **Input size (D-23 to D-26).** See [Input size](#input-size-d-23-to-d-26) below. Before `0.5.0-alpha`
+  the readers refused input over 2,000,000 characters with codes that are not in the §8.3 taxonomy
+  (`document.parse-error`, `parse.input-too-large`, `schema.input-too-large`); that cap is gone, replaced by the
+  configurable byte maximum with the registered code `document.limit.input-size`.
 - **OSD field label with a control character** has no OSD spelling (OSD-14): `OsdWriter` fails with
   `write.unsupported-value` at the record path, unconditionally.
 
+## Input size (D-23 to D-26)
+
+`omnist-spec` v0.30.0-beta added a bound on input size (§2.4.2). `omnist-j` enforces it in every reader
+(OML, OSD, JSON, YAML, TOML, XML) and in the CLI.
+
+| Item | Value |
+|---|---|
+| Code, path | `document.limit.input-size` at `$` |
+| Unit | UTF-8 bytes, not characters. A `String` is counted without allocating an encoded copy; a lone surrogate counts as the three bytes of U+FFFD |
+| Boundary | an input of exactly `maxInputBytes` is accepted; one byte more is refused |
+| Byte-order mark | counted (three bytes): the check runs before it is stripped |
+| Order | first: before decoding (CLI), before the BOM rules, before any parse. An oversized malformed input reports the size |
+| Default | **64 MiB** (`Limits.DEFAULT_MAX_INPUT_BYTES`) |
+| Range | 1 to 1 GiB (`Limits.MAX_INPUT_BYTES_CEILING`); anything else is `IllegalArgumentException`, as for the other limits |
+| Library | `Limits.maxInputBytes`; `OmlReader.read(text, limits)`, `OsdReader.read(text, limits)`, `JsonCodec`/`TomlCodec`/`XmlCodec.readWithLimits`, `YamlCodec.readWithLimits(text, yamlLimits, limits)` |
+| CLI | `--max-input-bytes N` on every command that reads input; stdin and files read at most `N + 1` bytes |
+
+**Why 64 MiB, and why this is a behaviour change.** The spec names no reference number (D-24): the maximum is
+configurable, an implementation documents the value it chooses and SHOULD measure its slowest codec on a worst-case
+input of that size before raising it. Before `0.5.0-alpha` the readers refused anything over
+2,000,000 characters. The default is now 32 times larger, so a document that was refused before is read. Measured on this port (`omnist format` on a flat mapping, JVM start-up included,
+default heap of a 6 GB machine, one run each, not a benchmark): JSON 10.3 MB 2.4 s and 32.4 MB 6.4 s; YAML
+9.0 MB 6.2 s and 27.7 MB 19.0 s. Parse time and memory grow with the input and with its shape (deep
+nesting, many keys, YAML anchors); the cap bounds them, it does not make a parse fast. Lower it for untrusted
+input. SnakeYAML's own 3 MiB code point limit is raised to the configured maximum, so it never refuses an
+input D-23 accepts.
+
+**What it does not bound (D-26).** The depth, node count and integer digit limits and the two YAML alias
+limits bound a different cost. Alias-free YAML is exempt from D-22 by design. String, label and schema size have
+no limit in this port.
+
+## Strings with no UTF-8 encoding (C-9)
+
+Every writer (`OmlWriter`, `JsonCodec`, `YamlCodec`, `TomlCodec`, `XmlCodec`) fails with
+`write.unsupported-value`, unconditionally (`strict` or not), on a string value or an edge label that has no UTF-8
+encoding. In Java that is a lone UTF-16 surrogate, for example `"a\uD800"`. A valid surrogate pair (an astral
+character) and U+FFFD are ordinary text and still write. Before `0.5.0-alpha` the lone surrogate was written raw in
+JSON, TOML and OML and as an escape in YAML (DIV-5); spelling it as an escape does not comply, so no writer emits it
+in any form now.
+
+- **Path.** The Document path of the node holding the string; for a label, the node holding the edge (a path cannot
+  quote a label), so `{"bad\uD800": 1}` fails at `$`, and a bad string in the second `item` of `$.r` at
+  `$.r.item[1]` (E-10). It is a `WriteException`; its `report()` carries the error.
+- **Cost.** No path is built unless there is a failure. OML checks inside the one loop that escapes strings; JSON and
+  TOML fold the test into the pass that already visits every node; YAML and XML run one extra pass
+  (`Encodability.allEncodable`, iterative, no path). Measured on a document of 120 000 edges (100 sections of 300
+  items; best of 20 iterations, three JVM runs, before and after, on a shared machine whose run-to-run noise is about
+  10%): OML 0%, JSON +7%, YAML +1%, TOML +10%, XML +5%. The extra pass alone costs 6.6 ms on that document.
+- **XML.** A label or string C-9 refuses is not reported a second time as an invalid XML name or character.
+- No conformance vector pins C-9 (an input cannot carry a lone surrogate into a Document); `Utf8WriterTest` does,
+  for all five writers.
+
+## OML datetimes have no `Z` (omnist-j#122)
+
+The grammar's `tz-offset` is `("+" / "-") HH ":" MM` (ABNF `oml.abnf`, §4.2.4 OML-10): there is no `Z`. Before
+`0.5.0-alpha` the OML reader accepted `a: 2024-01-01T10:00:00.123456Z` (and `10:00:00Z`, `...T10:00Z`). It now reads
+the literal up to the `Z`, which is left over, and fails with `parse.trailing-content` at the `Z`'s `line:col`
+(`1:30` for that example), the code and position the Python reference reports (checked row by row against Python
+omnist master). `+00:00` is the way to write UTC and reads as UTC.
+
+The OML writer used to write a UTC time or date-time with `Z`, which no conforming reader (this one included, now)
+accepts; it writes `+00:00`, as the Python writer does. The JSON, YAML, TOML and XML codecs are untouched: ISO `Z`
+is valid there.
+
 ## Testing
 
-**836 tests passing**, 0 failures — JUnit unit/integration tests plus
+**1194 tests passing**, 0 failures — JUnit unit/integration tests plus
 jqwik property-based and fuzz tests (grammar-aware generators for TOML
 radix literals, OML lexing, and YAML timestamp shapes; raw-input fuzzers
 for every codec reader) run at thousands of iterations per property with
@@ -217,11 +303,11 @@ contains a raw U+FEFF.
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 `CliMain`, which is a thin argument-parsing entry point). Numbers are from
 `target/site/jacoco/jacoco.xml` after a fresh `mvn clean test`, measured three times
-(spec v0.28.0-beta adoption, 2026-10-02): the three runs gave identical figures.
+(spec v0.33.0-beta adoption, 2026-10-05): the three runs gave identical figures.
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.71%** (10 of 3443 missed) | **99.29%** (17 of 2408 missed) |
+| Overall | **99.72%** (10 of 3591 missed) | **99.36%** (16 of 2508 missed) |
 | `dev.omnist.document` | 100.0% | 98.6% |
 | `dev.omnist.schema` | 100.0% | 99.6% |
 | `dev.omnist.algebra` | 100.0% | 99.7% |
@@ -231,6 +317,10 @@ Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 | `dev.omnist.oml` | 99.3% | 99.3% |
 
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
+
+**v0.33.0-beta (2026-10-05):** 1194 tests; 10 of 3591 lines and 16 of 2508 branches missed, three runs identical
+(headroom 4 lines and 6 branches against the 99.6% / 99.1% gate). The new `InputSize`, `Encodability` and writer paths
+are fully covered. The per-package table above is from the v0.28.0-beta run and was not re-measured.
 
 **v0.28.0-beta (2026-10-02):** 836 tests; 10 of 3451 lines and 17 of 2414 branches missed, three runs identical
 (headroom 3 lines and 4 branches). The new `SchemaRules`, `SchemaException` and writer paths are fully covered.

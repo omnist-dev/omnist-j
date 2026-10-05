@@ -97,8 +97,9 @@ class DeepCoverageTest {
         assertThrows(WriteException.class, () -> TomlCodec.write(null));
 
         // Exceeding length limit
-        String longText = "a = 1\n" + " ".repeat(TomlCodec.MAX_INPUT_LENGTH + 1);
-        assertThrows(RuntimeException.class, () -> TomlCodec.read(longText));
+        String longText = "a = 1\n" + " ".repeat(10);
+        assertThrows(RuntimeException.class,
+                () -> TomlCodec.readWithLimits(longText, dev.omnist.document.Limits.DEFAULT.withMaxInputBytes(10)));
 
         // Toml write with table array and dates
         Node docNode = new Node(List.of(

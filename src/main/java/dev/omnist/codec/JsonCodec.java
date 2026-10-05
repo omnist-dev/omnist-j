@@ -27,8 +27,6 @@ import java.util.*;
  * <p>This class is stateless; all methods are {@code static}.
  */
 public final class JsonCodec {
-    public static final int MAX_INPUT_LENGTH = 2_000_000;
-
     private static final ObjectMapper MAPPER;
     static {
         com.fasterxml.jackson.core.StreamReadConstraints constraints = com.fasterxml.jackson.core.StreamReadConstraints.builder()
@@ -48,10 +46,26 @@ public final class JsonCodec {
      * @param text the JSON text; must not be {@code null}
      * @return the parsed document
      * @throws RuntimeException if the JSON is syntactically invalid, or if the root value is an array,
-     *         or if nesting depth exceeds 200, or if node count exceeds 1,000,000
+     *         or if nesting depth exceeds 200, or if node count exceeds 1,000,000, or if the input
+     *         is larger than {@link Limits#DEFAULT_MAX_INPUT_BYTES} bytes
      */
     public static Document read(String text) {
-        text = CodecInput.prepare(text, "JSON", MAX_INPUT_LENGTH);
+        return readWithLimits(text, Limits.DEFAULT);
+    }
+
+    /**
+     * Parses JSON text into a {@link Document}, refusing input larger than
+     * {@link Limits#maxInputBytes()} bytes (D-23). Only {@code maxInputBytes} is read from
+     * {@code limits}; depth, node count and integer digits stay at the reference defaults.
+     *
+     * @param text   the JSON text; must not be {@code null}
+     * @param limits the limits; must not be {@code null}
+     * @return the parsed document
+     * @throws RuntimeException as {@link #read(String)}, with {@code document.limit.input-size}
+     *         at {@code $} for an input over the maximum
+     */
+    public static Document readWithLimits(String text, Limits limits) {
+        text = CodecInput.prepare(text, "JSON", java.util.Objects.requireNonNull(limits, "limits").maxInputBytes());
         Object raw;
         try {
             raw = MAPPER.readValue(text, Object.class);
@@ -258,11 +272,20 @@ public final class JsonCodec {
             Map<String, Integer> seen = new HashMap<>();
             for (Edge edge : node.edges()) {
                 String label = edge.label();
+                // C-9, folded into this pass (which already visits every node and builds its path):
+                // a label with no UTF-8 encoding fails at the node holding the edge.
+                if (!Encodability.isEncodable(label)) {
+                    rep.add(path, "write.unsupported-value", "edge label has no UTF-8 encoding (a lone surrogate)", "error");
+                }
                 int i = seen.getOrDefault(label, 0);
                 seen.put(label, i + 1);
                 int total = totals.getOrDefault(label, 1);
                 String p = dev.omnist.document.PathUtils.childPath(path, label, i, total);
                 scanJson((Document) edge.target(), p, depth + 1, rep, interleavingFound);
+            }
+        } else if (doc instanceof StringScalar str) {
+            if (!Encodability.isEncodable(str.value())) {
+                rep.add(path, "write.unsupported-value", "string value has no UTF-8 encoding (a lone surrogate)", "error");
             }
         } else if (doc instanceof Scalar s) {
             if (s instanceof DateScalar || s instanceof TimeScalar || s instanceof DateTimeScalar) {
