@@ -91,9 +91,9 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 ## Status
 
-**`v0.4.0-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.28.0-beta (commit `1a7d0de`).
+**`v0.4.0-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.33.0-beta (commit `64cbb68`).
 
-- **Conformance**: 339 passing, 0 failures, 28 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (310 pass), compared as (path, code) sets. The only skips are the not-yet-implemented OSD-OML extension (28); see [`docs/limitations.md`](docs/limitations.md).
+- **Conformance**: 358 passing, 0 failures, 38 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (329 pass of 367), compared as (path, code) sets. The skips are the not-yet-implemented OSD-OML extension (28) and the 10 input-size vectors (`declared_max_input_bytes`, D-23, not yet enforced); see [`docs/limitations.md`](docs/limitations.md).
 - **YAML aliases**: bounded by the spec's two limits (D-18 expansion factor, default 50; D-22 expanded size, default 1,000,000 slots, only for input that uses an alias or merge key), checked on the parsed node graph before anything is expanded; configurable with `YamlCodec.readWithLimits(text, new YamlLimits(...))`. A mapping that merges a large block reads an expansion factor of about `(keys + 2) / 3`, so very large merges can need a higher maximum; see [`docs/limitations.md`](docs/limitations.md).
 - **Tests**: 802 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
 - **Coverage**: 99.71% line / 99.30% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.

@@ -71,9 +71,13 @@ class ConformanceTest {
         // "line:col" vectors in the other formats. The only skips left are the 28 OSD-OML ones.
         // Bumped to omnist-spec v0.27.0-beta (commit a6a6090): 338 vectors. 310 = 303 + 7 new D-18a
         // empty-merge-sequence vectors, all passing with no code change.
-        assertEquals(310, results[0], "Track 2 should pass 310 real JSON test vectors");
+        // Bumped to omnist-spec v0.33.0-beta (commit 64cbb68): 367 vectors. 329 = 310 + 19 (7 E-10
+        // repeated-label path vectors, 7 OML-29 colon-separator vectors, 5 C-10 XML null-leaf vectors),
+        // all passing with no code change. The 10 new document-model/input-size vectors skip until
+        // declared_max_input_bytes is honoured: 28 OSD-OML + 10 input-size = 38.
+        assertEquals(329, results[0], "Track 2 should pass 329 real JSON test vectors");
         assertEquals(0, results[1], "Track 2 should have 0 failures");
-        assertEquals(28, results[2], "Track 2 should skip only the 28 OSD-OML vectors");
+        assertEquals(38, results[2], "Track 2 should skip the 28 OSD-OML vectors and the 10 input-size vectors");
     }
 
     @Test

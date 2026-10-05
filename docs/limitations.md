@@ -9,17 +9,22 @@ interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.28.0-beta**'s pinned suite (commit `1a7d0de`), comparing diagnostics as **(path, code) sets**
+**v0.33.0-beta**'s pinned suite (commit `64cbb68`), comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 310 | 0 | 28 |
+| 2: JSON vectors | 329 | 0 | 38 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.28.0-beta to v0.33.0-beta (2026-10-05), first step (spec pin only).** The suite grows from 338 to 367 vectors.
+Track 2 is 329 pass / 0 fail / 38 skip: the 29 new vectors are 19 that already pass (7 E-10 repeated-label paths, 7 OML-29
+colon-separator, 5 C-10 XML null leaf) and the 10 `document-model/input-size/*` vectors, which skip because the runner did
+not yet honour `declared_max_input_bytes`. The red state by cause is 0 failures; the 10 skips are the only gap.
 
 **v0.27.0-beta to v0.28.0-beta (2026-10-02).** No vector changed: Track 2 stays 310 pass / 0 fail / 28 skip
 of 338, Track 1 29 / 0 / 0, headline 339 / 0 / 28. The release adds four rules about programmatically built
