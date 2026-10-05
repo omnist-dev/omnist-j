@@ -198,11 +198,7 @@ public class OmlWriter {
                 TimeValue tv = timeScalar.value();
                 sb.append(tv.time().toString());
                 if (tv.offset() != null) {
-                    if (ZoneOffset.UTC.equals(tv.offset())) {
-                        sb.append("Z");
-                    } else {
-                        sb.append(tv.offset().getId());
-                    }
+                    sb.append(offsetText(tv.offset()));
                 }
             } else {
                 // Scalar is sealed to 7 variants; the other 6 are handled above,
@@ -211,14 +207,19 @@ public class OmlWriter {
                 DateTimeValue dtv = dtScalar.value();
                 sb.append(dtv.dateTime().toString());
                 if (dtv.offset() != null) {
-                    if (ZoneOffset.UTC.equals(dtv.offset())) {
-                        sb.append("Z");
-                    } else {
-                        sb.append(dtv.offset().getId());
-                    }
+                    sb.append(offsetText(dtv.offset()));
                 }
             }
         }
+    }
+
+    /**
+     * The OML spelling of a UTC offset. The grammar's {@code tz-offset} is {@code ("+" / "-") HH ":" MM}
+     * and has no {@code Z}, so UTC is written {@code +00:00}: a {@code Z} would be text this port's own
+     * reader (and every other) rejects.
+     */
+    private static String offsetText(ZoneOffset offset) {
+        return ZoneOffset.UTC.equals(offset) ? "+00:00" : offset.getId();
     }
 
     /**

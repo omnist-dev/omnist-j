@@ -24,7 +24,7 @@ class OmlReaderTest {
             flag: true
             d: 2026-08-10
             t: 12:30:45+02:00
-            dt: 2026-08-10T12:30:45Z
+            dt: 2026-08-10T12:30:45+00:00
             empty: null
             """;
 

@@ -43,8 +43,8 @@ class GapCoverageTest {
 
     @Test
     void omlLexer_dateTimeWithTimezoneOffset() {
-        // parseDateTimeValue: Z-suffix branch
-        Document docZ = OmlReader.read("dt: 2024-01-01T12:00:00Z");
+        // parseDateTimeValue: UTC written +00:00 (OML has no Z suffix, omnist-j#122)
+        Document docZ = OmlReader.read("dt: 2024-01-01T12:00:00+00:00");
         assertNotNull(docZ);
 
         // parseDateTimeValue: positive offset branch (signPos > 10)
@@ -58,8 +58,8 @@ class GapCoverageTest {
 
     @Test
     void omlLexer_timeWithTimezoneOffset() {
-        // parseTimeValue: Z-suffix branch
-        Document docZ = OmlReader.read("t: 12:00:00Z");
+        // parseTimeValue: UTC written +00:00
+        Document docZ = OmlReader.read("t: 12:00:00+00:00");
         assertNotNull(docZ);
 
         // parseTimeValue: positive offset branch (signPos > 0 and indexOf(':') < signPos)
@@ -178,11 +178,11 @@ class GapCoverageTest {
 
     @Test
     void omlWriter_timeScalarWithUtcOffset() {
-        // writeScalarOrNull: TimeScalar with UTC offset → appends "Z"
+        // writeScalarOrNull: TimeScalar with UTC offset → appends "+00:00" (the grammar has no Z)
         TimeValue tv = TimeValue.of(LocalTime.of(12, 0, 0), ZoneOffset.UTC);
         Node doc = new Node(List.of(new Edge("t", new TimeScalar(tv))));
         String written = OmlWriter.write(doc);
-        assertTrue(written.contains("Z"), "Expected Z suffix in: " + written);
+        assertTrue(written.contains("+00:00") && !written.contains("Z"), "Expected +00:00 in: " + written);
     }
 
     @Test
@@ -196,11 +196,11 @@ class GapCoverageTest {
 
     @Test
     void omlWriter_dateTimeScalarWithUtcOffset() {
-        // writeScalarOrNull: DateTimeScalar with UTC offset → appends "Z"
+        // writeScalarOrNull: DateTimeScalar with UTC offset → appends "+00:00" (the grammar has no Z)
         DateTimeValue dtv = DateTimeValue.of(LocalDateTime.of(2024, 1, 1, 12, 0), ZoneOffset.UTC);
         Node doc = new Node(List.of(new Edge("dt", new DateTimeScalar(dtv))));
         String written = OmlWriter.write(doc);
-        assertTrue(written.contains("Z"), "Expected Z suffix in: " + written);
+        assertTrue(written.contains("+00:00") && !written.contains("Z"), "Expected +00:00 in: " + written);
     }
 
     @Test

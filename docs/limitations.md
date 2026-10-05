@@ -1,6 +1,6 @@
 # Status and limitations
 
-**`v0.4.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.5.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
@@ -264,9 +264,21 @@ in any form now.
 - No conformance vector pins C-9 (an input cannot carry a lone surrogate into a Document); `Utf8WriterTest` does,
   for all five writers.
 
+## OML datetimes have no `Z` (omnist-j#122)
+
+The grammar's `tz-offset` is `("+" / "-") HH ":" MM` (ABNF `oml.abnf`, §4.2.4 OML-10): there is no `Z`. Before
+`0.5.0-alpha` the OML reader accepted `a: 2024-01-01T10:00:00.123456Z` (and `10:00:00Z`, `...T10:00Z`). It now reads
+the literal up to the `Z`, which is left over, and fails with `parse.trailing-content` at the `Z`'s `line:col`
+(`1:30` for that example), the code and position the Python reference reports (checked row by row against Python
+omnist master). `+00:00` is the way to write UTC and reads as UTC.
+
+The OML writer used to write a UTC time or date-time with `Z`, which no conforming reader (this one included, now)
+accepts; it writes `+00:00`, as the Python writer does. The JSON, YAML, TOML and XML codecs are untouched: ISO `Z`
+is valid there.
+
 ## Testing
 
-**836 tests passing**, 0 failures — JUnit unit/integration tests plus
+**1194 tests passing**, 0 failures — JUnit unit/integration tests plus
 jqwik property-based and fuzz tests (grammar-aware generators for TOML
 radix literals, OML lexing, and YAML timestamp shapes; raw-input fuzzers
 for every codec reader) run at thousands of iterations per property with
@@ -278,11 +290,11 @@ contains a raw U+FEFF.
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 `CliMain`, which is a thin argument-parsing entry point). Numbers are from
 `target/site/jacoco/jacoco.xml` after a fresh `mvn clean test`, measured three times
-(spec v0.28.0-beta adoption, 2026-10-02): the three runs gave identical figures.
+(spec v0.33.0-beta adoption, 2026-10-05): the three runs gave identical figures.
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.71%** (10 of 3443 missed) | **99.29%** (17 of 2408 missed) |
+| Overall | **99.72%** (10 of 3591 missed) | **99.36%** (16 of 2508 missed) |
 | `dev.omnist.document` | 100.0% | 98.6% |
 | `dev.omnist.schema` | 100.0% | 99.6% |
 | `dev.omnist.algebra` | 100.0% | 99.7% |
@@ -292,6 +304,10 @@ Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 | `dev.omnist.oml` | 99.3% | 99.3% |
 
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
+
+**v0.33.0-beta (2026-10-05):** 1194 tests; 10 of 3591 lines and 16 of 2508 branches missed, three runs identical
+(headroom 4 lines and 6 branches against the 99.6% / 99.1% gate). The new `InputSize`, `Encodability` and writer paths
+are fully covered. The per-package table above is from the v0.28.0-beta run and was not re-measured.
 
 **v0.28.0-beta (2026-10-02):** 836 tests; 10 of 3451 lines and 17 of 2414 branches missed, three runs identical
 (headroom 3 lines and 4 branches). The new `SchemaRules`, `SchemaException` and writer paths are fully covered.
