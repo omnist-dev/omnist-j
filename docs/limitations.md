@@ -6,6 +6,19 @@ algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
 interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 
+## Changes in 0.5.0-alpha
+
+Breaking changes for library users (the version is an alpha minor bump for this reason):
+
+- `MAX_INPUT_LENGTH` is removed from `OmlReader`, `OsdReader`, `JsonCodec`, `YamlCodec`, `TomlCodec` and `XmlCodec`.
+- `Limits` gained a fourth component, `maxInputBytes`; the three-argument constructor is kept and uses the default.
+- The default maximum input is now 64 MiB, counted in bytes, instead of 2,000,000 characters.
+- The codes `parse.input-too-large` and `schema.input-too-large` (and `document.parse-error` for an oversized input) are
+  replaced by `document.limit.input-size` at `$`.
+- The OML writer now writes UTC as `+00:00` instead of `Z`, and the OML reader no longer accepts `Z`
+  ([omnist-j#122](https://github.com/omnist-dev/omnist-j/issues/122)).
+- Every writer now refuses a lone surrogate in a string or label with `write.unsupported-value` (C-9).
+
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
@@ -229,10 +242,10 @@ only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema buil
 | Library | `Limits.maxInputBytes`; `OmlReader.read(text, limits)`, `OsdReader.read(text, limits)`, `JsonCodec`/`TomlCodec`/`XmlCodec.readWithLimits`, `YamlCodec.readWithLimits(text, yamlLimits, limits)` |
 | CLI | `--max-input-bytes N` on every command that reads input; stdin and files read at most `N + 1` bytes |
 
-**Why 64 MiB, and why this is a behaviour change.** The spec names no reference number (D-24) and says a
-cap SHOULD NOT exceed 10 MiB without measuring. Before `0.5.0-alpha` the readers refused anything over
-2,000,000 characters. The default is now 32 times larger, matching the Go port, so a document that was
-refused before is read. Measured on this port (`omnist format` on a flat mapping, JVM start-up included,
+**Why 64 MiB, and why this is a behaviour change.** The spec names no reference number (D-24): the maximum is
+configurable, an implementation documents the value it chooses and SHOULD measure its slowest codec on a worst-case
+input of that size before raising it. Before `0.5.0-alpha` the readers refused anything over
+2,000,000 characters. The default is now 32 times larger, so a document that was refused before is read. Measured on this port (`omnist format` on a flat mapping, JVM start-up included,
 default heap of a 6 GB machine, one run each, not a benchmark): JSON 10.3 MB 2.4 s and 32.4 MB 6.4 s; YAML
 9.0 MB 6.2 s and 27.7 MB 19.0 s. Parse time and memory grow with the input and with its shape (deep
 nesting, many keys, YAML anchors); the cap bounds them, it does not make a parse fast. Lower it for untrusted
