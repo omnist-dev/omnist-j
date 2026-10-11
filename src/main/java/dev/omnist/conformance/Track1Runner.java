@@ -416,7 +416,6 @@ public final class Track1Runner {
         if (actual != null) {
             for (JsonNode n : actual) {
                 String c = n.get("code").asText();
-                if (c.startsWith("lint.")) c = c.substring(5);
                 act.add(c + "|" + n.get("severity").asText() + "|" + n.get("location").asText());
             }
         }
@@ -424,7 +423,6 @@ public final class Track1Runner {
         if (expected != null) {
             for (JsonNode n : expected) {
                 String c = n.get("code").asText();
-                if (c.startsWith("lint.")) c = c.substring(5);
                 exp.add(c + "|" + n.get("severity").asText() + "|" + n.get("location").asText());
             }
         }
