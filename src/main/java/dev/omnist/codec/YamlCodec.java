@@ -226,7 +226,9 @@ public final class YamlCodec {
      * than {@link Limits#maxInputBytes()} bytes first (D-23). The depth, node-count and integer-digit
      * bounds of {@code documentLimits} apply too (D-9, E-4a): {@code document.limit.depth} and
      * {@code document.limit.nodes} at {@code $}, {@code document.limit.int-digits} at the Document
-     * path of the integer, counted by the digits of its value (D-28).
+     * path of the integer, counted by the digits of its value (D-28). A mapping that repeats a key
+     * is {@code parse.codec-syntax} (C-12); a {@code !!omap}, {@code !!pairs} or {@code !!set}
+     * collection is {@code format.tag-forbidden} at {@code $} (C-13).
      *
      * @param text           the YAML text; must not be {@code null}
      * @param limits         the alias limits; must not be {@code null}
@@ -249,6 +251,9 @@ public final class YamlCodec {
         // (D-12, D-13), is the one that decides. Deeper than this the library still refuses first.
         int nestingLimit = nestingLimit(documentLimits.maxDepth());
         loaderOptions.setNestingDepthLimit(nestingLimit);
+        // C-12: a mapping that repeats a key is rejected (parse.codec-syntax at the repeated key),
+        // never resolved silently to one of the two values.
+        loaderOptions.setAllowDuplicateKeys(false);
         // SnakeYAML also refuses more than 50 aliases to collections in one document, a global count
         // that rejects ordinary configs (100 services merging one defaults block). That is not what
         // D-18 specifies, so the library's cap is lifted and YamlAliasCheck decides, from the node
@@ -274,6 +279,7 @@ public final class YamlCodec {
             if (docs.hasNext()) {
                 throw CodecInput.syntax("YAML", "expected a single document in the stream but found another document", 1, 1, null);
             }
+            rejectCollectionTags(root);
             YamlAliasCheck.check(root, limits, nestingLimit);
             raw = constructor.constructRoot(root);
         } catch (DocumentParseException dpe) {
@@ -294,6 +300,39 @@ public final class YamlCodec {
     private static int nestingLimit(int maxDepth) {
         long wanted = 2L * maxDepth + 2;
         return (int) Math.min(Integer.MAX_VALUE, Math.max(YAML_NESTING_DEPTH_LIMIT, wanted));
+    }
+
+    /**
+     * C-13: a {@code !!omap}, {@code !!pairs} or {@code !!set} collection is outside the profile and
+     * is refused with {@code format.tag-forbidden} at {@code $}, well-formed though it is. The walk
+     * visits each node once, so an alias into a shared node costs nothing extra.
+     */
+    private static void rejectCollectionTags(Node root) {
+        Deque<Node> pending = new ArrayDeque<>();
+        Set<Node> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        pending.push(root);
+        while (!pending.isEmpty()) {
+            Node node = pending.pop();
+            if (!seen.add(node)) {
+                continue;
+            }
+            Tag tag = node.getTag();
+            if (Tag.OMAP.equals(tag) || Tag.PAIRS.equals(tag) || Tag.SET.equals(tag)) {
+                throw new DocumentParseException("$", "format.tag-forbidden",
+                        "$: a YAML " + tag.getValue().replace("tag:yaml.org,2002:", "!!")
+                                + " collection is outside the profile and is refused");
+            }
+            if (node instanceof org.yaml.snakeyaml.nodes.MappingNode mapping) {
+                for (org.yaml.snakeyaml.nodes.NodeTuple tuple : mapping.getValue()) {
+                    pending.push(tuple.getKeyNode());
+                    pending.push(tuple.getValueNode());
+                }
+            } else if (node instanceof org.yaml.snakeyaml.nodes.SequenceNode sequence) {
+                for (Node item : sequence.getValue()) {
+                    pending.push(item);
+                }
+            }
+        }
     }
 
     /**
