@@ -38,6 +38,35 @@ public final class JsonCodec {
         MAPPER = new ObjectMapper(factory);
     }
 
+    /**
+     * C-14: the hex digits of a four-digit unicode escape are lowercase. Jackson writes the control
+     * character U+001F with an uppercase F; this rewrites each such escape with lowercase digits.
+     * It walks the text so an escaped backslash followed by the letters of an escape stays as it
+     * was: a backslash is skipped together with the character it escapes.
+     */
+    static String lowercaseEscapes(String json) {
+        StringBuilder out = new StringBuilder(json.length());
+        int i = 0;
+        while (i < json.length()) {
+            char c = json.charAt(i);
+            if (c == '\\') {
+                // Jackson's output is well-formed: a backslash is always followed by the character
+                // it escapes, and a "u" by exactly four hex digits.
+                char next = json.charAt(i + 1);
+                out.append(c).append(next);
+                i += 2;
+                if (next == 'u') {
+                    out.append(json.substring(i, i + 4).toLowerCase(java.util.Locale.ROOT));
+                    i += 4;
+                }
+            } else {
+                out.append(c);
+                i++;
+            }
+        }
+        return out.toString();
+    }
+
     private JsonCodec() {}
 
     /**
@@ -230,9 +259,9 @@ public final class JsonCodec {
                 com.fasterxml.jackson.core.util.DefaultIndenter indenter = new com.fasterxml.jackson.core.util.DefaultIndenter(" ".repeat(indent), com.fasterxml.jackson.core.util.DefaultIndenter.SYS_LF);
                 printer.indentObjectsWith(indenter);
                 printer.indentArraysWith(indenter);
-                return MAPPER.writer(printer).writeValueAsString(grouped);
+                return lowercaseEscapes(MAPPER.writer(printer).writeValueAsString(grouped));
             } else {
-                return MAPPER.writeValueAsString(grouped);
+                return lowercaseEscapes(MAPPER.writeValueAsString(grouped));
             }
         } catch (IOException e) {
             // Not observed to be reachable: `grouped` is built entirely from
