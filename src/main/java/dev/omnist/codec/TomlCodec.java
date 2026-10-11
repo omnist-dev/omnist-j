@@ -154,7 +154,11 @@ public final class TomlCodec {
                             sb.append(token);
                         }
                     } else {
-                        sb.append(token);
+                        // D-29: a literal that rounds to infinity is accepted and reads as one, and
+                        // one that rounds to zero reads as 0.0; tomlj refuses both ("too large",
+                        // "too small") as syntax errors.
+                        String extreme = extremeFloat(token);
+                        sb.append(extreme != null ? extreme : token);
                     }
                 } else {
                     sb.append(c);
@@ -163,6 +167,76 @@ public final class TomlCodec {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * The spelling tomlj accepts for a float literal whose value rounds to an infinity ({@code inf},
+     * {@code -inf}) or, with a nonzero mantissa, to zero ({@code 0.0}, {@code -0.0}) (D-29); null for
+     * any other token.
+     */
+    private static String extremeFloat(String token) {
+        // Only reached for a token that is not an integer literal, so a match is a float.
+        if (!isFloatLiteral(token)) {
+            return null;
+        }
+        String clean = token.replace("_", "");
+        boolean negative = clean.charAt(0) == '-';
+        double value = Double.parseDouble(clean);
+        if (Double.isInfinite(value)) {
+            return negative ? "-inf" : "inf";
+        }
+        String mantissa = clean.split("[eE]")[0];
+        if (value == 0.0 && mantissa.chars().anyMatch(c -> c >= '1')) {
+            return negative ? "-0.0" : "0.0";
+        }
+        return null;
+    }
+
+    /**
+     * Whether {@code token} is a TOML float literal: an optional sign, digits, an optional fraction
+     * and an optional exponent, an underscore only between two digits. Scanned by hand: a regular
+     * expression with a repeated group recurses once per digit and overflows the stack on a long
+     * literal.
+     */
+    private static boolean isFloatLiteral(String token) {
+        int i = 0;
+        if (token.charAt(0) == '+' || token.charAt(0) == '-') {
+            i++;
+        }
+        i = digitRun(token, i);
+        if (i > 0 && i < token.length() && token.charAt(i) == '.') {
+            i = digitRun(token, i + 1);
+        }
+        if (i > 0 && i < token.length() && (token.charAt(i) == 'e' || token.charAt(i) == 'E')) {
+            i++;
+            if (i < token.length() && (token.charAt(i) == '+' || token.charAt(i) == '-')) {
+                i++;
+            }
+            i = digitRun(token, i);
+        }
+        return i == token.length();
+    }
+
+    /**
+     * The index after the run of digits (with single underscores between digits) that starts at
+     * {@code from}, or -1 if there is no digit there.
+     */
+    private static int digitRun(String token, int from) {
+        int i = from;
+        if (i >= token.length() || !Character.isDigit(token.charAt(i))) {
+            return -1;
+        }
+        while (i < token.length()) {
+            char c = token.charAt(i);
+            if (c >= '0' && c <= '9') {
+                i++;
+            } else if (c == '_' && i + 1 < token.length() && token.charAt(i + 1) >= '0' && token.charAt(i + 1) <= '9') {
+                i += 2;
+            } else {
+                break;
+            }
+        }
+        return i;
     }
 
     private static boolean isTokenChar(char c) {
