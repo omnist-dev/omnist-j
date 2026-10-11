@@ -9,11 +9,14 @@ package dev.omnist.document;
  * {@link Node}/{@link Edge} construction itself, which stays unconditionally trusting
  * (a document already built in memory has no "input" left to bound).
  *
- * <p>{@code maxInputBytes} (D-23) is applied by every reader that accepts a {@code Limits}: the OML
+ * <p>Every reader that accepts a {@code Limits} applies all four bounds (D-9, D-23, E-4a): the OML
  * reader through {@link dev.omnist.oml.OmlReader#read(String, Limits)}, and the JSON, TOML and XML
  * codecs through their {@code readWithLimits} methods (YAML through
  * {@link dev.omnist.codec.YamlCodec#readWithLimits(String, dev.omnist.codec.YamlLimits, Limits)}).
- * The depth, node-count and integer-digit bounds of the codecs stay at the reference defaults.
+ * An over-limit input is refused with the OML reader's diagnostic whatever the format:
+ * {@code document.limit.depth} and {@code document.limit.nodes} at {@code $},
+ * {@code document.limit.int-digits} at the Document path of the integer, which counts the decimal
+ * digits of the <em>value</em> (D-28), not of a hexadecimal, octal or binary spelling.
  *
  * <p>A value that is not positive is refused with {@link IllegalArgumentException}, never quietly
  * replaced by the default or read as "no limit" (D-10: every bound is finite). {@code maxInputBytes}

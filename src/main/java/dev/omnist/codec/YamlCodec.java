@@ -59,15 +59,88 @@ public final class YamlCodec {
     // SnakeYAML's own default BOOL pattern with no customization needed; the
     // subclass was removed and the base Resolver is used directly below.
 
+    /**
+     * Stands for an integer whose value has more decimal digits than the configured limit (D-9,
+     * D-28). The constructor has no Document path to report it at, so it returns this and the
+     * tree walk, which knows the path, refuses it.
+     */
+    private enum OverLimitInteger { INSTANCE }
+
+    /**
+     * SnakeYAML's resolver leaves a plain scalar of more than about a thousand characters as a
+     * string even when it is spelled as an integer or a float, which turned a long integer into a
+     * {@code StringScalar} with no diagnostic. This resolver gives such a scalar the tag its
+     * spelling has, so the digit limit decides and never a silent change of type.
+     */
+    private static final class LongNumberResolver extends org.yaml.snakeyaml.resolver.Resolver {
+        private static final int MIN_LENGTH = 256;
+
+        @Override
+        public Tag resolve(org.yaml.snakeyaml.nodes.NodeId kind, String value, boolean implicit) {
+            Tag tag = super.resolve(kind, value, implicit);
+            if (implicit && kind == org.yaml.snakeyaml.nodes.NodeId.scalar && Tag.STR.equals(tag)
+                    && value.length() >= MIN_LENGTH) {
+                if (INT.matcher(value).matches()) {
+                    return Tag.INT;
+                }
+                if (FLOAT.matcher(value).matches()) {
+                    return Tag.FLOAT;
+                }
+            }
+            return tag;
+        }
+    }
+
     private static class CustomConstructor extends SafeConstructor {
-        public CustomConstructor(LoaderOptions loaderOptions) {
+        public CustomConstructor(LoaderOptions loaderOptions, int maxIntegerDigits) {
             super(loaderOptions);
             this.yamlConstructors.put(Tag.TIMESTAMP, new ConstructTimestamp());
+            this.yamlConstructors.put(Tag.INT, new ConstructBoundedInt(maxIntegerDigits));
         }
 
         /** Constructs the Java value of an already-composed (and already-checked) document root. */
         Object constructRoot(Node root) {
             return constructDocument(root);
+        }
+
+        /**
+         * An integer whose decimal digits are counted by value (D-28): a hexadecimal, octal or
+         * binary literal, underscores, leading zeros and a sexagesimal integer are all counted by
+         * what they denote. The check runs on the literal before it is converted, so an over-long
+         * one costs time linear in its length, never a super-linear conversion.
+         */
+        private class ConstructBoundedInt extends AbstractConstruct {
+            private final int max;
+            private final ConstructYamlInt plain = new ConstructYamlInt();
+
+            ConstructBoundedInt(int max) {
+                this.max = max;
+            }
+
+            @Override
+            public Object construct(Node node) {
+                String v = ((ScalarNode) node).getValue().replace("_", "");
+                String body = v.startsWith("-") || v.startsWith("+") ? v.substring(1) : v;
+                if (body.indexOf(':') < 0) {
+                    BigInteger parsed;
+                    if (body.startsWith("0b")) {
+                        parsed = IntegerDigits.parse(body.substring(2), 2, max);
+                    } else if (body.startsWith("0x")) {
+                        parsed = IntegerDigits.parse(body.substring(2), 16, max);
+                    } else if (body.length() > 1 && body.charAt(0) == '0') {
+                        parsed = IntegerDigits.parse(body.substring(1), 8, max);
+                    } else {
+                        parsed = IntegerDigits.parse(body, 10, max);
+                    }
+                    if (parsed == null) {
+                        return OverLimitInteger.INSTANCE;
+                    }
+                }
+                Object value = plain.construct(node);
+                boolean over = value instanceof BigInteger bi ? IntegerDigits.exceeds(bi, max)
+                        : IntegerDigits.exceeds(((Number) value).longValue(), max);
+                return over ? OverLimitInteger.INSTANCE : value;
+            }
         }
 
         private class ConstructTimestamp extends AbstractConstruct {
@@ -150,8 +223,10 @@ public final class YamlCodec {
 
     /**
      * Parses YAML text as {@link #readWithLimits(String, YamlLimits)} does, and refuses input larger
-     * than {@link Limits#maxInputBytes()} bytes first (D-23). Only {@code maxInputBytes} is read from
-     * {@code documentLimits}; depth, node count and integer digits stay at the reference defaults.
+     * than {@link Limits#maxInputBytes()} bytes first (D-23). The depth, node-count and integer-digit
+     * bounds of {@code documentLimits} apply too (D-9, E-4a): {@code document.limit.depth} and
+     * {@code document.limit.nodes} at {@code $}, {@code document.limit.int-digits} at the Document
+     * path of the integer, counted by the digits of its value (D-28).
      *
      * @param text           the YAML text; must not be {@code null}
      * @param limits         the alias limits; must not be {@code null}
@@ -172,7 +247,8 @@ public final class YamlCodec {
         // is well within this port's own depth limit (200) as a syntax error. Raise it clear of
         // Limits.DEFAULT.maxDepth() so the port's own check, with its document.limit.depth code
         // (D-12, D-13), is the one that decides. Deeper than this the library still refuses first.
-        loaderOptions.setNestingDepthLimit(YAML_NESTING_DEPTH_LIMIT);
+        int nestingLimit = nestingLimit(documentLimits.maxDepth());
+        loaderOptions.setNestingDepthLimit(nestingLimit);
         // SnakeYAML also refuses more than 50 aliases to collections in one document, a global count
         // that rejects ordinary configs (100 services merging one defaults block). That is not what
         // D-18 specifies, so the library's cap is lifted and YamlAliasCheck decides, from the node
@@ -183,8 +259,8 @@ public final class YamlCodec {
         // never exceeds it, and D-23 alone decides how large an input may be.
         loaderOptions.setCodePointLimit(documentLimits.maxInputBytes());
         loaderOptions.setMaxAliasesForCollections(Integer.MAX_VALUE);
-        CustomConstructor constructor = new CustomConstructor(loaderOptions);
-        org.yaml.snakeyaml.resolver.Resolver resolver = new org.yaml.snakeyaml.resolver.Resolver();
+        CustomConstructor constructor = new CustomConstructor(loaderOptions, documentLimits.maxIntegerDigits());
+        org.yaml.snakeyaml.resolver.Resolver resolver = new LongNumberResolver();
         DumperOptions dumperOptions = new DumperOptions();
         Yaml yaml = new Yaml(constructor, new Representer(dumperOptions), dumperOptions, loaderOptions, resolver);
 
@@ -198,7 +274,7 @@ public final class YamlCodec {
             if (docs.hasNext()) {
                 throw CodecInput.syntax("YAML", "expected a single document in the stream but found another document", 1, 1, null);
             }
-            YamlAliasCheck.check(root, limits, YAML_NESTING_DEPTH_LIMIT);
+            YamlAliasCheck.check(root, limits, nestingLimit);
             raw = constructor.constructRoot(root);
         } catch (DocumentParseException dpe) {
             throw dpe;
@@ -207,7 +283,17 @@ public final class YamlCodec {
         }
 
         int[] budget = new int[]{0};
-        return buildNode(raw, "$", 0, budget);
+        return buildNode(raw, "$", 0, budget, documentLimits);
+    }
+
+    /**
+     * SnakeYAML's nesting cap for a configured Document depth: the reference {@value #YAML_NESTING_DEPTH_LIMIT}
+     * or, for a deeper configured limit, room for the collections between two Document levels (a
+     * sequence and a mapping per level), so the port's own check decides.
+     */
+    private static int nestingLimit(int maxDepth) {
+        long wanted = 2L * maxDepth + 2;
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(YAML_NESTING_DEPTH_LIMIT, wanted));
     }
 
     /**
@@ -234,15 +320,15 @@ public final class YamlCodec {
         return read(text);
     }
 
-    private static Document buildNode(Object val, String path, int depth, int[] budget) {
-        Limits limits = Limits.DEFAULT;
+    private static Document buildNode(Object val, String path, int depth, int[] budget, Limits limits) {
+        // The OML reader's diagnostics for the same Document (E-4a): depth and node count at `$`.
         if (depth > limits.maxDepth()) {
-            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException("$", "document.limit.depth", "$: nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof Map<?, ?> map) {
             budget[0]++;
             if (budget[0] > limits.maxNodeCount()) {
-                throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+                throw new DocumentParseException("$", "document.limit.nodes", "$: too many nodes materialized (over " + limits.maxNodeCount() + ")");
             }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -254,14 +340,16 @@ public final class YamlCodec {
                 if (v instanceof List<?> list) {
                     for (int i = 0; i < list.size(); i++) {
                         Object item = list.get(i);
+                        // E-10: the index appears on every edge of a label that occurs more than once.
+                        String ip = PathUtils.childPath(path, k, i, list.size());
                         if (item instanceof List<?>) {
                             throw new DocumentParseException(kp + "[" + i + "]", "document.unlabeled-element", kp + "[" + i + "]: an array of arrays has no labeled-edge form");
                         }
-                        Document child = buildNode(item, kp + "[" + i + "]", depth + 2, budget);
+                        Document child = buildNode(item, ip, depth + 1, budget, limits);
                         edges.add(new Edge(k, (Target) child));
                     }
                 } else {
-                    Document child = buildNode(v, kp, depth + 1, budget);
+                    Document child = buildNode(v, kp, depth + 1, budget, limits);
                     edges.add(new Edge(k, (Target) child));
                 }
             }
@@ -270,10 +358,13 @@ public final class YamlCodec {
         if (val instanceof List<?>) {
             throw new DocumentParseException(path, "document.unlabeled-element", path + ": a bare array has no labeled-edge form (arrays appear only as a repeated field)");
         }
-        return toScalar(val);
+        return toScalar(val, path, limits);
     }
 
-    private static Value toScalar(Object value) {
+    private static Value toScalar(Object value, String path, Limits limits) {
+        if (value == OverLimitInteger.INSTANCE) {
+            throw IntegerDigits.error(path, limits.maxIntegerDigits());
+        }
         if (value == null) {
             return Value.NULL;
         }
@@ -290,10 +381,9 @@ public final class YamlCodec {
             return new DateTimeScalar(dtv);
         }
         if (value instanceof BigInteger bi) {
-            String s = bi.toString();
-            int digits = s.startsWith("-") ? s.length() - 1 : s.length();
-            if (digits > Limits.DEFAULT.maxIntegerDigits()) {
-                throw new DocumentParseException("$", "document.limit.int-digits", "document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+            // The bound was applied to the literal by the integer constructor; this is the backstop.
+            if (IntegerDigits.exceeds(bi, limits.maxIntegerDigits())) {
+                throw IntegerDigits.error(path, limits.maxIntegerDigits());
             }
             return new IntegerScalar(bi);
         }

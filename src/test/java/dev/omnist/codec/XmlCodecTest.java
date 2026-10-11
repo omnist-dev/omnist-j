@@ -399,7 +399,7 @@ public class XmlCodecTest {
     @DisplayName("read/write: budget guards and buildDoc's unknown-type throw (reflection)")
     void testBudgetGuardsAndUnknownTypeViaReflection() throws Exception {
         java.lang.reflect.Method xmlToNode = XmlCodec.class.getDeclaredMethod(
-            "xmlToNode", org.w3c.dom.Element.class, String.class, String.class, int.class, int[].class, dev.omnist.codec.WriteReport.class);
+            "xmlToNode", org.w3c.dom.Element.class, String.class, String.class, int.class, dev.omnist.document.Limits.class, dev.omnist.codec.WriteReport.class);
         xmlToNode.setAccessible(true);
         javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
         org.w3c.dom.Document domDoc = dbf.newDocumentBuilder().parse(
@@ -407,18 +407,18 @@ public class XmlCodecTest {
         org.w3c.dom.Element el = domDoc.getDocumentElement();
 
         java.lang.reflect.Method buildDoc = XmlCodec.class.getDeclaredMethod(
-            "buildDoc", Object.class, String.class, int.class, int[].class);
+            "buildDoc", Object.class, String.class, int[].class, dev.omnist.document.Limits.class);
         buildDoc.setAccessible(true);
         int[] overBudget2 = new int[]{1_000_001};
         java.lang.reflect.InvocationTargetException writeThrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildDoc.invoke(null, java.util.List.of(new Object[]{"k", "v"}), "$", 0, overBudget2));
+            () -> buildDoc.invoke(null, java.util.List.of(new Object[]{"k", "v"}), "$", overBudget2, dev.omnist.document.Limits.DEFAULT));
         assertTrue(writeThrown.getCause().getMessage().contains("too many nodes materialized"));
 
         int[] freshBudget = new int[]{0};
         java.lang.reflect.InvocationTargetException unknownTypeThrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildDoc.invoke(null, 3.14f, "$", 0, freshBudget));
+            () -> buildDoc.invoke(null, 3.14f, "$", freshBudget, dev.omnist.document.Limits.DEFAULT));
         assertInstanceOf(IllegalArgumentException.class, unknownTypeThrown.getCause());
     }
 
