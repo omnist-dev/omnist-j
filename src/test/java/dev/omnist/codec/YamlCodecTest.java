@@ -78,7 +78,7 @@ public class YamlCodecTest {
         // Date should be written natively as unquoted timestamp
         assertTrue(yaml.contains("date: 2024-01-01"));
         // Time is stringified
-        assertTrue(yaml.contains("time: '12:30'") || yaml.contains("time: \"12:30\"") || yaml.contains("time: 12:30"));
+        assertTrue(yaml.contains("time: '12:30:00'") || yaml.contains("time: \"12:30:00\"") || yaml.contains("time: 12:30:00"));
 
         assertEquals(1, report.adjustments().size());
         assertEquals("format.temporal-stringified", report.adjustments().get(0).code());

@@ -146,21 +146,21 @@ class DocumentModelTest {
     @DisplayName("TimeValue and DateTimeValue format canonical ISO-8601 strings with optional zone offset")
     void testTimeValueAndDateTimeValueFormatting() {
         TimeValue tvLocal = TimeValue.of(LocalTime.of(12, 30, 0));
-        assertEquals("12:30", tvLocal.format());
+        assertEquals("12:30:00", tvLocal.format());
 
         TimeValue tvUtc = TimeValue.of(LocalTime.of(12, 30, 0), ZoneOffset.UTC);
-        assertEquals("12:30Z", tvUtc.format());
+        assertEquals("12:30:00Z", tvUtc.format());
 
         TimeValue tvOffset = TimeValue.of(LocalTime.of(12, 30, 0), ZoneOffset.ofHours(2));
-        assertEquals("12:30+02:00", tvOffset.format());
+        assertEquals("12:30:00+02:00", tvOffset.format());
 
         DateTimeValue dtvLocal = DateTimeValue.of(LocalDateTime.of(2026, 8, 12, 12, 30, 0));
-        assertEquals("2026-08-12T12:30", dtvLocal.format());
+        assertEquals("2026-08-12T12:30:00", dtvLocal.format());
 
         DateTimeValue dtvUtc = DateTimeValue.of(LocalDateTime.of(2026, 8, 12, 12, 30, 0), ZoneOffset.UTC);
-        assertEquals("2026-08-12T12:30Z", dtvUtc.format());
+        assertEquals("2026-08-12T12:30:00Z", dtvUtc.format());
 
         DateTimeValue dtvOffset = DateTimeValue.of(LocalDateTime.of(2026, 8, 12, 12, 30, 0), ZoneOffset.ofHours(2));
-        assertEquals("2026-08-12T12:30+02:00", dtvOffset.format());
+        assertEquals("2026-08-12T12:30:00+02:00", dtvOffset.format());
     }
 }

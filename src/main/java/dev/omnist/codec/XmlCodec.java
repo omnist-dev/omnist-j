@@ -520,14 +520,14 @@ public final class XmlCodec {
             return date.value().toString();
         }
         if (v instanceof TimeScalar time) {
-            return time.value().time().toString();
+            return TimeValue.localText(time.value().time());
         }
         if (v instanceof DateTimeScalar dt) {
             DateTimeValue dtv = dt.value();
             if (dtv.offset() != null) {
-                return java.time.OffsetDateTime.of(dtv.dateTime(), dtv.offset()).toString();
+                return DateTimeValue.localText(dtv.dateTime()) + (java.time.ZoneOffset.UTC.equals(dtv.offset()) ? "Z" : dtv.offset().getId());
             } else {
-                return dtv.dateTime().toString();
+                return DateTimeValue.localText(dtv.dateTime());
             }
         }
         if (v instanceof StringScalar s) {

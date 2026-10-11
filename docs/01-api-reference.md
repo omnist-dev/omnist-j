@@ -81,10 +81,10 @@ Represents a combined date and time with an optional UTC offset (omnist-spec §2
 <!-- test-backed: dev.omnist.DocTest#testTemporalValueFormattingExample -->
 ```java
 TimeValue tv = TimeValue.of(java.time.LocalTime.of(12, 30, 0), java.time.ZoneOffset.UTC);
-assertEquals("12:30Z", tv.format());
+assertEquals("12:30:00Z", tv.format());
 
 DateTimeValue dtv = DateTimeValue.of(java.time.LocalDateTime.of(2024, 1, 1, 12, 30, 0), java.time.ZoneOffset.UTC);
-assertEquals("2024-01-01T12:30Z", dtv.format());
+assertEquals("2024-01-01T12:30:00Z", dtv.format());
 ```
 
 ### `Limits`

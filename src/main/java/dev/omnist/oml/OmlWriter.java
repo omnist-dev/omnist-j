@@ -196,7 +196,7 @@ public class OmlWriter {
                 sb.append(dateVal.value().toString());
             } else if (scalar instanceof Scalar.TimeScalar timeScalar) {
                 TimeValue tv = timeScalar.value();
-                sb.append(tv.time().toString());
+                sb.append(TimeValue.localText(tv.time()));
                 if (tv.offset() != null) {
                     sb.append(offsetText(tv.offset()));
                 }
@@ -205,7 +205,7 @@ public class OmlWriter {
                 // so DateTimeScalar is the only remaining case.
                 Scalar.DateTimeScalar dtScalar = (Scalar.DateTimeScalar) scalar;
                 DateTimeValue dtv = dtScalar.value();
-                sb.append(dtv.dateTime().toString());
+                sb.append(DateTimeValue.localText(dtv.dateTime()));
                 if (dtv.offset() != null) {
                     sb.append(offsetText(dtv.offset()));
                 }
