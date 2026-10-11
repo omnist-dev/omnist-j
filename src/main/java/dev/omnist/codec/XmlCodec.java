@@ -107,7 +107,8 @@ public final class XmlCodec {
      * than {@link Limits#maxInputBytes()} bytes (D-23) and honouring the depth, node-count and
      * integer-digit bounds of {@code limits} (D-9, E-4a): {@code document.limit.depth} and
      * {@code document.limit.nodes} at {@code $}; the digit bound applies to an integer pretyped from
-     * {@code schema}, at the Document path of the leaf.
+     * {@code schema}, at the Document path of the leaf. The read-side drop reports carry the E-10 path
+     * of the element: indexed on every element of a label that repeats in its node, bare otherwise.
      *
      * @param text   the XML text; must not be {@code null}
      * @param schema if non-{@code null}, guides scalar-kind resolution
@@ -270,10 +271,20 @@ public final class XmlCodec {
                 }
             }
 
+            Map<String, Integer> totals = new HashMap<>();
+            for (org.w3c.dom.Element c : childElements) {
+                totals.merge(localName(c), 1, Integer::sum);
+            }
+            Map<String, Integer> seen = new HashMap<>();
             List<Object[]> edges = new ArrayList<>();
             for (org.w3c.dom.Element c : childElements) {
                 String localName = localName(c);
-                Object childNode = xmlToNode(c, path + "." + localName, docPath + "." + localName, depth + 1, limits, rep);
+                // E-10: a label that occurs more than once in a node carries its index on every
+                // edge, the first included, in the paths of the read-side reports too.
+                int index = seen.merge(localName, 1, Integer::sum) - 1;
+                Object childNode = xmlToNode(c, path + "." + localName,
+                        PathUtils.childPath(docPath, localName, index, totals.get(localName)),
+                        depth + 1, limits, rep);
                 edges.add(new Object[]{localName, childNode});
             }
             return edges;
