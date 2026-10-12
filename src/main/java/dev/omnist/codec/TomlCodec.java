@@ -203,6 +203,12 @@ public final class TomlCodec {
         if (token.charAt(0) == '+' || token.charAt(0) == '-') {
             i++;
         }
+        // TOML forbids a leading zero in the integer part (01e999, 0_1e5): not a float literal, so
+        // tomlj reports it as the syntax error it is instead of the D-29 rewrite reading it.
+        if (i + 1 < token.length() && token.charAt(i) == '0'
+                && (token.charAt(i + 1) == '_' || (token.charAt(i + 1) >= '0' && token.charAt(i + 1) <= '9'))) {
+            return false;
+        }
         i = digitRun(token, i);
         if (i > 0 && i < token.length() && token.charAt(i) == '.') {
             i = digitRun(token, i + 1);

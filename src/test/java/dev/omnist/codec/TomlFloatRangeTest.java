@@ -65,4 +65,22 @@ class TomlFloatRangeTest {
         DocumentParseException e = assertThrows(DocumentParseException.class, () -> TomlCodec.read(text));
         assertEquals("parse.codec-syntax", e.getCode());
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @ValueSource(strings = {"a = 01e999\n", "a = 0_1E+999\n", "a = 00.1e-999\n", "a = -01e400\n", "a = +00e999\n", "a = 01.5e999\n"})
+    @DisplayName("a float with a leading zero in its integer part is invalid TOML and stays a syntax error, not an infinity or zero")
+    void leadingZeroFloatsAreSyntaxErrors(String text) {
+        DocumentParseException e = assertThrows(DocumentParseException.class, () -> TomlCodec.read(text));
+        assertEquals("parse.codec-syntax", e.getCode());
+    }
+
+    @Test
+    @DisplayName("valid neighbours of the leading-zero rule still read: 0e999, 0.5e999, -0e999, 1e999")
+    void validZeroNeighboursStillRead() {
+        assertEquals(new NumberScalar(0.0), root(TomlCodec.read("a = 0e999\n")).edges().get(0).target());
+        assertEquals(new NumberScalar(Double.POSITIVE_INFINITY), root(TomlCodec.read("a = 0.5e999\n")).edges().get(0).target());
+        assertEquals(new NumberScalar(-0.0), root(TomlCodec.read("a = -0e999\n")).edges().get(0).target());
+        assertEquals(new NumberScalar(Double.POSITIVE_INFINITY), root(TomlCodec.read("a = 1e999\n")).edges().get(0).target());
+        assertEquals(new NumberScalar(0.0), root(TomlCodec.read("a = 0.0e-999\n")).edges().get(0).target());
+    }
 }
