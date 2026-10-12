@@ -243,3 +243,7 @@ If a change touches a public API surface, a documented number, or an external-st
 **Releasing, once the above is set up**: bump the version first (see the version-string-scatter gotcha above — grep the exact old string repo-wide, don't trust a single-file diff), verify all three gates locally, and merge to `main`. Tagging is automatic from there: `ci.yml`'s `auto-tag` job runs on every push to `main` (never on PRs), reads `pom.xml`'s version with `mvn help:evaluate`, and pushes `v<version>` as a tag if that tag doesn't already exist — which is what actually triggers `release.yml`. There is nothing else to run manually to kick off a release; merging the version bump is the trigger.
 
 Two safety properties this depends on: `auto-tag` only fires after `test-and-coverage` and `conformance` both pass (`needs: [...]`), and pushing the tag doesn't publish anything by itself — `release.yml`'s `publish` job still waits on manual approval in the `central-publish` GitHub Environment (required reviewers configured there) before `mvn deploy -Prelease` actually runs. Watch the `Release` workflow in the Actions tab, approve the `publish` job when it's ready, then do the final manual review/publish click in the Central Portal once that job succeeds.
+
+## Build tooling
+
+Build with the Maven Wrapper (`./mvnw`), which pins Maven 3.9.9: with the runner's newer Maven the Central bundle picks up local-repository metadata files that Central rejects (see `docs/limitations.md`, "Changes in 0.6.1-alpha").

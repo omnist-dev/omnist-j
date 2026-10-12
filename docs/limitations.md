@@ -1,12 +1,20 @@
 # Status and limitations
 
-**`v0.6.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.6.1-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
 interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 
-## Changes in 0.6.0-alpha
+## Changes in 0.6.1-alpha
+
+`0.6.0-alpha` was tagged but never published to Maven Central: its bundle was rejected ("content that does NOT have a
+.pom file"). On the CI runner (Maven 3.10.0) the central-publishing plugin's staging step also wrote
+`maven-metadata-local.xml` and `_remote.repositories` files into the bundle. The build now pins Maven 3.9.9 through
+the Maven Wrapper (`./mvnw`, used by CI, the release workflow and `./run-conformance`), which yields the 30 expected
+entries. `0.6.1-alpha` is the first published release of the code below; there is no other code change.
+
+## Changes in 0.6.0-alpha (never published; first published as 0.6.1-alpha)
 
 Adopts omnist-spec **v0.34.0-beta** (the suite grows from 367 to 522 vectors). New rejections, a new
 code and corrected output make this a minor bump:
@@ -283,7 +291,7 @@ only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema buil
 - **Nesting past the parsers' own limits.** JSON nesting of 1000 or more levels is refused by Jackson before this
   port's depth limit (200) is consulted, and is reported as `parse.codec-syntax` rather than `document.limit.depth`;
   YAML nesting past the larger of 1000 and `2 * maxDepth + 2` collections is refused by SnakeYAML the same way. A JSON
-  number token of more than 10,000 digits is likewise a syntax error (see Changes in 0.6.0-alpha).
+  number token of more than 10,000 digits is likewise a syntax error (see Changes in 0.6.0-alpha below).
 - **Input size (D-23 to D-26).** See [Input size](#input-size-d-23-to-d-26) below. Before `0.5.0-alpha`
   the readers refused input over 2,000,000 characters with codes that are not in the §8.3 taxonomy
   (`document.parse-error`, `parse.input-too-large`, `schema.input-too-large`); that cap is gone, replaced by the
