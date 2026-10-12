@@ -13,6 +13,11 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # the runner's own Maven, and the pinned Maven of the wrapper
+        mvn: ['mvn', './mvnw']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,6 +29,11 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
+
+      - name: Which Maven
+        run: |
+          mvn -v
+          ./mvnw -v
 
       - name: Throwaway GPG key and dummy settings.xml
         run: |
@@ -44,11 +54,12 @@ jobs:
 
       - name: Build the bundle (the release command; upload goes to an unreachable URL)
         continue-on-error: true
-        run: mvn -B clean deploy -Prelease -DskipTests -Dgpg.passphrase= -Dcentral.baseUrl=http://127.0.0.1:9
+        run: ${{ matrix.mvn }} -B clean deploy -Prelease -DskipTests -Dgpg.passphrase= -Dcentral.baseUrl=http://127.0.0.1:9
 
       - name: Show what was staged and bundled
         if: always()
         run: |
+          echo "matrix.mvn = ${{ matrix.mvn }}"
           ls -laR target/central-staging target/central-publishing || true
           unzip -l target/central-publishing/central-bundle.zip || true
           find . -name 'central-bundle*.zip' -print
@@ -57,7 +68,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: central-bundle-diagnose
+          name: central-bundle-diagnose-${{ strategy.job-index }}
           path: |
             target/central-publishing
             target/central-staging
