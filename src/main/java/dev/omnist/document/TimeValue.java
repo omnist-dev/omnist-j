@@ -48,7 +48,7 @@ public record TimeValue(LocalTime time, ZoneOffset offset) {
      */
     public String format() {
         StringBuilder sb = new StringBuilder();
-        sb.append(time.toString());
+        sb.append(localText(time));
         if (offset != null) {
             if (ZoneOffset.UTC.equals(offset)) {
                 sb.append("Z");
@@ -58,6 +58,19 @@ public record TimeValue(LocalTime time, ZoneOffset offset) {
         }
         return sb.toString();
     }
+    /**
+     * The {@code HH:MM:SS[.fractional]} spelling of a local time. Unlike {@link LocalTime#toString()}
+     * the seconds are always written, so {@code 12:00} is {@code 12:00:00} (the OML, JSON, YAML
+     * and XML time forms all carry them).
+     *
+     * @param time the local time; must not be {@code null}
+     * @return the text, never {@code null}
+     */
+    public static String localText(LocalTime time) {
+        String s = time.toString();
+        return s.length() == 5 ? s + ":00" : s;
+    }
+
     /**
      * Parses an ISO-8601 time string into a {@link TimeValue}.
      * Supports un-offset local times (e.g. {@code "12:00:00"}), UTC 'Z' (e.g. {@code "12:00:00Z"}),

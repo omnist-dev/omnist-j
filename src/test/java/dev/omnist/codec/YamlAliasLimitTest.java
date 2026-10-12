@@ -477,7 +477,7 @@ class YamlAliasLimitTest {
         // within what the library's own nesting cap allows to be written, the document model's limit decides
         DocumentParseException shallow = reject(chain(300), new YamlLimits(10_000, 10_000_000L));
         assertEquals("document.limit.depth", shallow.getCode());
-        assertNotEquals("$", shallow.getPath());
+        assertEquals("$", shallow.getPath()); // E-4a: the OML reader's path for the same diagnostic
         // and a chain within the model's limit parses
         assertAccepted(chain(150), new YamlLimits(10_000, 10_000_000L));
         // at the default the ratio refuses a long chain long before depth matters

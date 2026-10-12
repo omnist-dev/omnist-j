@@ -53,7 +53,8 @@ public final class Track2Runner {
     private static final Map<String, Integer> skipReasons = new TreeMap<>();
 
     /**
-     * The {@code declared_max_*} keys this runner can honour by configuring the OML reader.
+     * The {@code declared_max_*} keys this runner can honour by configuring the reader of the vector's format
+     * (every reader takes a {@link dev.omnist.document.Limits}, D-9, E-4a).
      * Every other {@code declared_*} key is skipped, never run against this port's defaults
      * (test-suite/README.md, "Declared-limit keys"; E-20a).
      */
@@ -115,9 +116,6 @@ public final class Track2Runner {
             }
             if (!HANDLED_LIMIT_KEYS.contains(key)) {
                 return "unrecognised limit key " + key + ": not run against this port's default";
-            }
-            if (!"oml".equalsIgnoreCase(format)) {
-                return "no configuration surface for " + key + " on " + format + " (only the OML reader's limits are configurable): skipped per test-suite/README 'Declared-limit keys', never run against the default";
             }
         }
         return null;
@@ -254,7 +252,7 @@ public final class Track2Runner {
                 throw new RuntimeException("Expected parse success, but got exception: " + thrown.getMessage(), thrown);
             }
             Document expectedDoc = decodeJsonDoc(expect.get("document"));
-            if (!actualDoc.equals(expectedDoc) && !isEquivalentDoc(actualDoc, expectedDoc)) {
+            if (!documentsEqual(actualDoc, expectedDoc)) {
                 throw new RuntimeException("Parsed document does not match expected document");
             }
             if (expect.has("diagnostics")) {
@@ -346,7 +344,7 @@ public final class Track2Runner {
             }
             Document actualDoc = OmlReader.read(result.stdout());
             Document expectedDoc = decodeJsonDoc(expect.get("document"));
-            if (!actualDoc.equals(expectedDoc) && !isEquivalentDoc(actualDoc, expectedDoc)) {
+            if (!documentsEqual(actualDoc, expectedDoc)) {
                 throw new RuntimeException("Parsed document (bytes_hex, via CLI) does not match expected document");
             }
             passCount++;
@@ -503,6 +501,7 @@ public final class Track2Runner {
         Document doc = decodeJsonDoc(input.get("document"));
         String format = input.get("format").asText();
         boolean strict = input.has("strict") && input.get("strict").asBoolean();
+        boolean compact = input.has("compact") && input.get("compact").asBoolean();
         boolean expectedOk = expect.get("ok").asBoolean();
         
         WriteReport report = new WriteReport();
@@ -511,7 +510,7 @@ public final class Track2Runner {
         
         try {
             if ("oml".equalsIgnoreCase(format)) {
-                actualText = dev.omnist.oml.OmlWriter.write(doc);
+                actualText = compact ? dev.omnist.oml.OmlWriter.writeCompact(doc) : dev.omnist.oml.OmlWriter.write(doc);
             } else if ("json".equalsIgnoreCase(format)) {
                 actualText = dev.omnist.codec.JsonCodec.write(doc, null, strict, report);
             } else if ("yaml".equalsIgnoreCase(format)) {
@@ -532,11 +531,13 @@ public final class Track2Runner {
                 throw new RuntimeException("Expected write to succeed, but it threw: " + thrown.getMessage(), thrown);
             }
             if (expect.has("text")) {
-                String expectedText = expect.get("text").asText();
-                Document expectedDoc = parseFormat(expectedText, format);
-                Document actualDoc = parseFormat(actualText, format);
-                if (!actualDoc.equals(expectedDoc)) {
-                    throw new RuntimeException("Actual document parsed from written text does not equal expected document");
+                // Byte for byte (8.5.3), never by re-parsing both sides: a re-parse hides a
+                // layout, hex-case or escape difference the vector pins.
+                String expectedText = normalizeWriteText(expect.get("text").asText(), format);
+                String actualNorm = normalizeWriteText(actualText, format);
+                if (!actualNorm.equals(expectedText)) {
+                    throw new RuntimeException("Written text differs from the expected text. Expected: ["
+                            + expectedText + "] Actual: [" + actualNorm + "]");
                 }
             } else if (expect.has("document")) {
                 Document expectedDoc = decodeJsonDoc(expect.get("document"));
@@ -1055,32 +1056,48 @@ public final class Track2Runner {
         return dev.omnist.document.TimeValue.parse(text);
     }
 
-    private static boolean isEquivalentDoc(dev.omnist.document.Document a, dev.omnist.document.Document b) {
-        if (a.equals(b)) return true;
-        if (a instanceof dev.omnist.document.Node na && b instanceof dev.omnist.document.Node nb) {
-            if (na.edges().size() != nb.edges().size()) return false;
-            java.util.Map<String, java.util.List<dev.omnist.document.Target>> mapA = new java.util.HashMap<>();
-            for (dev.omnist.document.Edge e : na.edges()) {
-                mapA.computeIfAbsent(e.label(), k -> new java.util.ArrayList<>()).add(e.target());
-            }
-            java.util.Map<String, java.util.List<dev.omnist.document.Target>> mapB = new java.util.HashMap<>();
-            for (dev.omnist.document.Edge e : nb.edges()) {
-                mapB.computeIfAbsent(e.label(), k -> new java.util.ArrayList<>()).add(e.target());
-            }
-            if (!mapA.keySet().equals(mapB.keySet())) return false;
-            for (String k : mapA.keySet()) {
-                java.util.List<dev.omnist.document.Target> listA = mapA.get(k);
-                java.util.List<dev.omnist.document.Target> listB = mapB.get(k);
-                if (listA.size() != listB.size()) return false;
-                for (int i = 0; i < listA.size(); i++) {
-                    if (!isEquivalentDoc((dev.omnist.document.Document) listA.get(i), (dev.omnist.document.Document) listB.get(i))) {
-                        return false;
+    /**
+     * Parse results are compared exactly, with edge order significant (D-1, E-9): two Documents
+     * that differ only in the order of their edges are different Documents.
+     */
+    static boolean documentsEqual(dev.omnist.document.Document actual, dev.omnist.document.Document expected) {
+        return actual.equals(expected);
+    }
+
+    /**
+     * Prepares a {@code write} vector's text for comparison (spec 8.5.3): the outer whitespace is
+     * trimmed on both sides; XML drops the whitespace strictly between {@code >} and {@code <}
+     * (E-18); JSON drops its insignificant whitespace, the layout being the writer's choice, while
+     * every character inside a string literal (the hex case of an escape included) stays. Every
+     * other format is compared byte for byte.
+     */
+    static String normalizeWriteText(String text, String format) {
+        String t = text.strip();
+        if ("xml".equalsIgnoreCase(format)) {
+            return t.replaceAll(">\\s+<", "><");
+        }
+        if ("json".equalsIgnoreCase(format)) {
+            StringBuilder sb = new StringBuilder(t.length());
+            boolean inString = false;
+            for (int i = 0; i < t.length(); i++) {
+                char c = t.charAt(i);
+                if (inString) {
+                    sb.append(c);
+                    if (c == '\\') {
+                        sb.append(t.charAt(++i));
+                    } else if (c == '"') {
+                        inString = false;
                     }
+                } else if (c == '"') {
+                    inString = true;
+                    sb.append(c);
+                } else if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+                    sb.append(c);
                 }
             }
-            return true;
+            return sb.toString();
         }
-        return false;
+        return t;
     }
 
 }

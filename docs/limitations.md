@@ -1,10 +1,57 @@
 # Status and limitations
 
-**`v0.5.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.6.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
 interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
+
+## Changes in 0.6.0-alpha
+
+Adopts omnist-spec **v0.34.0-beta** (the suite grows from 367 to 522 vectors). New rejections, a new
+code and corrected output make this a minor bump:
+
+- **`Limits` reach every codec** ([omnist-j#127](https://github.com/omnist-dev/omnist-j/issues/127), DIV-29, D-9, E-4a).
+  `JsonCodec`, `YamlCodec`, `TomlCodec` and `XmlCodec` honour the depth, node-count and integer-digit bounds of the
+  `Limits` they are given, with the OML reader's diagnostics: `document.limit.depth` and `document.limit.nodes` at `$`
+  (before: at the path of the node), `document.limit.int-digits` at the Document path of the integer (before: at `$`).
+  An array element is one level below its node, as in OML (before: two). The root element of an XML document is
+  level 1, so a limit now counts the same Document the same way in every format.
+- **Digits are counted by value** (D-28). A TOML or YAML hexadecimal, octal or binary literal, an underscored one,
+  one with leading zeros and a YAML sexagesimal integer are counted by the decimal digits of the number they denote: a
+  3,600-digit hex literal (4,335 digits) is refused, a 4,301-digit binary one (1,295) is accepted. An XML integer leaf
+  pretyped from a schema is counted the same way, at the leaf's path (indexed per E-10 when the element repeats).
+- **A long YAML integer is an integer** (#127). SnakeYAML leaves a plain scalar of more than about 1,000 characters a
+  string even when it is spelled as an integer or a float; that turned a 1,001 to 4,300-digit YAML integer into a
+  `StringScalar` with no diagnostic. It is now an integer (or `document.limit.int-digits`), and a long float a number.
+- **A repeated YAML key is rejected** (C-12): `parse.codec-syntax` at the repeated key. (Before: the edge moved to
+  the last position.) A repeated JSON key keeps its first position and its last value (C-11, unchanged); a repeated
+  TOML key is rejected (unchanged).
+- **`!!omap`, `!!pairs` and `!!set` are refused** (C-13) with the new registered code `format.tag-forbidden` at `$`
+  (before: `!!omap` was read as a sequence, and `!!pairs` and `!!set` threw an uncoded `IllegalArgumentException`).
+  `!!str <<` is an ordinary key and `!!merge <<` a merge key (D-27, unchanged).
+- **TOML `1e999` reads as +Infinity, `-1e999` as -Infinity, and `1e-999` as 0.0** (D-29); tomlj reports both as
+  syntax errors, so the reader rewrites the token before parsing.
+- **TOML edges are read in source order** (D-1). The reader took tomlj's `toMap()`, a `HashMap`, so top-level keys came
+  back in hash order. Found by the order-sensitive Track 2 comparison below. The reader also no longer rewrites a
+  number-shaped key or table name, and a string that starts with the reader's own wrapper for a long integer stays a
+  string.
+- **The JSON writer writes `\u001f` with lowercase hex digits** (C-14); the other writers already did.
+- **A time or date-time is written with its seconds** everywhere: `12:00`, which `LocalTime.toString()` produces for
+  a whole minute, is now `12:00:00` in OML, JSON, YAML and XML (`TimeValue.format()` and `DateTimeValue.format()`
+  changed; `localText` is new on both). Found by the byte-exact `write` comparison.
+- **XML drop reports carry E-10 paths** ([omnist-j#124](https://github.com/omnist-dev/omnist-j/issues/124)):
+  `format.attribute-dropped` and `format.namespace-dropped` for `<r><a x="1"/><a x="2"/></r>` are at `$.r.a[0]` and
+  `$.r.a[1]`; a single element stays bare.
+- **Runners** ([omnist-j#125](https://github.com/omnist-dev/omnist-j/issues/125),
+  [#126](https://github.com/omnist-dev/omnist-j/issues/126), DIV-33): Track 2 compares a parse result with edge
+  order significant and a `write` vector's text byte for byte (after the outer-whitespace trim; XML per E-18; JSON with
+  its insignificant whitespace removed), instead of re-parsing it; it passes `compact` to the OML writer (E-35) and
+  runs every `limits-codecs` vector instead of skipping it; Track 1 compares a lint finding's `code` exactly.
+
+Known caveat: Jackson refuses a JSON number token of more than 10,000 digits (or of more than `maxIntegerDigits` when
+that is larger) itself, as `parse.codec-syntax`; between the limit and that cap the diagnostic is
+`document.limit.int-digits` at the integer's path.
 
 ## Changes in 0.5.0-alpha
 
@@ -22,17 +69,35 @@ Breaking changes for library users (the version is an alpha minor bump for this 
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.33.0-beta**'s pinned suite (commit `64cbb68`), comparing diagnostics as **(path, code) sets**
+**v0.34.0-beta**'s pinned suite (commit `3346b50`), comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 339 | 0 | 28 |
+| 2: JSON vectors | 494 | 0 | 28 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.33.0-beta to v0.34.0-beta (2026-10-11).** The suite grows from 367 to 522 vectors; Track 2 goes from 339 pass /
+0 fail / 28 skip to 494 / 0 / 28, the headline from 368 / 0 / 28 to 523 / 0 / 28. Every vector now runs except the 28
+OSD-OML ones (omnist-j#105): the old runner skipped the 42 vectors that carry a `declared_max_*` key outside OML (the 26
+`limits-codecs` vectors and 16 of `limits-literals`). Measured red to green, in three steps:
+
+| Step | Track 1 | Track 2 | Headline |
+|---|---|---|---|
+| The pin alone, old runner | 29 / 0 / 0 | 434 / 18 / 70 | 463 / 18 / 70 |
+| The runner fixes (byte-exact `write`, ordered parse comparison, `compact`, limits vectors run), no code change | 29 / 0 / 0 | 448 / 46 / 28 | 477 / 46 / 28 |
+| Plus the source fixes | 29 / 0 / 0 | 494 / 0 / 28 | 523 / 0 / 28 |
+
+The 18 failures of the first step were the four default-limit literals (3,600-digit hex and 4,301-digit binary, in TOML
+and in YAML), the 2 TOML overflowing floats, the 6 YAML repeated-key vectors and the 6 YAML `!!omap`, `!!pairs` and
+`!!set` vectors. The runner fixes then added 28 more failures that the old comparison and the skips hid: the 14
+`limits-codecs` one-past-the-limit vectors and the 8 `limits-literals` refusals now run (the 12 at-limit vectors passed
+at once), the 2 lowercase-hex JSON vectors, the 2 OML time and date-time vectors (`12:00` written for `12:00:00`), and
+2 TOML vectors that pin edge order (the reader returned top-level keys in hash order).
 
 **v0.28.0-beta to v0.33.0-beta (2026-10-05).** The suite grows from 338 to 367 vectors; Track 2 goes from 310 pass /
 0 fail / 28 skip to 339 / 0 / 28, the headline from 339 / 0 / 28 to 368 / 0 / 28. Of the 29 new vectors, 19 passed with no
@@ -215,9 +280,10 @@ only pin is `src/test/java/dev/omnist/schema/SchemaV028Test.java`. A schema buil
 - **Codec syntax positions (JSON/YAML/TOML/XML)** keep each codec library's own position
   arithmetic. E-28's code-point column is implemented for OML and OSD text only; the codec
   positions are the open question [omnist-spec#114](https://github.com/omnist-dev/omnist-spec/issues/114).
-- **Nesting past the parsers' own limits.** JSON and YAML nesting of 1000 or more levels is refused
-  by Jackson / SnakeYAML before this port's depth limit (200) is consulted, and is reported as
-  `parse.codec-syntax` rather than `document.limit.depth`.
+- **Nesting past the parsers' own limits.** JSON nesting of 1000 or more levels is refused by Jackson before this
+  port's depth limit (200) is consulted, and is reported as `parse.codec-syntax` rather than `document.limit.depth`;
+  YAML nesting past the larger of 1000 and `2 * maxDepth + 2` collections is refused by SnakeYAML the same way. A JSON
+  number token of more than 10,000 digits is likewise a syntax error (see Changes in 0.6.0-alpha).
 - **Input size (D-23 to D-26).** See [Input size](#input-size-d-23-to-d-26) below. Before `0.5.0-alpha`
   the readers refused input over 2,000,000 characters with codes that are not in the §8.3 taxonomy
   (`document.parse-error`, `parse.input-too-large`, `schema.input-too-large`); that cap is gone, replaced by the
@@ -303,11 +369,11 @@ contains a raw U+FEFF.
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 `CliMain`, which is a thin argument-parsing entry point). Numbers are from
 `target/site/jacoco/jacoco.xml` after a fresh `mvn clean test`, measured three times
-(spec v0.33.0-beta adoption, 2026-10-05): the three runs gave identical figures.
+(spec v0.34.0-beta adoption, 2026-10-11): the three runs gave identical figures.
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.72%** (10 of 3591 missed) | **99.36%** (16 of 2508 missed) |
+| Overall | **99.73%** (10 of 3746 missed) | **99.34%** (18 of 2712 missed) |
 | `dev.omnist.document` | 100.0% | 98.6% |
 | `dev.omnist.schema` | 100.0% | 99.6% |
 | `dev.omnist.algebra` | 100.0% | 99.7% |
@@ -317,6 +383,12 @@ Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 | `dev.omnist.oml` | 99.3% | 99.3% |
 
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
+
+**v0.34.0-beta (2026-10-11):** 1272 tests; 10 of 3746 lines and 18 of 2712 branches missed, three runs identical
+(headroom 6 branches against the 99.1% gate; lines unchanged at 10). The new `IntegerDigits`, the YAML integer
+constructor and resolver, the TOML float and table walk and the XML path code are covered; the two branches added over
+v0.33.0-beta are in the TOML float rewrite and the YAML integer constructor. The per-package table above is from the
+v0.28.0-beta run and was not re-measured.
 
 **v0.33.0-beta (2026-10-05):** 1194 tests; 10 of 3591 lines and 16 of 2508 branches missed, three runs identical
 (headroom 4 lines and 6 branches against the 99.6% / 99.1% gate). The new `InputSize`, `Encodability` and writer paths

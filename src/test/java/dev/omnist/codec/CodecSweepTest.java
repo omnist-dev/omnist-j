@@ -3,6 +3,7 @@ package dev.omnist.codec;
 import dev.omnist.document.Document;
 import dev.omnist.document.DocumentParseException;
 import dev.omnist.document.Edge;
+import dev.omnist.document.Limits;
 import dev.omnist.document.Node;
 import dev.omnist.document.Scalar;
 import org.junit.jupiter.api.Test;
@@ -307,10 +308,10 @@ class CodecSweepTest {
         DocumentParseException located = fail(YamlCodec::read, "a: 1\nb: [1, 2\n");
         assertNotEquals("1:1", located.getPath());
 
-        DocumentParseException overflow = TomlCodec.unexpectedFailure(new StackOverflowError());
+        DocumentParseException overflow = TomlCodec.unexpectedFailure(new StackOverflowError(), Limits.DEFAULT);
         assertEquals("document.limit.depth", overflow.getCode());
         assertEquals("$", overflow.getPath());
-        DocumentParseException other = TomlCodec.unexpectedFailure(new AssertionError("boom"));
+        DocumentParseException other = TomlCodec.unexpectedFailure(new AssertionError("boom"), Limits.DEFAULT);
         assertEquals("parse.codec-syntax", other.getCode());
         assertEquals("1:1", other.getPath());
     }

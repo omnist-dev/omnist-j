@@ -69,17 +69,17 @@ class RunnerHonestyTest {
     void declaredLimitKeysTheRunnerCannotHonourAreSkippedWithATrueReason(@TempDir Path dir) throws Exception {
         String alias = parseVector("alias", "{\"format\":\"json\",\"declared_max_alias_expansion\":3,\"text\":\"{}\"}", "{\"ok\":true,\"document\":{\"edges\":[[\"a\",{\"scalar\":{\"kind\":\"integer\",\"value\":1}}]]}}");
         String unknownKey = parseVector("unknown-key", "{\"format\":\"oml\",\"declared_max_widgets\":3,\"text\":\"a: 1\\n\"}", "{\"ok\":true,\"document\":{\"edges\":[]}}");
+        // D-9, E-4a: the depth, node and digit limits reach every codec, so this one runs (and passes)
         String codecLimit = parseVector("codec-limit", "{\"format\":\"json\",\"declared_max_depth\":3,\"text\":\"{}\"}", "{\"ok\":true,\"document\":{\"edges\":[]}}");
         int[] results = run(dir, alias + "," + unknownKey + "," + codecLimit);
-        assertEquals(0, results[0]);
+        assertEquals(1, results[0]);
         assertEquals(0, results[1]);
-        assertEquals(3, results[2]);
+        assertEquals(2, results[2]);
 
         Map<String, Integer> reasons = Track2Runner.skipReasons();
-        assertEquals(3, reasons.size());
+        assertEquals(2, reasons.size());
         assertTrue(reasons.keySet().stream().anyMatch(r -> r.contains("no configuration surface for declared_max_alias_expansion on json")), reasons.toString());
         assertTrue(reasons.keySet().stream().anyMatch(r -> r.contains("unrecognised limit key declared_max_widgets")), reasons.toString());
-        assertTrue(reasons.keySet().stream().anyMatch(r -> r.contains("no configuration surface for declared_max_depth on json")), reasons.toString());
     }
 
     private static final String BOMB_TEXT = "b: &b {k1: 1, k2: 2, k3: 3}\\nt: {<<: [*b, *b, *b, *b]}\\n";

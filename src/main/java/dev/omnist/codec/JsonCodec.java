@@ -27,15 +27,48 @@ import java.util.*;
  * <p>This class is stateless; all methods are {@code static}.
  */
 public final class JsonCodec {
-    private static final ObjectMapper MAPPER;
-    static {
+    /** Jackson's own cap on the length of one number token, above the reference digit limit. */
+    private static final int NUMBER_LENGTH_CAP = 10_000;
+
+    private static final ObjectMapper MAPPER = mapper(NUMBER_LENGTH_CAP);
+
+    private static ObjectMapper mapper(int maxNumberLength) {
         com.fasterxml.jackson.core.StreamReadConstraints constraints = com.fasterxml.jackson.core.StreamReadConstraints.builder()
-                .maxNumberLength(10_000)
+                .maxNumberLength(maxNumberLength)
                 .build();
         com.fasterxml.jackson.core.JsonFactory factory = com.fasterxml.jackson.core.JsonFactory.builder()
                 .streamReadConstraints(constraints)
                 .build();
-        MAPPER = new ObjectMapper(factory);
+        return new ObjectMapper(factory);
+    }
+
+    /**
+     * C-14: the hex digits of a four-digit unicode escape are lowercase. Jackson writes the control
+     * character U+001F with an uppercase F; this rewrites each such escape with lowercase digits.
+     * It walks the text so an escaped backslash followed by the letters of an escape stays as it
+     * was: a backslash is skipped together with the character it escapes.
+     */
+    static String lowercaseEscapes(String json) {
+        StringBuilder out = new StringBuilder(json.length());
+        int i = 0;
+        while (i < json.length()) {
+            char c = json.charAt(i);
+            if (c == '\\') {
+                // Jackson's output is well-formed: a backslash is always followed by the character
+                // it escapes, and a "u" by exactly four hex digits.
+                char next = json.charAt(i + 1);
+                out.append(c).append(next);
+                i += 2;
+                if (next == 'u') {
+                    out.append(json.substring(i, i + 4).toLowerCase(java.util.Locale.ROOT));
+                    i += 4;
+                }
+            } else {
+                out.append(c);
+                i++;
+            }
+        }
+        return out.toString();
     }
 
     private JsonCodec() {}
@@ -55,8 +88,13 @@ public final class JsonCodec {
 
     /**
      * Parses JSON text into a {@link Document}, refusing input larger than
-     * {@link Limits#maxInputBytes()} bytes (D-23). Only {@code maxInputBytes} is read from
-     * {@code limits}; depth, node count and integer digits stay at the reference defaults.
+     * {@link Limits#maxInputBytes()} bytes (D-23) and honouring the depth, node-count and
+     * integer-digit bounds of {@code limits} (D-9, E-4a) with the diagnostics the OML reader gives:
+     * {@code document.limit.depth} and {@code document.limit.nodes} at {@code $},
+     * {@code document.limit.int-digits} at the Document path of the integer.
+     *
+     * <p>An integer literal of more than 10 000 digits (or of more than {@code maxIntegerDigits}
+     * when that is larger) is refused by the JSON parser itself as {@code parse.codec-syntax}.
      *
      * @param text   the JSON text; must not be {@code null}
      * @param limits the limits; must not be {@code null}
@@ -66,14 +104,15 @@ public final class JsonCodec {
      */
     public static Document readWithLimits(String text, Limits limits) {
         text = CodecInput.prepare(text, "JSON", java.util.Objects.requireNonNull(limits, "limits").maxInputBytes());
+        ObjectMapper mapper = limits.maxIntegerDigits() > NUMBER_LENGTH_CAP ? mapper(limits.maxIntegerDigits()) : MAPPER;
         Object raw;
         try {
-            raw = MAPPER.readValue(text, Object.class);
+            raw = mapper.readValue(text, Object.class);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw syntaxError(e);
         }
         int[] budget = new int[]{0};
-        return buildNode(raw, "$", 0, budget);
+        return buildNode(raw, "$", 0, budget, limits);
     }
 
     /** Maps a Jackson failure to {@code parse.codec-syntax} at Jackson's own line and column. */
@@ -94,15 +133,15 @@ public final class JsonCodec {
         return read(text);
     }
 
-    private static Document buildNode(Object val, String path, int depth, int[] budget) {
-        Limits limits = Limits.DEFAULT;
+    private static Document buildNode(Object val, String path, int depth, int[] budget, Limits limits) {
+        // The OML reader's diagnostics for the same Document (E-4a): depth and node count at `$`.
         if (depth > limits.maxDepth()) {
-            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException("$", "document.limit.depth", "$: nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
         if (val instanceof Map<?, ?> map) {
             budget[0]++;
             if (budget[0] > limits.maxNodeCount()) {
-                throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+                throw new DocumentParseException("$", "document.limit.nodes", "$: too many nodes materialized (over " + limits.maxNodeCount() + ")");
             }
             List<Edge> edges = new ArrayList<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -115,14 +154,16 @@ public final class JsonCodec {
                 if (v instanceof List<?> list) {
                     for (int i = 0; i < list.size(); i++) {
                         Object item = list.get(i);
+                        // E-10: the index appears on every edge of a label that occurs more than once.
+                        String ip = PathUtils.childPath(path, k, i, list.size());
                         if (item instanceof List<?>) {
                             throw new DocumentParseException(kp + "[" + i + "]", "document.unlabeled-element", kp + "[" + i + "]: an array of arrays has no labeled-edge form");
                         }
-                        Document child = buildNode(item, kp + "[" + i + "]", depth + 2, budget);
+                        Document child = buildNode(item, ip, depth + 1, budget, limits);
                         edges.add(new Edge(k, (Target) child));
                     }
                 } else {
-                    Document child = buildNode(v, kp, depth + 1, budget);
+                    Document child = buildNode(v, kp, depth + 1, budget, limits);
                     edges.add(new Edge(k, (Target) child));
                 }
             }
@@ -131,10 +172,10 @@ public final class JsonCodec {
         if (val instanceof List<?>) {
             throw new DocumentParseException(path, "document.unlabeled-element", path + ": a bare array has no labeled-edge form (arrays appear only as a repeated field)");
         }
-        return toScalar(val);
+        return toScalar(val, path, limits);
     }
 
-    private static Value toScalar(Object value) {
+    private static Value toScalar(Object value, String path, Limits limits) {
         if (value == null) {
             return Value.NULL;
         }
@@ -145,17 +186,21 @@ public final class JsonCodec {
             return new BooleanScalar(b);
         }
         if (value instanceof BigInteger bi) {
-            String s = bi.toString();
-            int digits = s.startsWith("-") ? s.length() - 1 : s.length();
-            if (digits > Limits.DEFAULT.maxIntegerDigits()) {
-                throw new DocumentParseException("$", "document.limit.int-digits", "document.limit.int-digits: Integer literal digit count (" + digits + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+            if (IntegerDigits.exceeds(bi, limits.maxIntegerDigits())) {
+                throw IntegerDigits.error(path, limits.maxIntegerDigits());
             }
             return new IntegerScalar(bi);
         }
         if (value instanceof Integer i) {
+            if (IntegerDigits.exceeds(i, limits.maxIntegerDigits())) {
+                throw IntegerDigits.error(path, limits.maxIntegerDigits());
+            }
             return new IntegerScalar(BigInteger.valueOf(i));
         }
         if (value instanceof Long l) {
+            if (IntegerDigits.exceeds(l, limits.maxIntegerDigits())) {
+                throw IntegerDigits.error(path, limits.maxIntegerDigits());
+            }
             return new IntegerScalar(BigInteger.valueOf(l));
         }
         if (value instanceof Double d) {
@@ -230,9 +275,9 @@ public final class JsonCodec {
                 com.fasterxml.jackson.core.util.DefaultIndenter indenter = new com.fasterxml.jackson.core.util.DefaultIndenter(" ".repeat(indent), com.fasterxml.jackson.core.util.DefaultIndenter.SYS_LF);
                 printer.indentObjectsWith(indenter);
                 printer.indentArraysWith(indenter);
-                return MAPPER.writer(printer).writeValueAsString(grouped);
+                return lowercaseEscapes(MAPPER.writer(printer).writeValueAsString(grouped));
             } else {
-                return MAPPER.writeValueAsString(grouped);
+                return lowercaseEscapes(MAPPER.writeValueAsString(grouped));
             }
         } catch (IOException e) {
             // Not observed to be reachable: `grouped` is built entirely from

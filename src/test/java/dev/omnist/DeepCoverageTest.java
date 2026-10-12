@@ -44,12 +44,12 @@ class DeepCoverageTest {
 
         // TimeValue & DateTimeValue
         TimeValue tv = TimeValue.of(LocalTime.of(12, 30, 0));
-        assertEquals("12:30", tv.format());
+        assertEquals("12:30:00", tv.format());
         assertNotNull(tv.toString());
         assertEquals(tv, TimeValue.of(LocalTime.of(12, 30, 0)));
 
         DateTimeValue dtv = DateTimeValue.of(LocalDateTime.of(2024, 1, 1, 12, 30, 0));
-        assertEquals("2024-01-01T12:30", dtv.format());
+        assertEquals("2024-01-01T12:30:00", dtv.format());
         assertNotNull(dtv.toString());
         assertEquals(dtv, DateTimeValue.of(LocalDateTime.of(2024, 1, 1, 12, 30, 0)));
     }

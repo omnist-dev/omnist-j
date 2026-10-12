@@ -48,7 +48,7 @@ public record DateTimeValue(LocalDateTime dateTime, ZoneOffset offset) {
      */
     public String format() {
         StringBuilder sb = new StringBuilder();
-        sb.append(dateTime.toString());
+        sb.append(localText(dateTime));
         if (offset != null) {
             if (ZoneOffset.UTC.equals(offset)) {
                 sb.append("Z");
@@ -57,6 +57,17 @@ public record DateTimeValue(LocalDateTime dateTime, ZoneOffset offset) {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * The {@code YYYY-MM-DDTHH:MM:SS[.fractional]} spelling of a local date-time, the seconds always
+     * written (see {@link TimeValue#localText(java.time.LocalTime)}).
+     *
+     * @param dateTime the local date-time; must not be {@code null}
+     * @return the text, never {@code null}
+     */
+    public static String localText(LocalDateTime dateTime) {
+        return dateTime.toLocalDate() + "T" + TimeValue.localText(dateTime.toLocalTime());
     }
 
     /**

@@ -81,10 +81,10 @@ Represents a combined date and time with an optional UTC offset (omnist-spec §2
 <!-- test-backed: dev.omnist.DocTest#testTemporalValueFormattingExample -->
 ```java
 TimeValue tv = TimeValue.of(java.time.LocalTime.of(12, 30, 0), java.time.ZoneOffset.UTC);
-assertEquals("12:30Z", tv.format());
+assertEquals("12:30:00Z", tv.format());
 
 DateTimeValue dtv = DateTimeValue.of(java.time.LocalDateTime.of(2024, 1, 1, 12, 30, 0), java.time.ZoneOffset.UTC);
-assertEquals("2024-01-01T12:30Z", dtv.format());
+assertEquals("2024-01-01T12:30:00Z", dtv.format());
 ```
 
 ### `Limits`
@@ -92,7 +92,7 @@ assertEquals("2024-01-01T12:30Z", dtv.format());
 
 Guard parameters for parser recursion depth, node count, integer digit limits and input size. Default limits: `maxDepth = 200`, `maxNodeCount = 1_000_000`, `maxIntegerDigits = 4300`, `maxInputBytes = 67_108_864` (64 MiB). The three-argument constructor `new Limits(depth, nodes, digits)` keeps the default input size. The constructor throws `IllegalArgumentException` for a value that is not positive (it never falls back to the default and never reads a bad value as "no limit"), and for a `maxInputBytes` above 1 GiB (`Limits.MAX_INPUT_BYTES_CEILING`). `withMaxInputBytes(n)` returns a copy with another input size.
 
-`maxInputBytes` is omnist-spec D-23: an input of more than that many **bytes** is refused with `document.limit.input-size` at `$` before it is decoded or parsed, and an input of exactly that many is accepted. The bytes are counted before a leading byte-order mark is stripped, so the mark counts as three. It is applied by `OmlReader.read(text, limits)`, `OsdReader.read(text, limits)`, `JsonCodec.readWithLimits`, `TomlCodec.readWithLimits`, `XmlCodec.readWithLimits` and `YamlCodec.readWithLimits(text, yamlLimits, limits)`; the plain `read(text)` of each uses the default. The other three fields apply to `OmlReader`; the codecs keep their reference defaults. The CLI takes `--max-input-bytes N`.
+`maxInputBytes` is omnist-spec D-23: an input of more than that many **bytes** is refused with `document.limit.input-size` at `$` before it is decoded or parsed, and an input of exactly that many is accepted. The bytes are counted before a leading byte-order mark is stripped, so the mark counts as three. It is applied by `OmlReader.read(text, limits)`, `OsdReader.read(text, limits)`, `JsonCodec.readWithLimits`, `TomlCodec.readWithLimits`, `XmlCodec.readWithLimits` and `YamlCodec.readWithLimits(text, yamlLimits, limits)`; the plain `read(text)` of each uses the default. The other three fields apply to every one of those readers (D-9, E-4a): over the depth or node-count limit the diagnostic is `document.limit.depth` or `document.limit.nodes` at `$`, and over the digit limit it is `document.limit.int-digits` at the Document path of the integer, whatever the format. The digit limit counts the decimal digits of the *value* (D-28): a hexadecimal, octal or binary literal, an underscored one and a YAML sexagesimal integer are counted by what they denote, and the sign is not a digit. The CLI takes `--max-input-bytes N`.
 
 <!-- test-backed: dev.omnist.DocTest#testLimitsExample -->
 ```java
@@ -343,13 +343,13 @@ assertNotNull(res.schema());
 
 ### `JsonCodec`
 - `public static Document read(String text)` (input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB)
-- `public static Document readWithLimits(String text, Limits limits)` (the same, with the input size you choose)
-- `public static String write(Document doc)`
+- `public static Document readWithLimits(String text, Limits limits)` (the same, with the depth, node-count, digit and input-size limits you choose)
+- `public static String write(Document doc)`: a control character is escaped with lowercase hex digits (C-14)
 
 ### `YamlCodec`
 - `public static Document read(String text)` (input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB; alias limits at the reference defaults)
 - `public static Document readWithLimits(String text, YamlLimits limits)` (the same, with the alias limits you choose)
-- `public static Document readWithLimits(String text, YamlLimits limits, Limits documentLimits)` (also with the input size you choose)
+- `public static Document readWithLimits(String text, YamlLimits limits, Limits documentLimits)` (also with the depth, node-count, digit and input-size limits you choose). A mapping that repeats a key is `parse.codec-syntax` (C-12); `!!omap`, `!!pairs` and `!!set` are `format.tag-forbidden` at `$` (C-13)
 - `public static String write(Document doc)`
 
 ### `YamlLimits`
@@ -390,10 +390,10 @@ assertEquals(1_000_000L, YamlLimits.DEFAULT.maxExpandedSlots());
 
 ### `TomlCodec`
 - `public static Document read(String text)` (input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB)
-- `public static Document readWithLimits(String text, Limits limits)` (the same, with the input size you choose)
+- `public static Document readWithLimits(String text, Limits limits)` (the same, with the depth, node-count, digit and input-size limits you choose). Edges are read in source order; `1e999` reads as +Infinity (D-29)
 - `public static String write(Document doc)`
 
 ### `XmlCodec`
 - `public static Document read(String text)` (secure XXE/DTD protection, input bounded by `Limits.DEFAULT.maxInputBytes`, 64 MiB)
-- `public static Document readWithLimits(String text, Schema schema, WriteReport report, Limits limits)` (the same, with the input size you choose)
+- `public static Document readWithLimits(String text, Schema schema, WriteReport report, Limits limits)` (the same, with the depth, node-count, digit and input-size limits you choose; the digit limit applies to an integer pretyped from `schema`). The read-side drop reports carry indexed E-10 paths for repeated elements
 - `public static String write(Document doc)`

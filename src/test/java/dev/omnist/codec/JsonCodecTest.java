@@ -169,7 +169,7 @@ public class JsonCodecTest {
     @DisplayName("read: object key not a string (reflection, Jackson never actually produces a non-String JSON object key)")
     void testReadObjectKeyNotStringViaReflection() throws Exception {
         java.lang.reflect.Method buildNode = JsonCodec.class.getDeclaredMethod(
-            "buildNode", Object.class, String.class, int.class, int[].class);
+            "buildNode", Object.class, String.class, int.class, int[].class, dev.omnist.document.Limits.class);
         buildNode.setAccessible(true);
         java.util.Map<Object, Object> badMap = new java.util.LinkedHashMap<>();
         badMap.put(123, "value");
@@ -177,7 +177,7 @@ public class JsonCodecTest {
 
         java.lang.reflect.InvocationTargetException thrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildNode.invoke(null, badMap, "$", 0, budget));
+            () -> buildNode.invoke(null, badMap, "$", 0, budget, dev.omnist.document.Limits.DEFAULT));
         assertInstanceOf(RuntimeException.class, thrown.getCause());
         assertTrue(thrown.getCause().getMessage().contains("is not a string"));
     }
@@ -186,13 +186,13 @@ public class JsonCodecTest {
     @DisplayName("read: budget guard rejects when the node count would exceed 1,000,000 (reflection)")
     void testReadBudgetGuardViaReflection() throws Exception {
         java.lang.reflect.Method buildNode = JsonCodec.class.getDeclaredMethod(
-            "buildNode", Object.class, String.class, int.class, int[].class);
+            "buildNode", Object.class, String.class, int.class, int[].class, dev.omnist.document.Limits.class);
         buildNode.setAccessible(true);
         int[] budget = new int[]{1_000_001};
 
         java.lang.reflect.InvocationTargetException thrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, budget));
+            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, budget, dev.omnist.document.Limits.DEFAULT));
         assertInstanceOf(RuntimeException.class, thrown.getCause());
         assertTrue(thrown.getCause().getMessage().contains("too many nodes materialized"));
     }

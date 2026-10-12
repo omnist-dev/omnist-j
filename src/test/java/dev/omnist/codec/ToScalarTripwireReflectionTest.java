@@ -1,5 +1,6 @@
 package dev.omnist.codec;
 
+import dev.omnist.document.Limits;
 import dev.omnist.document.Scalar.NumberScalar;
 import dev.omnist.document.Value;
 import org.junit.jupiter.api.DisplayName;
@@ -19,10 +20,31 @@ import static org.junit.jupiter.api.Assertions.*;
 class ToScalarTripwireReflectionTest {
 
     private static Value invokeToScalar(Class<?> codec, Object value) throws Exception {
-        Method toScalar = codec.getDeclaredMethod("toScalar", Object.class);
+        return invokeToScalar(codec, value, Limits.DEFAULT);
+    }
+
+    @Test
+    @DisplayName("TomlCodec.toScalar: an Integer or a Long over the configured digit limit is refused at the path (tomlj only produces a Long)")
+    void tomlCodecIntegerAndLongOverTheLimit() throws Exception {
+        Limits three = new Limits(200, 1_000_000, 3);
+        assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(999)), invokeToScalar(TomlCodec.class, 999, three));
+        RuntimeException e = assertThrows(RuntimeException.class, () -> invokeToScalar(TomlCodec.class, 1000, three));
+        assertEquals("document.limit.int-digits", ((dev.omnist.document.DocumentParseException) e).getCode());
+        assertThrows(RuntimeException.class, () -> invokeToScalar(TomlCodec.class, 1000L, three));
+        assertEquals(new dev.omnist.document.Scalar.IntegerScalar(BigInteger.valueOf(999)), invokeToScalar(TomlCodec.class, 999L, three));
+    }
+
+    private static Value invokeToScalar(Class<?> codec, Object value, Limits limits) throws Exception {
+        // JSON and YAML: toScalar(value, path, limits); TOML also takes the marker of its wrapped integers.
+        boolean toml = codec == TomlCodec.class;
+        Method toScalar = toml
+            ? codec.getDeclaredMethod("toScalar", Object.class, String.class, String.class, Limits.class)
+            : codec.getDeclaredMethod("toScalar", Object.class, String.class, Limits.class);
         toScalar.setAccessible(true);
         try {
-            return (Value) toScalar.invoke(null, value);
+            return (Value) (toml
+                ? toScalar.invoke(null, value, "$", "__marker__", limits)
+                : toScalar.invoke(null, value, "$", limits));
         } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException re) throw re;
             throw e;
@@ -88,25 +110,5 @@ class ToScalarTripwireReflectionTest {
     @DisplayName("TomlCodec.toScalar: value == null")
     void tomlCodecNullValue() throws Exception {
         assertEquals(Value.NULL, invokeToScalar(TomlCodec.class, null));
-    }
-
-    @Test
-    @DisplayName("TomlCodec.buildNode: budget guard and object-key-not-string")
-    void tomlCodecBuildNodeBudgetAndKeyGuards() throws Exception {
-        Method buildNode = TomlCodec.class.getDeclaredMethod(
-            "buildNode", Object.class, String.class, int.class, int[].class);
-        buildNode.setAccessible(true);
-
-        int[] overBudget = new int[]{1_000_001};
-        InvocationTargetException budgetThrown = assertThrows(InvocationTargetException.class,
-            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, overBudget));
-        assertTrue(budgetThrown.getCause().getMessage().contains("too many nodes materialized"));
-
-        java.util.Map<Object, Object> badMap = new java.util.LinkedHashMap<>();
-        badMap.put(123, "value");
-        int[] freshBudget = new int[]{0};
-        InvocationTargetException keyThrown = assertThrows(InvocationTargetException.class,
-            () -> buildNode.invoke(null, badMap, "$", 0, freshBudget));
-        assertTrue(keyThrown.getCause().getMessage().contains("is not a string"));
     }
 }

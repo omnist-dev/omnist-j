@@ -78,7 +78,7 @@ public class YamlCodecTest {
         // Date should be written natively as unquoted timestamp
         assertTrue(yaml.contains("date: 2024-01-01"));
         // Time is stringified
-        assertTrue(yaml.contains("time: '12:30'") || yaml.contains("time: \"12:30\"") || yaml.contains("time: 12:30"));
+        assertTrue(yaml.contains("time: '12:30:00'") || yaml.contains("time: \"12:30:00\"") || yaml.contains("time: 12:30:00"));
 
         assertEquals(1, report.adjustments().size());
         assertEquals("format.temporal-stringified", report.adjustments().get(0).code());
@@ -223,19 +223,19 @@ public class YamlCodecTest {
     @DisplayName("read: budget and depth guards (reflection)")
     void testReadBudgetAndDepthGuardsViaReflection() throws Exception {
         java.lang.reflect.Method buildNode = YamlCodec.class.getDeclaredMethod(
-            "buildNode", Object.class, String.class, int.class, int[].class);
+            "buildNode", Object.class, String.class, int.class, int[].class, dev.omnist.document.Limits.class);
         buildNode.setAccessible(true);
 
         int[] overBudget = new int[]{1_000_001};
         java.lang.reflect.InvocationTargetException budgetThrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, overBudget));
+            () -> buildNode.invoke(null, java.util.Map.of("k", "v"), "$", 0, overBudget, dev.omnist.document.Limits.DEFAULT));
         assertTrue(budgetThrown.getCause().getMessage().contains("too many nodes materialized"));
 
         int[] freshBudget = new int[]{0};
         java.lang.reflect.InvocationTargetException depthThrown = assertThrows(
             java.lang.reflect.InvocationTargetException.class,
-            () -> buildNode.invoke(null, "any value", "$", 201, freshBudget));
+            () -> buildNode.invoke(null, "any value", "$", 201, freshBudget, dev.omnist.document.Limits.DEFAULT));
         assertTrue(depthThrown.getCause().getMessage().contains("nesting exceeds the maximum depth"));
     }
 

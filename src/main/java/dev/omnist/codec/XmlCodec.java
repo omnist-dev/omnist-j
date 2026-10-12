@@ -104,8 +104,11 @@ public final class XmlCodec {
 
     /**
      * Parses XML text as {@link #read(String, Schema, WriteReport)} does, refusing input larger
-     * than {@link Limits#maxInputBytes()} bytes (D-23). Only {@code maxInputBytes} is read from
-     * {@code limits}; depth, node count and integer digits stay at the reference defaults.
+     * than {@link Limits#maxInputBytes()} bytes (D-23) and honouring the depth, node-count and
+     * integer-digit bounds of {@code limits} (D-9, E-4a): {@code document.limit.depth} and
+     * {@code document.limit.nodes} at {@code $}; the digit bound applies to an integer pretyped from
+     * {@code schema}, at the Document path of the leaf. The read-side drop reports carry the E-10 path
+     * of the element: indexed on every element of a label that repeats in its node, bare otherwise.
      *
      * @param text   the XML text; must not be {@code null}
      * @param schema if non-{@code null}, guides scalar-kind resolution
@@ -159,7 +162,8 @@ public final class XmlCodec {
         int[] budget = new int[]{0};
         WriteReport rep = new WriteReport();
         String rootLabel = localName(rootElem);
-        Object rootContent = xmlToNode(rootElem, "$", "$." + rootLabel, 0, budget, rep);
+        // The root element is the target of the Document root's one edge: Document depth 1.
+        Object rootContent = xmlToNode(rootElem, "$", "$." + rootLabel, 1, limits, rep);
         if (report != null) {
             report.addAll(rep.adjustments());
         }
@@ -172,13 +176,13 @@ public final class XmlCodec {
                 // itself (the root element's own child edges) -- not to a
                 // [rootLabel, rootContent] wrapper, whose single "label" (the
                 // XML tag name) never matches any field of the root record.
-                rootContent = xmlPretype(rootContent, schema, rootType);
+                rootContent = xmlPretype(rootContent, schema, rootType, "$." + rootLabel, limits);
             }
         }
 
         List<Object[]> rawList = new ArrayList<>();
         rawList.add(new Object[]{rootLabel, rootContent});
-        return buildDoc(rawList, "$", 0, budget);
+        return buildDoc(rawList, "$", budget, limits);
     }
 
     /**
@@ -211,10 +215,10 @@ public final class XmlCodec {
         return rootElem;
     }
 
-    private static Object xmlToNode(org.w3c.dom.Element elem, String path, String docPath, int depth, int[] budget, WriteReport rep) {
-        Limits limits = Limits.DEFAULT;
+    private static Object xmlToNode(org.w3c.dom.Element elem, String path, String docPath, int depth, Limits limits, WriteReport rep) {
+        // The OML reader's diagnostic for the same Document (E-4a): depth at `$`.
         if (depth > limits.maxDepth()) {
-            throw new DocumentParseException(path, "document.limit.depth", path + ": nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
+            throw new DocumentParseException("$", "document.limit.depth", "$: nesting exceeds the maximum depth (" + limits.maxDepth() + ")");
         }
 
         int prefixColon = elem.getTagName().indexOf(':');
@@ -267,10 +271,20 @@ public final class XmlCodec {
                 }
             }
 
+            Map<String, Integer> totals = new HashMap<>();
+            for (org.w3c.dom.Element c : childElements) {
+                totals.merge(localName(c), 1, Integer::sum);
+            }
+            Map<String, Integer> seen = new HashMap<>();
             List<Object[]> edges = new ArrayList<>();
             for (org.w3c.dom.Element c : childElements) {
                 String localName = localName(c);
-                Object childNode = xmlToNode(c, path + "." + localName, docPath + "." + localName, depth + 1, budget, rep);
+                // E-10: a label that occurs more than once in a node carries its index on every
+                // edge, the first included, in the paths of the read-side reports too.
+                int index = seen.merge(localName, 1, Integer::sum) - 1;
+                Object childNode = xmlToNode(c, path + "." + localName,
+                        PathUtils.childPath(docPath, localName, index, totals.get(localName)),
+                        depth + 1, limits, rep);
                 edges.add(new Object[]{localName, childNode});
             }
             return edges;
@@ -298,7 +312,7 @@ public final class XmlCodec {
         return name;
     }
 
-    private static Object xmlPretype(Object node, Schema schema, Object typeResolved) {
+    private static Object xmlPretype(Object node, Schema schema, Object typeResolved, String path, Limits limits) {
         if (typeResolved instanceof Type.Any) {
             return node;
         }
@@ -309,11 +323,13 @@ public final class XmlCodec {
                     if ("false".equals(s)) return Boolean.FALSE;
                 } else if (scalar.kind() == ScalarKind.INTEGER) {
                     if (XML_INT_RE.matcher(s).matches()) {
-                        String clean = s.startsWith("-") ? s.substring(1) : s;
-                        if (clean.length() > Limits.DEFAULT.maxIntegerDigits()) {
-                            throw new DocumentParseException("$", "document.limit.int-digits", "document.limit.int-digits: Integer literal digit count (" + clean.length() + ") exceeds maximum limit of " + Limits.DEFAULT.maxIntegerDigits());
+                        // E-4a, D-28: the same limit and diagnostic as every other route, at the
+                        // Document path of the leaf; checked on the text, before any conversion.
+                        BigInteger magnitude = IntegerDigits.parse(s.startsWith("-") ? s.substring(1) : s, 10, limits.maxIntegerDigits());
+                        if (magnitude == null) {
+                            throw IntegerDigits.error(path, limits.maxIntegerDigits());
                         }
-                        return new BigInteger(s);
+                        return s.startsWith("-") ? magnitude.negate() : magnitude;
                     }
                 } else if (scalar.kind() == ScalarKind.NUMBER) {
                     if (XML_NUM_RE.matcher(s).matches()) {
@@ -326,14 +342,21 @@ public final class XmlCodec {
         if (typeResolved instanceof Record record) {
             if (node instanceof List<?> list) {
                 List<Object[]> out = new ArrayList<>();
+                Map<String, Integer> totals = new HashMap<>();
+                for (Object item : list) {
+                    totals.merge((String) ((Object[]) item)[0], 1, Integer::sum);
+                }
+                Map<String, Integer> seen = new HashMap<>();
                 for (Object item : list) {
                     Object[] edge = (Object[]) item;
                     String label = (String) edge[0];
                     Object child = edge[1];
                     Field field = record.field(label);
+                    int index = seen.merge(label, 1, Integer::sum) - 1;
                     if (field != null) {
                         Object nextType = resolveType(schema, field.type());
-                        out.add(new Object[]{label, xmlPretype(child, schema, nextType)});
+                        out.add(new Object[]{label, xmlPretype(child, schema, nextType,
+                                PathUtils.childPath(path, label, index, totals.get(label)), limits)});
                     } else {
                         out.add(edge);
                     }
@@ -351,16 +374,15 @@ public final class XmlCodec {
         return type;
     }
 
-    private static Document buildDoc(Object val, String path, int depth, int[] budget) {
-        Limits limits = Limits.DEFAULT;
+    private static Document buildDoc(Object val, String path, int[] budget, Limits limits) {
         // No depth guard here: read() only reaches buildDoc after xmlToNode has
         // already walked the DOM tree that this List/Object[] structure mirrors
         // 1:1 (one xmlToNode level per buildDoc level) and thrown if any depth
-        // exceeded 200, so that bound is already established.
+        // exceeded the limit, so that bound is already established.
         if (val instanceof List<?> list) {
             budget[0]++;
             if (budget[0] > limits.maxNodeCount()) {
-                throw new DocumentParseException(path, "document.limit.nodes", path + ": too many nodes materialized (over " + limits.maxNodeCount() + ")");
+                throw new DocumentParseException("$", "document.limit.nodes", "$: too many nodes materialized (over " + limits.maxNodeCount() + ")");
             }
             List<Edge> edges = new ArrayList<>();
             for (Object item : list) {
@@ -368,7 +390,7 @@ public final class XmlCodec {
                 String label = (String) edge[0];
                 Object childVal = edge[1];
                 String nextPath = path.equals("$") ? "$." + label : path + "." + label;
-                Document child = buildDoc(childVal, nextPath, depth + 1, budget);
+                Document child = buildDoc(childVal, nextPath, budget, limits);
                 edges.add(new Edge(label, (Target) child));
             }
             return new Node(edges);
@@ -520,14 +542,14 @@ public final class XmlCodec {
             return date.value().toString();
         }
         if (v instanceof TimeScalar time) {
-            return time.value().time().toString();
+            return TimeValue.localText(time.value().time());
         }
         if (v instanceof DateTimeScalar dt) {
             DateTimeValue dtv = dt.value();
             if (dtv.offset() != null) {
-                return java.time.OffsetDateTime.of(dtv.dateTime(), dtv.offset()).toString();
+                return DateTimeValue.localText(dtv.dateTime()) + (java.time.ZoneOffset.UTC.equals(dtv.offset()) ? "Z" : dtv.offset().getId());
             } else {
-                return dtv.dateTime().toString();
+                return DateTimeValue.localText(dtv.dateTime());
             }
         }
         if (v instanceof StringScalar s) {
