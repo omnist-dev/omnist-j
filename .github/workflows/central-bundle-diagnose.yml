@@ -1,0 +1,64 @@
+name: Central bundle diagnose
+
+# Builds the Central bundle exactly as release.yml does, but signs with a throwaway key, uses a
+# dummy `central` login and points the plugin at an unreachable URL, so nothing is sent to
+# Central and no repository secret is used. It then lists and uploads the bundle for inspection.
+# Run by hand only.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Throwaway GPG key and dummy settings.xml
+        run: |
+          gpg --batch --passphrase '' --quick-gen-key throwaway@example.invalid rsa2048 sign never
+          gpg --list-secret-keys
+          mkdir -p "$HOME/.m2"
+          cat > "$HOME/.m2/settings.xml" <<'XML'
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>dummy</username>
+                <password>dummy</password>
+              </server>
+            </servers>
+          </settings>
+          XML
+
+      - name: Build the bundle (the release command; upload goes to an unreachable URL)
+        continue-on-error: true
+        run: mvn -B clean deploy -Prelease -DskipTests -Dgpg.passphrase= -Dcentral.baseUrl=http://127.0.0.1:9
+
+      - name: Show what was staged and bundled
+        if: always()
+        run: |
+          ls -laR target/central-staging target/central-publishing || true
+          unzip -l target/central-publishing/central-bundle.zip || true
+          find . -name 'central-bundle*.zip' -print
+
+      - name: Upload the bundle and the staging directory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-bundle-diagnose
+          path: |
+            target/central-publishing
+            target/central-staging
+          if-no-files-found: warn
