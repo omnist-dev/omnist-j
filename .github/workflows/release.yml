@@ -73,3 +73,13 @@ jobs:
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: mvn clean deploy -Prelease
+
+      - name: Keep the bundle of a failed publish for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-bundle
+          path: |
+            target/central-publishing
+            target/central-staging
+          if-no-files-found: warn
