@@ -1,5 +1,6 @@
 package dev.omnist.oml;
 
+import dev.omnist.codec.WriteReport;
 import dev.omnist.document.*;
 
 import java.time.ZoneOffset;
@@ -25,7 +26,22 @@ public class OmlWriter {
      *         an edge label has no UTF-8 encoding (a lone surrogate)
      */
     public static String write(Document doc) {
-        return writeChecked(doc, "\n");
+        return writeChecked(doc, "\n", null);
+    }
+
+    /**
+     * Like {@link #write(Document)}, and records in {@code report} every value the OML grammar cannot
+     * hold exactly: a time or datetime whose fraction needs more than six digits (the grammar is
+     * {@code 1*6DIGIT}) is written as a quoted string holding every digit, with a
+     * {@code format.temporal-stringified} adjustment (E-37: a value is never altered).
+     *
+     * @param doc    the document to serialize; must not be {@code null}
+     * @param report receives the adjustments; may be {@code null}
+     * @return the canonical OML text; never {@code null}
+     * @throws dev.omnist.codec.WriteException with {@code write.unsupported-value} (C-9) as {@link #write(Document)}
+     */
+    public static String write(Document doc, WriteReport report) {
+        return writeChecked(doc, "\n", report);
     }
 
     /**
@@ -39,17 +55,30 @@ public class OmlWriter {
      *         an edge label has no UTF-8 encoding (a lone surrogate)
      */
     public static String writeCompact(Document doc) {
-        return writeChecked(doc, "; ");
+        return writeChecked(doc, "; ", null);
+    }
+
+    /**
+     * Like {@link #writeCompact(Document)}, recording the temporal adjustments in {@code report} as
+     * {@link #write(Document, WriteReport)} does.
+     *
+     * @param doc    the document to serialize; must not be {@code null}
+     * @param report receives the adjustments; may be {@code null}
+     * @return the compact OML text; never {@code null}
+     * @throws dev.omnist.codec.WriteException with {@code write.unsupported-value} (C-9) as {@link #write(Document)}
+     */
+    public static String writeCompact(Document doc, WriteReport report) {
+        return writeChecked(doc, "; ", report);
     }
 
     /**
      * Writes {@code doc}, enforcing C-9 inside the one pass that writes the strings: a string with no
      * UTF-8 encoding stops the write, and only then is the document walked again to find its path.
      */
-    private static String writeChecked(Document doc, String edgeSeparator) {
+    private static String writeChecked(Document doc, String edgeSeparator, WriteReport report) {
         StringBuilder sb = new StringBuilder();
         try {
-            writeValue(sb, doc, 0, edgeSeparator);
+            writeValue(sb, doc, 0, edgeSeparator, report);
         } catch (dev.omnist.codec.Encodability.LoneSurrogate e) {
             throw dev.omnist.codec.Encodability.refusal(doc);
         }
@@ -57,18 +86,20 @@ public class OmlWriter {
     }
 
 
-    private static void writeValue(StringBuilder sb, Document doc, int indentLevel, String edgeSeparator) {
+    private static void writeValue(StringBuilder sb, Document doc, int indentLevel, String edgeSeparator, WriteReport report) {
         // Exhaustive switch over Document's sealed permits (Node, Value) -- the
         // compiler enforces completeness, so no unreachable default branch exists.
         switch (doc) {
-            case Node node -> writeNode(sb, node, indentLevel, edgeSeparator);
-            case Value val -> writeScalarOrNull(sb, val);
+            case Node node -> writeNode(sb, node, indentLevel, edgeSeparator, report, "$");
+            case Value val -> writeScalarOrNull(sb, val, report, "$");
         }
     }
 
-    private static void writeNode(StringBuilder sb, Node node, int indentLevel, String edgeSeparator) {
+    private static void writeNode(StringBuilder sb, Node node, int indentLevel, String edgeSeparator, WriteReport report, String path) {
         boolean first = true;
+        EdgePaths paths = new EdgePaths(node, path, report);
         for (Edge edge : node.edges()) {
+            String childPath = paths.next(edge.label());
             if (!first) {
                 sb.append(edgeSeparator);
             }
@@ -83,12 +114,12 @@ public class OmlWriter {
                 } else {
                     if ("\n".equals(edgeSeparator)) {
                         sb.append("\n");
-                        writeNodeIndented(sb, childNode, indentLevel + 1, edgeSeparator);
+                        writeNodeIndented(sb, childNode, indentLevel + 1, edgeSeparator, report, childPath);
                         sb.append("\n");
                         appendIndent(sb, indentLevel);
                     } else {
                         sb.append(" ");
-                        writeNode(sb, childNode, indentLevel + 1, edgeSeparator);
+                        writeNode(sb, childNode, indentLevel + 1, edgeSeparator, report, childPath);
                         sb.append(" ");
                     }
                     sb.append("}");
@@ -96,15 +127,17 @@ public class OmlWriter {
             } else {
                 // Target is sealed to {Node, Value}; Node is handled above, so
                 // target is exhaustively a Value here.
-                writeScalarOrNull(sb, (Value) target);
+                writeScalarOrNull(sb, (Value) target, report, childPath);
             }
             first = false;
         }
     }
 
-    private static void writeNodeIndented(StringBuilder sb, Node node, int indentLevel, String edgeSeparator) {
+    private static void writeNodeIndented(StringBuilder sb, Node node, int indentLevel, String edgeSeparator, WriteReport report, String path) {
         boolean first = true;
+        EdgePaths paths = new EdgePaths(node, path, report);
         for (Edge edge : node.edges()) {
+            String childPath = paths.next(edge.label());
             if (!first) {
                 sb.append("\n");
             }
@@ -119,7 +152,7 @@ public class OmlWriter {
                     sb.append("}");
                 } else {
                     sb.append("\n");
-                    writeNodeIndented(sb, childNode, indentLevel + 1, edgeSeparator);
+                    writeNodeIndented(sb, childNode, indentLevel + 1, edgeSeparator, report, childPath);
                     sb.append("\n");
                     appendIndent(sb, indentLevel);
                     sb.append("}");
@@ -127,7 +160,7 @@ public class OmlWriter {
             } else {
                 // Target is sealed to {Node, Value}; Node is handled above, so
                 // target is exhaustively a Value here.
-                writeScalarOrNull(sb, (Value) target);
+                writeScalarOrNull(sb, (Value) target, report, childPath);
             }
             first = false;
         }
@@ -163,7 +196,7 @@ public class OmlWriter {
         };
     }
 
-    private static void writeScalarOrNull(StringBuilder sb, Value value) {
+    private static void writeScalarOrNull(StringBuilder sb, Value value, WriteReport report, String path) {
         // value is never Java null (every caller passes a Value obtained from an
         // `instanceof Value val` pattern match). Value is sealed to {Scalar,
         // NullValue}, so this switch is exhaustive -- no reachable fallback exists.
@@ -196,20 +229,55 @@ public class OmlWriter {
                 sb.append(dateVal.value().toString());
             } else if (scalar instanceof Scalar.TimeScalar timeScalar) {
                 TimeValue tv = timeScalar.value();
-                sb.append(TimeValue.localText(tv.time()));
-                if (tv.offset() != null) {
-                    sb.append(offsetText(tv.offset()));
-                }
+                String text = TimeValue.localText(tv.time()) + (tv.offset() != null ? offsetText(tv.offset()) : "");
+                writeTemporal(sb, tv.time().getNano(), text, report, path);
             } else {
                 // Scalar is sealed to 7 variants; the other 6 are handled above,
                 // so DateTimeScalar is the only remaining case.
                 Scalar.DateTimeScalar dtScalar = (Scalar.DateTimeScalar) scalar;
                 DateTimeValue dtv = dtScalar.value();
-                sb.append(DateTimeValue.localText(dtv.dateTime()));
-                if (dtv.offset() != null) {
-                    sb.append(offsetText(dtv.offset()));
-                }
+                String text = DateTimeValue.localText(dtv.dateTime())
+                        + (dtv.offset() != null ? offsetText(dtv.offset()) : "");
+                writeTemporal(sb, dtv.dateTime().getNano(), text, report, path);
             }
+        }
+    }
+
+    /**
+     * Writes a time or datetime. The OML fraction is {@code 1*6DIGIT}; a value whose nanosecond part is
+     * not a whole number of microseconds has no exact literal, so it is written as a quoted string holding
+     * every digit (E-37: never alter a value) and reported as {@code format.temporal-stringified}.
+     */
+    private static void writeTemporal(StringBuilder sb, int nano, String text, WriteReport report, String path) {
+        if (nano % 1000 == 0) {
+            sb.append(text);
+            return;
+        }
+        if (report != null) {
+            report.add(path, "format.temporal-stringified",
+                    "temporal value with a fraction of more than six digits written as a string (OML allows at most six)",
+                    "warning");
+        }
+        sb.append('"').append(text).append('"');
+    }
+
+    /** Tracks the path of each edge of one node, only when a report wants paths. */
+    private static final class EdgePaths {
+        private final String parent;
+        private final java.util.Map<String, Integer> totals;
+        private final java.util.Map<String, Integer> seen = new java.util.HashMap<>();
+
+        EdgePaths(Node node, String parent, WriteReport report) {
+            this.parent = parent;
+            this.totals = report == null ? null : PathUtils.countLabels(node);
+        }
+
+        String next(String label) {
+            if (totals == null) {
+                return null;
+            }
+            int i = seen.merge(label, 1, Integer::sum) - 1;
+            return PathUtils.childPath(parent, label, i, totals.get(label));
         }
     }
 

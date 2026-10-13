@@ -233,14 +233,17 @@ public final class Cli {
     /**
      * {@code omnist format <input> [--from FORMAT] [--to FORMAT] [--compact] [-o OUTPUT]}:
      * reads a document in one format and re-emits it in another with no validation.
+     * With {@code --schema} the schema types XML input (E-4a) exactly as {@code validate} and {@code convert} do.
      */
     private static int runFormat(List<String> positionals, Options opts, PrintStream out, PrintStream err, InputStream in) throws Exception {
         if (positionals.size() < 2) {
             err.println("Missing format input file");
             return 2;
         }
+        // E-4a: like validate and convert, format pretypes XML with the schema's integer typing.
+        Schema schema = opts.schemaPath() == null ? null : readSchema(opts.schemaPath(), in, opts);
         String content = readInput(positionals.get(1), in, opts);
-        Document doc = readDocument(opts.fromFormat(), content, null, opts);
+        Document doc = readDocument(opts.fromFormat(), content, schema, opts);
         String formatted = writeDocument(opts.toFormat(), doc, opts.compact());
         writeOutput(opts.outputPath(), formatted, out);
         return 0;
