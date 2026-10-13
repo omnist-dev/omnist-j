@@ -1,10 +1,36 @@
 # Status and limitations
 
-**`v0.7.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.7.1-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
 interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
+
+## Changes in 0.7.1-alpha
+
+A patch release: two bugs from omnist-j#133 and a regression test for hostile XML. No spec change (still v0.35.0-beta).
+
+- **The OML writer no longer emits a fraction its own grammar cannot read.** The OML fraction is `1*6DIGIT`; a time or
+  date-time with 7 to 9 fraction digits was written with all of them and failed to read back. A value that is exact in
+  six digits is written as before; any other is written as a quoted string holding every digit (the value is never
+  altered, E-37) and reported `format.temporal-stringified`. The report is available through the new
+  `OmlWriter.write(Document, WriteReport)` and `OmlWriter.writeCompact(Document, WriteReport)`; the one-argument
+  methods are unchanged. These overloads are library API: the CLI and the conformance runner still call the report-less
+  methods, as for every other codec. **Migration:** OML text produced for a time or date-time with a fraction of more than six
+  digits changes from an unreadable literal to a string.
+- **`omnist format --schema` now types XML input** (E-4a), exactly as `validate` and `convert` do; before, the schema
+  was accepted and ignored, so integers read as strings. For non-XML input the schema is still read and must be valid,
+  and is otherwise ignored.
+  **Migration:** `format --from xml --schema S` output now carries the schema's integers, numbers and booleans. For
+  non-XML input a missing or invalid schema file now exits 2 with an error (v0.7.0 ignored the schema and exited 0), and
+  `--schema -` when the input is also stdin does the same, as in `validate` and `convert`.
+- **TOML read time is tomlj's.** Reading 40,000 keys takes about 1.2 s warm (about 4 s on a cold JVM): linear, about
+  30 microseconds per key warm, and measured inside `org.tomlj.Toml.parse` alone (our mapping adds a few percent), so
+  there is no cheap win in this port and nothing was changed.
+- **Cross-port checks, all clean for this port.** Readers keep offset times and date-times and 1 to 9 fraction digits
+  (TOML, YAML, JSON, XML read them unaltered); every writer except OML already kept every digit; a 100,000-deep XML
+  document gives `document.limit.depth` in under 0.3 s; an attribute of 1 to 8 MB reads in about 0.15 s; 100,000-deep
+  JSON, YAML, TOML and OML give a parse error. New tests: `BugWave071Test`, `XmlHostile071Test`.
 
 ## Changes in 0.7.0-alpha
 

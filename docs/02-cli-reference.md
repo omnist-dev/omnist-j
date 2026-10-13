@@ -9,7 +9,7 @@
 The CLI executable fat jar can be invoked via:
 
 ```bash
-java -jar target/omnist-j-0.7.0-alpha-cli.jar <command> [subcommand] [options]
+java -jar target/omnist-j-0.7.1-alpha-cli.jar <command> [subcommand] [options]
 ```
 
 Or via `./run-conformance` / shell wrapper `omnist`:
@@ -31,7 +31,7 @@ omnist <command> [subcommand] [options]
 ## Commands & Subcommands
 
 ### 1. `format`
-Formats input text between OML, JSON, YAML, TOML, or XML.
+Formats input text between OML, JSON, YAML, TOML, or XML. With `--schema SCHEMA`, XML input is typed by the schema (integers, numbers, booleans), as `validate` and `convert` do; for non-XML input the schema is still read and must be valid, and is otherwise ignored.
 
 <!-- test-backed: dev.omnist.cli.CliDocTest#testCliFormatExample -->
 ```bash
