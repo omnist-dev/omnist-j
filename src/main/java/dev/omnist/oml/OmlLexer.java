@@ -154,14 +154,14 @@ public class OmlLexer {
         char c = source.charAt(pos);
 
         // Check SEPARATOR (\n, \r, ;)
-        if (c == '\n' || c == '\r' || c == ';') {
+        if (c == '\n' || isCrLfAt(pos) || c == ';') {
             StringBuilder sb = new StringBuilder();
             while (pos < source.length()) {
                 char ch = source.charAt(pos);
-                if (ch == '\n' || ch == '\r' || ch == ';' || ch == ' ' || ch == '\t') {
+                if (ch == '\n' || isCrLfAt(pos) || ch == ';' || ch == ' ' || ch == '\t') {
                     sb.append(consumeChar());
                 } else if (ch == '#') {
-                    while (pos < source.length() && source.charAt(pos) != '\n' && source.charAt(pos) != '\r') {
+                    while (pos < source.length() && source.charAt(pos) != '\n') {
                         sb.append(consumeChar());
                     }
                 } else {
@@ -390,13 +390,18 @@ public class OmlLexer {
         return isAsciiLetter || isAsciiDigit || c == '_' || c == '-';
     }
 
+    /** True when the character at {@code at} is a CR that starts a CRLF; a lone CR is no line break (E-29). */
+    private boolean isCrLfAt(int at) {
+        return source.charAt(at) == '\r' && at + 1 < source.length() && source.charAt(at + 1) == '\n';
+    }
+
     private void skipHSpaceAndComments() {
         while (pos < source.length()) {
             char c = source.charAt(pos);
             if (c == ' ' || c == '\t') {
                 consumeChar();
             } else if (c == '#') {
-                while (pos < source.length() && source.charAt(pos) != '\n' && source.charAt(pos) != '\r') {
+                while (pos < source.length() && source.charAt(pos) != '\n') {
                     consumeChar();
                 }
             } else {

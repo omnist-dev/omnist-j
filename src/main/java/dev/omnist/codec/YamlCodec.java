@@ -8,7 +8,9 @@ import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.AbstractConstruct;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
+import org.yaml.snakeyaml.nodes.MappingNode;
 import org.yaml.snakeyaml.nodes.Node;
+import org.yaml.snakeyaml.nodes.NodeTuple;
 import org.yaml.snakeyaml.nodes.ScalarNode;
 import org.yaml.snakeyaml.nodes.Tag;
 import org.yaml.snakeyaml.representer.Represent;
@@ -75,19 +77,76 @@ public final class YamlCodec {
     private static final class LongNumberResolver extends org.yaml.snakeyaml.resolver.Resolver {
         private static final int MIN_LENGTH = 256;
 
+        /**
+         * The floats YAML 1.1's core schema resolves, as PyYAML's {@code SafeLoader} does (C-17):
+         * a point with digits on at least one side and an exponent only with a sign, a sexagesimal
+         * float is checked by hand, and the infinities and NaN. A spelling SnakeYAML's own
+         * (YAML 1.2 style) pattern also takes, {@code 1e3} and {@code 1.0e3}, stays a string.
+         */
+        private static final java.util.regex.Pattern PLAIN_FLOAT = java.util.regex.Pattern.compile(
+                "[-+]?[0-9][0-9_]*\\.[0-9_]*(?:[eE][-+][0-9]+)?|\\.[0-9][0-9_]*(?:[eE][-+][0-9]+)?"
+                + "|[-+]?\\.(?:inf|Inf|INF)|\\.(?:nan|NaN|NAN)");
+
         @Override
         public Tag resolve(org.yaml.snakeyaml.nodes.NodeId kind, String value, boolean implicit) {
-            Tag tag = super.resolve(kind, value, implicit);
-            if (implicit && kind == org.yaml.snakeyaml.nodes.NodeId.scalar && Tag.STR.equals(tag)
-                    && value.length() >= MIN_LENGTH) {
-                if (INT.matcher(value).matches()) {
-                    return Tag.INT;
+            if (implicit && kind == org.yaml.snakeyaml.nodes.NodeId.scalar && value.length() >= MIN_LENGTH
+                    && value.indexOf(':') >= 0) {
+                // The library's regular expressions recurse once per ':nn' group and overflow the
+                // stack on a long sexagesimal literal, so these are recognised by hand.
+                Tag sexagesimal = sexagesimalTag(value);
+                if (sexagesimal != null) {
+                    return sexagesimal;
                 }
-                if (FLOAT.matcher(value).matches()) {
-                    return Tag.FLOAT;
+            }
+            Tag tag = super.resolve(kind, value, implicit);
+            if (implicit && kind == org.yaml.snakeyaml.nodes.NodeId.scalar) {
+                if (Tag.FLOAT.equals(tag) && value.indexOf(':') < 0 && !PLAIN_FLOAT.matcher(value).matches()) {
+                    return Tag.STR;
+                }
+                if (Tag.STR.equals(tag) && value.length() >= MIN_LENGTH && value.indexOf(':') < 0) {
+                    if (INT.matcher(value).matches()) {
+                        return Tag.INT;
+                    }
+                    if (PLAIN_FLOAT.matcher(value).matches()) {
+                        return Tag.FLOAT;
+                    }
                 }
             }
             return tag;
+        }
+
+        private static final java.util.regex.Pattern FIRST_GROUP = java.util.regex.Pattern.compile("[0-9][0-9_]*");
+        private static final java.util.regex.Pattern LATER_GROUP = java.util.regex.Pattern.compile("[0-5]?[0-9]");
+        private static final java.util.regex.Pattern FRACTION = java.util.regex.Pattern.compile("[0-9_]*");
+
+        /**
+         * INT for {@code [-+]?[1-9][0-9_]*(:[0-5]?[0-9])+}, FLOAT for
+         * {@code [-+]?[0-9][0-9_]*(:[0-5]?[0-9])+\.[0-9_]*}, else null. {@code v} contains a colon.
+         */
+        private static Tag sexagesimalTag(String v) {
+            String body = v.startsWith("-") || v.startsWith("+") ? v.substring(1) : v;
+            String[] groups = body.split(":", -1);
+            int last = groups.length - 1;
+            int point = groups[last].indexOf('.');
+            boolean isFloat = point >= 0;
+            if (isFloat) {
+                if (!FRACTION.matcher(groups[last].substring(point + 1)).matches()) {
+                    return null;
+                }
+                groups[last] = groups[last].substring(0, point);
+            }
+            if (!FIRST_GROUP.matcher(groups[0]).matches()) {
+                return null;
+            }
+            for (int g = 1; g <= last; g++) {
+                if (!LATER_GROUP.matcher(groups[g]).matches()) {
+                    return null;
+                }
+            }
+            if (isFloat) {
+                return Tag.FLOAT;
+            }
+            return groups[0].charAt(0) == '0' ? null : Tag.INT;
         }
     }
 
@@ -96,6 +155,31 @@ public final class YamlCodec {
             super(loaderOptions);
             this.yamlConstructors.put(Tag.TIMESTAMP, new ConstructTimestamp());
             this.yamlConstructors.put(Tag.INT, new ConstructBoundedInt(maxIntegerDigits));
+        }
+
+        /**
+         * C-11/C-12: the entries a merge key brings come first, in the order the merge keys are
+         * written, and the mapping's own entries follow, whatever their position in the text. The
+         * library merges in place of the key, so a merge key that follows an explicit key is moved
+         * to the front before it runs.
+         */
+        @Override
+        protected void flattenMapping(MappingNode node, boolean forceStringKeys) {
+            List<NodeTuple> tuples = node.getValue();
+            List<NodeTuple> merges = new ArrayList<>();
+            List<NodeTuple> others = new ArrayList<>();
+            for (NodeTuple t : tuples) {
+                if (t.getKeyNode() instanceof ScalarNode && Tag.MERGE.equals(t.getKeyNode().getTag())) {
+                    merges.add(t);
+                } else {
+                    others.add(t);
+                }
+            }
+            if (!merges.isEmpty() && !others.isEmpty()) {
+                merges.addAll(others);
+                node.setValue(merges);
+            }
+            super.flattenMapping(node, forceStringKeys);
         }
 
         /** Constructs the Java value of an already-composed (and already-checked) document root. */
@@ -136,11 +220,34 @@ public final class YamlCodec {
                         return OverLimitInteger.INSTANCE;
                     }
                 }
-                Object value = plain.construct(node);
-                boolean over = value instanceof BigInteger bi ? IntegerDigits.exceeds(bi, max)
-                        : IntegerDigits.exceeds(((Number) value).longValue(), max);
-                return over ? OverLimitInteger.INSTANCE : value;
+                if (body.indexOf(':') >= 0) {
+                    BigInteger sexagesimal = sexagesimal(body, max);
+                    if (sexagesimal == null) {
+                        return OverLimitInteger.INSTANCE;
+                    }
+                    return v.startsWith("-") ? sexagesimal.negate() : sexagesimal;
+                }
+                return plain.construct(node);
             }
+        }
+
+        /**
+         * The value of a sexagesimal integer ({@code 190:20:30}), or null when it has more than
+         * {@code max} decimal digits. Summed group by group and abandoned as soon as the value is
+         * certainly past the limit, so a long literal costs no more than its length.
+         */
+        private static BigInteger sexagesimal(String body, int max) {
+            // 10^(max + 1) needs about 3.3219 * (max + 1) bits: past this many a value has > max digits.
+            long certainBits = (long) (3.33 * max) + 64;
+            BigInteger value = BigInteger.ZERO;
+            BigInteger sixty = BigInteger.valueOf(60);
+            for (String group : body.split(":", -1)) {
+                value = value.multiply(sixty).add(new BigInteger(group));
+                if (value.bitLength() > certainBits) {
+                    return null;
+                }
+            }
+            return IntegerDigits.exceeds(value, max) ? null : value;
         }
 
         private class ConstructTimestamp extends AbstractConstruct {
@@ -375,7 +482,7 @@ public final class YamlCodec {
                     throw new DocumentParseException(path, "document.unlabeled-element", path + ": object key " + entry.getKey() + " is not a string (unlabeled element in key position)");
                 }
                 Object v = entry.getValue();
-                String kp = path.equals("$") ? "$." + k : path + "." + k;
+                String kp = PathUtils.child(path, k);
                 if (v instanceof List<?> list) {
                     for (int i = 0; i < list.size(); i++) {
                         Object item = list.get(i);
@@ -561,7 +668,7 @@ public final class YamlCodec {
             List<Object[]> edges = new ArrayList<>();
             for (Edge edge : node.edges()) {
                 String label = edge.label();
-                Object child = prepareYaml((Document) edge.target(), path + "." + label, depth + 1, strict);
+                Object child = prepareYaml((Document) edge.target(), PathUtils.child(path, label), depth + 1, strict);
                 edges.add(new Object[]{label, child});
             }
             return edges;
@@ -584,9 +691,12 @@ public final class YamlCodec {
             // Scalar's 7 variants | NullValue) -- TimeScalar is the only
             // remaining case, no fallback is reachable.
             TimeScalar time = (TimeScalar) doc;
-            return time.value().format();
+            return new QuotedText(time.value().format());
         }
     }
+
+    /** A string the YAML writer must double-quote (E-37: a time is a quoted ISO-8601 string). */
+    private record QuotedText(String text) {}
 
     private static class CustomRepresenter extends Representer {
         public CustomRepresenter(DumperOptions options) {
@@ -594,6 +704,14 @@ public final class YamlCodec {
             this.representers.put(LocalDate.class, new RepresentLocalDate());
             this.representers.put(DateTimeValue.class, new RepresentDateTimeValue());
             this.representers.put(String.class, new RepresentString());
+            this.representers.put(QuotedText.class, new RepresentQuotedText());
+        }
+
+        private class RepresentQuotedText implements Represent {
+            @Override
+            public Node representData(Object data) {
+                return representScalar(Tag.STR, ((QuotedText) data).text(), DumperOptions.ScalarStyle.DOUBLE_QUOTED);
+            }
         }
 
         private class RepresentLocalDate implements Represent {

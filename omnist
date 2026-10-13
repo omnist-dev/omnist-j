@@ -1,3 +1,9 @@
 #!/usr/bin/env bash
-# wrapper script for omnist-j CLI
-exec java -jar "$(dirname "$0")/target/omnist-j-0.2.4-alpha-cli.jar" "$@"
+# wrapper script for omnist-j CLI: runs the CLI jar the build put in target/
+dir="$(cd "$(dirname "$0")" && pwd)"
+jar="$(ls -t "$dir"/target/omnist-j-*-cli.jar 2>/dev/null | head -n 1)"
+if [ -z "$jar" ]; then
+  echo "omnist: no target/omnist-j-*-cli.jar; run ./mvnw package -DskipTests first" >&2
+  exit 1
+fi
+exec java -jar "$jar" "$@"

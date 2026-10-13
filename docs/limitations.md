@@ -1,10 +1,51 @@
 # Status and limitations
 
-**`v0.6.1-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
+**`v0.7.0-alpha`.** `omnist-j` implements the full Document model, Schema model, OML and OSD
 grammars (read and write), `validate`, `materialize`, the full schema
 algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
 interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
+
+## Changes in 0.7.0-alpha
+
+Adopts omnist-spec **v0.35.0-beta** (the suite grows from 522 to 731 vectors). New rejections and corrected output make
+this a minor bump. Migration notes are on the lines marked **Migration**.
+
+- **Document paths quote a label that needs it** (E-36, DIV-35). A label that is empty or holds `.` `[` `]` `"` or `\`,
+  a control character, U+007F, U+0085, U+2028 or U+2029 is written `$["a.b"]` with the pinned escapes; every other label
+  stays bare. One renderer, `PathUtils.child`, builds every Document path (validate, materialize, the codecs' read and
+  write reports, the OML reader). **Migration:** code that matched a diagnostic path by splitting on `.` must accept the
+  bracket form. Schema paths are unchanged.
+- **Temporals are written unaltered, with their seconds** (E-37, DIV-36). TOML writes a time as `12:00:00`, a local
+  date-time as `2024-01-15T12:00:00` and an offset date-time with its offset (`2024-01-15T12:00:00+01:00`); before, the
+  seconds of a whole minute were dropped, which produced a literal TOML rejects. A TOML time with an offset has no
+  literal: it is written as the quoted string `"12:00:00+01:00"` and reported `format.temporal-stringified` (before: the
+  offset was dropped with no report). YAML writes a time double-quoted (before: single-quoted) and reports it. XML writes
+  a time with its offset (before: dropped), reported as before. **Migration:** text produced by the TOML, YAML and XML
+  writers for a time changes as above.
+- **A lone CR in OML is rejected** (E-29, DIV-41): `parse.unexpected-token` at the CR, where it was whitespace and ended a
+  comment. A CR inside a comment is comment text; `CRLF` is still one line break. **Migration:** an OML file with
+  old-Mac line endings no longer reads.
+- **YAML number spellings are YAML 1.1's** (C-17, DIV-39): `1e3` and `1.0e3` are strings (an exponent needs a point and a
+  sign: `1.0e+3` is a number), `-.5` is a string. **Migration:** a YAML file that relied on `1e3` being a number now
+  reads a string.
+- **A long sexagesimal YAML integer no longer crashes the reader** (DIV-40): a 4,300-digit-plus literal such as
+  `1:30:30:...` threw `StackOverflowError`; it is `document.limit.int-digits` at the integer's path, and a shorter one an
+  integer. The literal is summed group by group and abandoned as soon as it is certainly past the limit.
+- **A merge key's entries come first** (C-11, C-12, DIV-39): `{p: 0, <<: *a, k: 1}` reads the merged entries, then `p`, as
+  it does when the merge key is written first. Before, a merge key that followed an explicit key placed its entries after
+  it. **Migration:** edge order of such a mapping changes.
+- **XML schema-directed pretyping follows the wrapper shape** (E-4a, DIV-42): the document element is a field of the root
+  record (`record Root { "r": R }` for `<r>`), as in the spec's XML worked example, and an over-long integer leaf is
+  `document.limit.int-digits` at the leaf's Document path (`$.r.n`, `$.r.n[1]` when repeated). Before, pretyping only
+  worked when the schema root described the content of the document element, and the limit error was reported at `$`.
+  **Migration:** a schema whose root record described the document element's own children no longer types those leaves;
+  declare the element as a field of the root record.
+- **`./omnist` finds the CLI jar** ([omnist-j#129](https://github.com/omnist-dev/omnist-j/issues/129)): the wrapper ran
+  a jar named `omnist-j-0.2.4-alpha-cli.jar`, which has not existed for several releases. It now picks the newest
+  `target/omnist-j-*-cli.jar` and says so when there is none. Track 1 of the conformance harness already ran the CLI
+  in-process because that name never matched; the dead process branch is removed, and CI runs `./omnist format` against
+  the built jar.
 
 ## Changes in 0.6.1-alpha
 
@@ -77,17 +118,24 @@ Breaking changes for library users (the version is an alpha minor bump for this 
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.34.0-beta**'s pinned suite (commit `3346b50`), comparing diagnostics as **(path, code) sets**
+**v0.35.0-beta**'s pinned suite (commit `237ef00`), comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
-| 2: JSON vectors | 494 | 0 | 28 |
+| 2: JSON vectors | 703 | 0 | 28 |
 
 \* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
 headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+
+**v0.34.0-beta to v0.35.0-beta (2026-10-13).** The suite grows from 522 to 731 vectors. With the new pin and no source
+change Track 2 was 660 pass / 43 fail / 28 skip (headline 689 / 43 / 28) and Track 1 29 / 0 / 0; after the fixes it is
+703 / 0 / 28 (headline 732 / 0 / 28). The 43 failures: 18 `validate/label-quoting` (E-36), 14 temporal `write` (E-37: 7 TOML, 5 YAML, 2 XML), 7 `oml-grammar/lone-cr`
+(E-29), 2 YAML exponent spellings (C-17), 1 YAML merge-key order (C-12) and the 4,300-digit sexagesimal YAML
+integer, which crashed the runner with a `StackOverflowError`. The digit-by-value (D-28) and TOML underflow (D-29)
+vectors already passed.
 
 **v0.33.0-beta to v0.34.0-beta (2026-10-11).** The suite grows from 367 to 522 vectors; Track 2 goes from 339 pass /
 0 fail / 28 skip to 494 / 0 / 28, the headline from 368 / 0 / 28 to 523 / 0 / 28. Every vector now runs except the 28
@@ -377,11 +425,11 @@ contains a raw U+FEFF.
 Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 `CliMain`, which is a thin argument-parsing entry point). Numbers are from
 `target/site/jacoco/jacoco.xml` after a fresh `mvn clean test`, measured three times
-(spec v0.34.0-beta adoption, 2026-10-11): the three runs gave identical figures.
+(spec v0.35.0-beta adoption, 2026-10-13): the three runs gave identical figures.
 
 | Package | Line | Branch |
 |---|---|---|
-| Overall | **99.73%** (10 of 3746 missed) | **99.34%** (18 of 2712 missed) |
+| Overall | **99.74%** (10 of 3832 missed) | **99.40%** (17 of 2814 missed) |
 | `dev.omnist.document` | 100.0% | 98.6% |
 | `dev.omnist.schema` | 100.0% | 99.6% |
 | `dev.omnist.algebra` | 100.0% | 99.7% |
@@ -391,6 +439,10 @@ Gate-scoped (excludes `dev.omnist.conformance`, the harness itself, and
 | `dev.omnist.oml` | 99.3% | 99.3% |
 
 The CI gate (`pom.xml`) is set at 99.6% line / 99.1% branch.
+
+**v0.35.0-beta (2026-10-13):** 1297 tests; 10 of 3832 lines and 17 of 2814 branches missed, three runs identical
+(headroom 8 branches against the 99.1% gate; lines unchanged at 10). The new path renderer, the temporal writers,
+the lone-CR scan, the sexagesimal recogniser and the wrapper-shaped XML pretyping are covered.
 
 **v0.34.0-beta (2026-10-11):** 1272 tests; 10 of 3746 lines and 18 of 2712 branches missed, three runs identical
 (headroom 6 branches against the 99.1% gate; lines unchanged at 10). The new `IntegerDigits`, the YAML integer

@@ -6,7 +6,7 @@
 
     <groupId>dev.omnist</groupId>
     <artifactId>omnist-j</artifactId>
-    <version>0.6.1-alpha</version>
+    <version>0.7.0-alpha</version>
     <name>omnist-j</name>
     <description>Java implementation of the Omnist data-interchange specification</description>
     <url>https://j.omnist.dev</url>
@@ -263,9 +263,8 @@
                                 library jar with its real <dependencies> intact for anyone adding
                                 it as a Maven/Gradle dependency, so Jackson/SnakeYAML/tomlj don't
                                 get silently duplicated on their classpath. The fat jar is only for
-                                running `omnist` as a standalone CLI (see the wrapper script and
-                                Track1Runner.java's conformance harness, both of which reference
-                                the -cli.jar explicitly).
+                                running `omnist` as a standalone CLI (the ./omnist wrapper script picks
+                                the newest target/omnist-j-*-cli.jar).
                             -->
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                             <shadedClassifierName>cli</shadedClassifierName>

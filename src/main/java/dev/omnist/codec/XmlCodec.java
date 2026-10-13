@@ -163,25 +163,26 @@ public final class XmlCodec {
         WriteReport rep = new WriteReport();
         String rootLabel = localName(rootElem);
         // The root element is the target of the Document root's one edge: Document depth 1.
-        Object rootContent = xmlToNode(rootElem, "$", "$." + rootLabel, 1, limits, rep);
+        Object rootContent = xmlToNode(rootElem, "$", PathUtils.child("$", rootLabel), 1, limits, rep);
         if (report != null) {
             report.addAll(rep.adjustments());
         }
 
+        List<Object[]> rawList = new ArrayList<>();
+        rawList.add(new Object[]{rootLabel, rootContent});
+
         if (schema != null) {
             Object rootType = schema.records().get(schema.root());
             if (rootType != null) {
-                // xmlPretype matches a List<Object[]>'s edge labels against a
-                // Record's field names, so it must be applied to rootContent
-                // itself (the root element's own child edges) -- not to a
-                // [rootLabel, rootContent] wrapper, whose single "label" (the
-                // XML tag name) never matches any field of the root record.
-                rootContent = xmlPretype(rootContent, schema, rootType, "$." + rootLabel, limits);
+                // The Document is the wrapper [(rootLabel, rootContent)] (section 7.1, E-4a): the
+                // document element is a field of the root record, so the pretyping starts at the
+                // wrapper and reaches a leaf at its Document path ($.r.n), E-10 index included.
+                @SuppressWarnings("unchecked")
+                List<Object[]> typed = (List<Object[]>) xmlPretype(rawList, schema, rootType, "$", limits);
+                rawList = typed;
             }
         }
 
-        List<Object[]> rawList = new ArrayList<>();
-        rawList.add(new Object[]{rootLabel, rootContent});
         return buildDoc(rawList, "$", budget, limits);
     }
 
@@ -282,7 +283,7 @@ public final class XmlCodec {
                 // E-10: a label that occurs more than once in a node carries its index on every
                 // edge, the first included, in the paths of the read-side reports too.
                 int index = seen.merge(localName, 1, Integer::sum) - 1;
-                Object childNode = xmlToNode(c, path + "." + localName,
+                Object childNode = xmlToNode(c, PathUtils.child(path, localName),
                         PathUtils.childPath(docPath, localName, index, totals.get(localName)),
                         depth + 1, limits, rep);
                 edges.add(new Object[]{localName, childNode});
@@ -389,7 +390,7 @@ public final class XmlCodec {
                 Object[] edge = (Object[]) item;
                 String label = (String) edge[0];
                 Object childVal = edge[1];
-                String nextPath = path.equals("$") ? "$." + label : path + "." + label;
+                String nextPath = PathUtils.child(path, label);
                 Document child = buildDoc(childVal, nextPath, budget, limits);
                 edges.add(new Edge(label, (Target) child));
             }
@@ -542,7 +543,7 @@ public final class XmlCodec {
             return date.value().toString();
         }
         if (v instanceof TimeScalar time) {
-            return TimeValue.localText(time.value().time());
+            return time.value().format();
         }
         if (v instanceof DateTimeScalar dt) {
             DateTimeValue dtv = dt.value();

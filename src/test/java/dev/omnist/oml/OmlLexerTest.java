@@ -29,10 +29,9 @@ class OmlLexerTest {
         List<Token> withNewline = tokenize("a: 1\n# comment\nb: 2\n");
         assertTrue(withNewline.stream().anyMatch(t -> t.type() == TokenType.IDENT && t.text().equals("b")));
 
-        // A bare \r right after the comment: the scan loop's third sub-check
-        // ('\r', as opposed to the '\n' case above) is the one that stops it.
+        // A lone \r does not end a comment (E-29): `b: 2` is comment text.
         List<Token> withCr = tokenize("a: 1\n# comment\rb: 2\n");
-        assertTrue(withCr.stream().anyMatch(t -> t.type() == TokenType.IDENT && t.text().equals("b")));
+        assertTrue(withCr.stream().noneMatch(t -> t.type() == TokenType.IDENT && t.text().equals("b")));
     }
 
     @Test

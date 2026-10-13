@@ -221,7 +221,7 @@ class CodecLimitsTest {
     @Test
     @DisplayName("the pretyping of an XML integer leaf uses the configured digit limit, at the leaf's Document path")
     void xmlPretypedIntegersAreBounded() {
-        Schema schema = OsdReader.read("record R {\n  \"n\": integer,\n  \"m\": integer,\n}\nroot R\n");
+        Schema schema = OsdReader.read("record R {\n  \"n\": integer,\n  \"m\": integer,\n}\nrecord Doc { \"R\": R }\nroot Doc\n");
         Document ok = XmlCodec.readWithLimits("<R><n>999</n><m>-999</m></R>", schema, null, DIGITS_3);
         Node r = (Node) ((Node) ok).edges().get(0).target();
         assertEquals(new IntegerScalar(BigInteger.valueOf(999)), r.edges().get(0).target());
@@ -235,7 +235,7 @@ class CodecLimitsTest {
     @Test
     @DisplayName("the path of a pretyped XML integer in a repeated element is indexed")
     void xmlPretypedRepeatedLeafPathIsIndexed() {
-        Schema schema = OsdReader.read("record R {\n  \"n\" [1,]: integer,\n}\nroot R\n");
+        Schema schema = OsdReader.read("record R {\n  \"n\" [1,]: integer,\n}\nrecord Doc { \"R\": R }\nroot Doc\n");
         DocumentParseException e = assertThrows(DocumentParseException.class,
                 () -> XmlCodec.readWithLimits("<R><n>1</n><n>2000</n></R>", schema, null, DIGITS_3));
         assertEquals("$.R.n[1]", e.getPath());

@@ -41,6 +41,10 @@ jobs:
       - name: Run Conformance Harness
         run: ./run-conformance
 
+      - name: The ./omnist wrapper runs the jar the build produced
+        run: |
+          test "$(printf 'a: 1\n' | ./omnist format - --to json)" = '{"a":1}'
+
   dependency-scan:
     runs-on: ubuntu-latest
     steps:

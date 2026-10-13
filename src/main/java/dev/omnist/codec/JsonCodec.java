@@ -150,7 +150,7 @@ public final class JsonCodec {
                     throw new DocumentParseException(path, "document.unlabeled-element", path + ": object key " + entry.getKey() + " is not a string");
                 }
                 Object v = entry.getValue();
-                String kp = path.equals("$") ? "$." + k : path + "." + k;
+                String kp = PathUtils.child(path, k);
                 if (v instanceof List<?> list) {
                     for (int i = 0; i < list.size(); i++) {
                         Object item = list.get(i);
@@ -354,7 +354,7 @@ public final class JsonCodec {
             List<Object[]> edges = new ArrayList<>();
             for (Edge edge : node.edges()) {
                 String label = edge.label();
-                Object child = prepareJson((Document) edge.target(), path + "." + label, depth + 1, strict);
+                Object child = prepareJson((Document) edge.target(), PathUtils.child(path, label), depth + 1, strict);
                 edges.add(new Object[]{label, child});
             }
             return edges;
