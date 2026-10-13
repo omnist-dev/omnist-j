@@ -92,7 +92,10 @@ class LimitsConsistencyTest {
         Record rootRec = new Record("Root", List.of(
             new Field("big", new Type.Scalar(ScalarKind.INTEGER, false), 1, 1)
         ));
-        Schema schema = new Schema("Root", Map.of("Root", rootRec));
+        Record docRec = new Record("Doc", List.of(
+            new Field("Root", new Type.Ref("Root"), 1, 1)
+        ));
+        Schema schema = new Schema("Doc", Map.of("Root", rootRec, "Doc", docRec));
         assertThrows(RuntimeException.class, () -> XmlCodec.read("<Root><big>" + digits + "</big></Root>", schema));
         assertThrows(RuntimeException.class, () -> XmlCodec.read("<Root><big>-" + digits + "</big></Root>", schema));
     }

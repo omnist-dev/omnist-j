@@ -436,7 +436,7 @@ public final class TomlCodec {
         List<Edge> edges = new ArrayList<>();
         for (String k : table.keySet()) {
             Object v = table.get(List.of(k));
-            String kp = path.equals("$") ? "$." + k : path + "." + k;
+            String kp = PathUtils.child(path, k);
             if (v instanceof org.tomlj.TomlArray array) {
                 for (int i = 0; i < array.size(); i++) {
                     Object item = array.get(i);
@@ -669,13 +669,13 @@ public final class TomlCodec {
             return ld.toString();
         }
         if (val instanceof LocalTime lt) {
-            return lt.toString();
+            return TimeValue.localText(lt);
         }
         if (val instanceof LocalDateTime ldt) {
-            return ldt.toString();
+            return DateTimeValue.localText(ldt);
         }
         if (val instanceof OffsetDateTime odt) {
-            return odt.toString();
+            return DateTimeValue.of(odt.toLocalDateTime(), odt.getOffset()).format();
         }
         if (val instanceof List<?> list) {
             StringBuilder sb = new StringBuilder("[");
@@ -764,6 +764,10 @@ public final class TomlCodec {
                 if (child instanceof StringScalar str && !Encodability.isEncodable(str.value())) {
                     rep.add(p, "write.unsupported-value", "string value has no UTF-8 encoding (a lone surrogate)", "error");
                 }
+                if (child instanceof TimeScalar ts && ts.value().offset() != null) {
+                    rep.add(p, "format.temporal-stringified",
+                            "time-of-day with an offset written as a string (TOML has no offset time)", "warning");
+                }
                 if (child instanceof Value.NullValue) {
                     rep.add(p, "write.unsupported-value", "null has no representable TOML syntax", "error");
                     continue;
@@ -784,7 +788,7 @@ public final class TomlCodec {
             List<Object[]> edges = new ArrayList<>();
             for (Edge edge : node.edges()) {
                 String label = edge.label();
-                Object child = prepareToml((Document) edge.target(), path + "." + label, depth + 1, strict);
+                Object child = prepareToml((Document) edge.target(), PathUtils.child(path, label), depth + 1, strict);
                 edges.add(new Object[]{label, child});
             }
             return edges;
@@ -812,7 +816,8 @@ public final class TomlCodec {
             // Scalar's 7 variants | NullValue) -- TimeScalar is the only
             // remaining case, no fallback is reachable.
             TimeScalar time = (TimeScalar) doc;
-            return time.value().time();
+            // TOML has no time-of-day literal with an offset (E-37 rule 4): an ISO-8601 string.
+            return time.value().offset() == null ? time.value().time() : time.value().format();
         }
     }
 

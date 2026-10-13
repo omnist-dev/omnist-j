@@ -51,7 +51,8 @@ public class XmlCodecTest {
                      "  \"num\": number,\n" +
                      "  \"str\": string,\n" +
                      "}\n" +
-                     "root Root\n";
+                     "record Doc { \"Root\": Root }\n" +
+                     "root Doc\n";
         Schema schema = OsdReader.read(osd);
 
         String xml = "<Root>" +
@@ -230,7 +231,8 @@ public class XmlCodecTest {
     void testReadSchemaTypedPretyping() {
         Schema schema = OsdReader.read(
             "record Inner { \"x\": integer } " +
-            "record Root { \"flag\": boolean, \"n\": integer, \"d\": number, \"inner\": Inner } root Root\n"
+            "record Root { \"flag\": boolean, \"n\": integer, \"d\": number, \"inner\": Inner } " +
+            "record Doc { \"root\": Root } root Doc\n"
         );
         Document doc = XmlCodec.read(
             "<root><flag>true</flag><n>42</n><d>3.14</d><inner><x>7</x></inner></root>", schema);
@@ -246,7 +248,7 @@ public class XmlCodecTest {
     @Test
     @DisplayName("read: pretype false-boolean match and an unschema'd extra field")
     void testReadPretypeFalseBooleanAndExtraField() {
-        Schema schema = OsdReader.read("record Root { \"flag\": boolean } root Root\n");
+        Schema schema = OsdReader.read("record Root { \"flag\": boolean } record Doc { \"root\": Root } root Doc\n");
         Document doc = XmlCodec.read(
             "<root><flag>false</flag><extra>unschema'd</extra></root>", schema);
         Node root = (Node) doc;

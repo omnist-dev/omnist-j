@@ -27,6 +27,62 @@ public final class PathUtils {
     }
 
     /**
+     * Appends one label to a Document path (E-36): bare as {@code .label}, or bracket-quoted as
+     * {@code ["label"]} when the label is empty or holds a dot, a bracket, a double quote, a
+     * backslash, a control character, U+007F, U+0085, U+2028 or U+2029. An empty parent path
+     * yields the bare label.
+     *
+     * @param parentPath the path to the parent node
+     * @param label      the edge label
+     * @return the path of the child, without an occurrence index
+     */
+    public static String child(String parentPath, String label) {
+        if (needsQuoting(label)) {
+            return parentPath + "[\"" + escapeLabel(label) + "\"]";
+        }
+        return parentPath.isEmpty() ? label : parentPath + "." + label;
+    }
+
+    private static boolean isEscaped(char c) {
+        return c <= 0x1F || c == 0x7F || c == 0x85 || c == 0x2028 || c == 0x2029;
+    }
+
+    private static boolean needsQuoting(String label) {
+        if (label.isEmpty()) {
+            return true;
+        }
+        for (int i = 0; i < label.length(); i++) {
+            char c = label.charAt(i);
+            if (c == '.' || c == '[' || c == ']' || c == '"' || c == '\\' || isEscaped(c)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String escapeLabel(String label) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < label.length(); i++) {
+            char c = label.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (isEscaped(c)) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * Builds a canonical child path for an edge on a node.
      *
      * <p>When {@code totalCount > 1}, the 0-based index {@code [index]} is included on every occurrence,
@@ -40,7 +96,7 @@ public final class PathUtils {
      * @return the canonical path string
      */
     public static String childPath(String parentPath, String label, int index, int totalCount) {
-        String base = parentPath.equals("$") ? "$." + label : (parentPath.isEmpty() ? label : parentPath + "." + label);
+        String base = child(parentPath, label);
         if (totalCount > 1) {
             return base + "[" + index + "]";
         }
