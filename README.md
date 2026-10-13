@@ -13,19 +13,19 @@ Available on [Maven Central](https://central.sonatype.com/artifact/dev.omnist/om
 <dependency>
     <groupId>dev.omnist</groupId>
     <artifactId>omnist-j</artifactId>
-    <version>0.6.0-alpha</version>
+    <version>0.6.1-alpha</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'dev.omnist:omnist-j:0.6.0-alpha'
+implementation 'dev.omnist:omnist-j:0.6.1-alpha'
 ```
 
 This is a plain library jar with its real dependencies (Jackson, SnakeYAML, tomlj) resolved normally — nothing bundled or shaded. If you want to run `omnist` as a standalone CLI instead of using it as a library, use the `cli` classifier, which is a self-contained fat jar:
 ```bash
-curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.6.0-alpha/omnist-j-0.6.0-alpha-cli.jar
-java -jar omnist-j-0.6.0-alpha-cli.jar format sample.oml --to json
+curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.6.1-alpha/omnist-j-0.6.1-alpha-cli.jar
+java -jar omnist-j-0.6.1-alpha-cli.jar format sample.oml --to json
 ```
 
 ## Quickstart
@@ -91,7 +91,7 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 ## Status
 
-**`v0.6.0-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.34.0-beta (commit `3346b50`).
+**`v0.6.1-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.34.0-beta (commit `3346b50`).
 
 - **Conformance**: 523 passing, 0 failures, 28 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (494 pass of 522), compared as (path, code) sets, `write` text byte for byte and parse results with edge order significant. The only skips are the not-yet-implemented OSD-OML extension (28); see [`docs/limitations.md`](docs/limitations.md).
 - **Safety limits**: depth, node count, integer digits (counted by the value's decimal digits, D-28) and input size are configurable through `Limits` for every format (`OmlReader.read(text, limits)`, `JsonCodec`/`TomlCodec`/`XmlCodec.readWithLimits`, `YamlCodec.readWithLimits(text, yamlLimits, limits)`), with the same diagnostic whatever the format; see [`docs/limitations.md`](docs/limitations.md).

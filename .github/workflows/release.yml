@@ -32,14 +32,14 @@ jobs:
           cache: 'maven'
 
       - name: Build and Test with JaCoCo Coverage Check
-        run: mvn clean test
+        run: ./mvnw clean test
 
       - name: Run Conformance Harness
         run: ./run-conformance
 
       - name: Confirm tag matches pom.xml version
         run: |
-          POM_VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          POM_VERSION="$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)"
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           if [ "$POM_VERSION" != "$TAG_VERSION" ]; then
             echo "Tag v$TAG_VERSION does not match pom.xml version $POM_VERSION"
@@ -72,7 +72,7 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn clean deploy -Prelease
+        run: ./mvnw clean deploy -Prelease
 
       - name: Keep the bundle of a failed publish for inspection
         if: always()

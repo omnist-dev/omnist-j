@@ -22,7 +22,7 @@ jobs:
           cache: 'maven'
 
       - name: Build and Test with JaCoCo Coverage Check
-        run: mvn clean test
+        run: ./mvnw clean test
 
   conformance:
     runs-on: ubuntu-latest
@@ -79,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          VERSION="$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)"
           TAG="v$VERSION"
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
             echo "Tag $TAG already exists, nothing to do."
