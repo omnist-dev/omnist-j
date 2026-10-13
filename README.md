@@ -13,19 +13,19 @@ Available on [Maven Central](https://central.sonatype.com/artifact/dev.omnist/om
 <dependency>
     <groupId>dev.omnist</groupId>
     <artifactId>omnist-j</artifactId>
-    <version>0.6.1-alpha</version>
+    <version>0.7.0-alpha</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'dev.omnist:omnist-j:0.6.1-alpha'
+implementation 'dev.omnist:omnist-j:0.7.0-alpha'
 ```
 
 This is a plain library jar with its real dependencies (Jackson, SnakeYAML, tomlj) resolved normally — nothing bundled or shaded. If you want to run `omnist` as a standalone CLI instead of using it as a library, use the `cli` classifier, which is a self-contained fat jar:
 ```bash
-curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.6.1-alpha/omnist-j-0.6.1-alpha-cli.jar
-java -jar omnist-j-0.6.1-alpha-cli.jar format sample.oml --to json
+curl -O https://repo1.maven.org/maven2/dev/omnist/omnist-j/0.7.0-alpha/omnist-j-0.7.0-alpha-cli.jar
+java -jar omnist-j-0.7.0-alpha-cli.jar format sample.oml --to json
 ```
 
 ## Quickstart
@@ -91,13 +91,13 @@ See [`docs/02-cli-reference.md`](docs/02-cli-reference.md) for every subcommand.
 
 ## Status
 
-**`v0.6.1-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.34.0-beta (commit `3346b50`).
+**`v0.7.0-alpha`** — spec-first, built directly against [`vendor/omnist-spec`](https://github.com/omnist-dev/omnist-spec) (pinned as a git submodule, the normative source of truth for this port's behavior), currently pinned to v0.35.0-beta (commit `237ef00`).
 
-- **Conformance**: 523 passing, 0 failures, 28 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (494 pass of 522), compared as (path, code) sets, `write` text byte for byte and parse results with edge order significant. The only skips are the not-yet-implemented OSD-OML extension (28); see [`docs/limitations.md`](docs/limitations.md).
+- **Conformance**: 732 passing, 0 failures, 28 skipped against the shared spec test suite, across CLI fixtures (29, of which 19 comparable with the other ports) and JSON test vectors (703 pass of 731), compared as (path, code) sets, `write` text byte for byte and parse results with edge order significant. The only skips are the not-yet-implemented OSD-OML extension (28); see [`docs/limitations.md`](docs/limitations.md).
 - **Safety limits**: depth, node count, integer digits (counted by the value's decimal digits, D-28) and input size are configurable through `Limits` for every format (`OmlReader.read(text, limits)`, `JsonCodec`/`TomlCodec`/`XmlCodec.readWithLimits`, `YamlCodec.readWithLimits(text, yamlLimits, limits)`), with the same diagnostic whatever the format; see [`docs/limitations.md`](docs/limitations.md).
 - **YAML aliases**: bounded by the spec's two limits (D-18 expansion factor, default 50; D-22 expanded size, default 1,000,000 slots, only for input that uses an alias or merge key), checked on the parsed node graph before anything is expanded; configurable with `YamlCodec.readWithLimits(text, new YamlLimits(...))`. A mapping that merges a large block reads an expansion factor of about `(keys + 2) / 3`, so very large merges can need a higher maximum; see [`docs/limitations.md`](docs/limitations.md).
-- **Tests**: 1272 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
-- **Coverage**: 99.73% line / 99.34% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.
+- **Tests**: 1297 passing, 0 failures — JUnit plus jqwik property-based and fuzz testing.
+- **Coverage**: 99.74% line / 99.40% branch (gated in CI). Every remaining gap is a documented, verified trip-wire, not an untested code path — see [`docs/limitations.md`](docs/limitations.md) for the full breakdown and why each one is unreachable.
 
 ## Sibling ports
 
