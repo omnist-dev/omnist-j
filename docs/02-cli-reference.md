@@ -31,7 +31,7 @@ omnist <command> [subcommand] [options]
 ## Commands & Subcommands
 
 ### 1. `format`
-Formats input text between OML, JSON, YAML, TOML, or XML. With `--schema SCHEMA`, XML input is typed by the schema (integers, numbers, booleans), as `validate` and `convert` do; for other input formats the schema is ignored.
+Formats input text between OML, JSON, YAML, TOML, or XML. With `--schema SCHEMA`, XML input is typed by the schema (integers, numbers, booleans), as `validate` and `convert` do; for non-XML input the schema is still read and must be valid, and is otherwise ignored.
 
 <!-- test-backed: dev.omnist.cli.CliDocTest#testCliFormatExample -->
 ```bash

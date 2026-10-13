@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Bug wave 0.7.1-alpha cross-port check 3: hostile XML gives a coded diagnostic, quickly, never an uncaught error. */
+/**
+ * Note: the bounds are generous, so this catches a quadratic only at 100,000 depth / 8 MB, not a mild slowdown.
+ * Bug wave 0.7.1-alpha cross-port check 3: hostile XML gives a coded diagnostic, quickly, never an uncaught error. */
 class XmlHostile071Test {
 
     private static String outcome(String xml) {

@@ -15,11 +15,15 @@ A patch release: two bugs from omnist-j#133 and a regression test for hostile XM
   six digits is written as before; any other is written as a quoted string holding every digit (the value is never
   altered, E-37) and reported `format.temporal-stringified`. The report is available through the new
   `OmlWriter.write(Document, WriteReport)` and `OmlWriter.writeCompact(Document, WriteReport)`; the one-argument
-  methods are unchanged. **Migration:** OML text produced for a time or date-time with a fraction of more than six
+  methods are unchanged. These overloads are library API: the CLI and the conformance runner still call the report-less
+  methods, as for every other codec. **Migration:** OML text produced for a time or date-time with a fraction of more than six
   digits changes from an unreadable literal to a string.
 - **`omnist format --schema` now types XML input** (E-4a), exactly as `validate` and `convert` do; before, the schema
-  was accepted and ignored, so integers read as strings. With any other input format the schema is read and ignored.
-  **Migration:** `format --from xml --schema S` output now carries the schema's integers, numbers and booleans.
+  was accepted and ignored, so integers read as strings. For non-XML input the schema is still read and must be valid,
+  and is otherwise ignored.
+  **Migration:** `format --from xml --schema S` output now carries the schema's integers, numbers and booleans. For
+  non-XML input a missing or invalid schema file now exits 2 with an error (v0.7.0 ignored the schema and exited 0), and
+  `--schema -` when the input is also stdin does the same, as in `validate` and `convert`.
 - **TOML read time is tomlj's.** Reading 40,000 keys takes about 1.2 s warm (about 4 s on a cold JVM): linear, about
   30 microseconds per key warm, and measured inside `org.tomlj.Toml.parse` alone (our mapping adds a few percent), so
   there is no cheap win in this port and nothing was changed.
