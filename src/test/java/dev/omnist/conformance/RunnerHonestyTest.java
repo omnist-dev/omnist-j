@@ -140,8 +140,9 @@ class RunnerHonestyTest {
         Files.writeString(ref.resolve("a.oml"), "a: 1\n");
         Files.writeString(ref.resolve("b.oml"), "a: 1\n");
         int[] results = Track1Runner.runTrack1(fixtures, tempDir);
-        assertEquals(1, results[0]);
+        assertEquals(0, results[0]);
         assertEquals(1, Track1Runner.refereeSelfTestCount());
+        assertEquals(1, Track1Runner.refereeSelfTestPassCount());
     }
 
     @Test
