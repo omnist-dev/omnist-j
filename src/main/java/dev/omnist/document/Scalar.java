@@ -28,7 +28,11 @@ public sealed interface Scalar extends Value {
      * @param value the string content; never {@code null}
      */
     record StringScalar(String value) implements Scalar {
-        /** @throws NullPointerException if {@code value} is {@code null} */
+        /**
+         * Creates an instance, validating its components.
+         *
+         * @throws NullPointerException if {@code value} is {@code null}
+         */
         public StringScalar {
             Objects.requireNonNull(value, "value must not be null");
         }
@@ -44,7 +48,11 @@ public sealed interface Scalar extends Value {
      * @param value the integer value; never {@code null}
      */
     record IntegerScalar(BigInteger value) implements Scalar {
-        /** @throws NullPointerException if {@code value} is {@code null} */
+        /**
+         * Creates an instance, validating its components.
+         *
+         * @throws NullPointerException if {@code value} is {@code null}
+         */
         public IntegerScalar {
             Objects.requireNonNull(value, "value must not be null");
         }
@@ -86,7 +94,11 @@ public sealed interface Scalar extends Value {
      * @param value the calendar date; never {@code null}
      */
     record DateScalar(LocalDate value) implements Scalar {
-        /** @throws NullPointerException if {@code value} is {@code null} */
+        /**
+         * Creates an instance, validating its components.
+         *
+         * @throws NullPointerException if {@code value} is {@code null}
+         */
         public DateScalar {
             Objects.requireNonNull(value, "value must not be null");
         }
@@ -102,7 +114,11 @@ public sealed interface Scalar extends Value {
      * @param value the time value; never {@code null}
      */
     record TimeScalar(TimeValue value) implements Scalar {
-        /** @throws NullPointerException if {@code value} is {@code null} */
+        /**
+         * Creates an instance, validating its components.
+         *
+         * @throws NullPointerException if {@code value} is {@code null}
+         */
         public TimeScalar {
             Objects.requireNonNull(value, "value must not be null");
         }
@@ -118,7 +134,11 @@ public sealed interface Scalar extends Value {
      * @param value the date-time value; never {@code null}
      */
     record DateTimeScalar(DateTimeValue value) implements Scalar {
-        /** @throws NullPointerException if {@code value} is {@code null} */
+        /**
+         * Creates an instance, validating its components.
+         *
+         * @throws NullPointerException if {@code value} is {@code null}
+         */
         public DateTimeScalar {
             Objects.requireNonNull(value, "value must not be null");
         }

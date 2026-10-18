@@ -14,7 +14,11 @@ public sealed interface Type {
      * @param nullable whether {@code null} is an accepted value for this field (OSD's {@code ?} suffix)
      */
     record Scalar(ScalarKind kind, boolean nullable) implements Type {
-        /** @throws NullPointerException if {@code kind} is {@code null} */
+        /**
+         * Creates an instance, validating its components.
+         *
+         * @throws NullPointerException if {@code kind} is {@code null}
+         */
         public Scalar {
             Objects.requireNonNull(kind, "kind must not be null");
         }
@@ -27,6 +31,8 @@ public sealed interface Type {
      */
     record Ref(String name) implements Type {
         /**
+         * Creates an instance, validating its components.
+         *
          * @throws NullPointerException if {@code name} is {@code null}
          * @throws SchemaException      {@code schema.invalid-name} at {@code $} if {@code name} is not a
          *                              valid name (S-8)

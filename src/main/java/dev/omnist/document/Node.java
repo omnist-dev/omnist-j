@@ -15,7 +15,11 @@ import java.util.Objects;
  * @param edges the ordered list of edges
  */
 public record Node(List<Edge> edges) implements Target, Document {
-    /** @throws NullPointerException if {@code edges} is {@code null} */
+    /**
+     * Creates an instance, validating its components.
+     *
+     * @throws NullPointerException if {@code edges} is {@code null}
+     */
     public Node {
         Objects.requireNonNull(edges, "edges must not be null");
         edges = List.copyOf(edges);

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Javadoc coverage gate for the public API (public/protected members in src/main).
+# Fails when any public/protected member has no Javadoc comment or no main
+# description. Missing @param/@return tags are reported but do not fail the
+# check yet (they are mostly on record components).
+set -euo pipefail
+cd "$(dirname "$0")"
+
+CP_FILE="$(mktemp)"
+OUT_DIR="$(mktemp -d)"
+LOG="$(mktemp)"
+trap 'rm -rf "$CP_FILE" "$OUT_DIR" "$LOG"' EXIT
+
+./mvnw -B -q dependency:build-classpath -Dmdep.outputFile="$CP_FILE" >/dev/null
+javadoc -Xdoclint:missing -protected -cp "$(cat "$CP_FILE")" \
+  -d "$OUT_DIR" -sourcepath src/main/java -subpackages dev >"$LOG" 2>&1 || true
+
+if grep -qE ': error:' "$LOG"; then
+  grep -E ': error:' "$LOG"
+  echo "javadoc failed to run" >&2
+  exit 2
+fi
+
+GAPS="$(grep -E 'warning: (no comment|no main description|use of default constructor)' "$LOG" || true)"
+TAGS="$(grep -cE 'warning: no @(param|return)' "$LOG" || true)"
+echo "Missing @param/@return tags (informational): $TAGS"
+if [ -n "$GAPS" ]; then
+  echo "$GAPS"
+  echo "Public API members without Javadoc: $(echo "$GAPS" | wc -l)" >&2
+  exit 1
+fi
+echo "Javadoc coverage OK: every public/protected member has a description."

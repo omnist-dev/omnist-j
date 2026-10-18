@@ -45,6 +45,21 @@ jobs:
         run: |
           test "$(printf 'a: 1\n' | ./omnist format - --to json)" = '{"a":1}'
 
+  javadoc-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Check public API Javadoc coverage
+        run: ./check-javadoc
+
   dependency-scan:
     runs-on: ubuntu-latest
     steps:

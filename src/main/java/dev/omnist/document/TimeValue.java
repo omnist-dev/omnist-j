@@ -11,7 +11,11 @@ import java.util.Objects;
  * @param offset the UTC zone offset, or null if un-offset
  */
 public record TimeValue(LocalTime time, ZoneOffset offset) {
-    /** @throws NullPointerException if {@code time} is {@code null} */
+    /**
+     * Creates an instance, validating its components.
+     *
+     * @throws NullPointerException if {@code time} is {@code null}
+     */
     public TimeValue {
         Objects.requireNonNull(time, "time must not be null");
     }

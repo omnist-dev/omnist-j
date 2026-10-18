@@ -10,6 +10,9 @@ import java.util.List;
  * snapshot via {@link #adjustments()}.
  */
 public class WriteReport {
+    /** Creates an empty report. */
+    public WriteReport() {}
+
     private final List<WriteAdjustment> adjustments = new ArrayList<>();
 
     /**

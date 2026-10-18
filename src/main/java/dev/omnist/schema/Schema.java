@@ -16,6 +16,8 @@ import java.util.Objects;
  */
 public record Schema(String root, Map<String, Record> records) {
     /**
+     * Creates an instance, validating its components.
+     *
      * @throws NullPointerException if {@code root} is {@code null}
      * @throws SchemaException      {@code schema.invalid-name} at {@code $} if {@code root} or a key of
      *                              {@code records} is not a valid name (S-8)
