@@ -6,6 +6,18 @@ algebra (`satisfiable_set`, `is_empty`, `prune`, `compatible_with`,
 `equivalent`, `normalize`, `extract`, `lint`, `infer`), all four
 interchange codecs (JSON/YAML/TOML/XML, read and write), and a CLI.
 
+## Changes since 0.7.1-alpha (unreleased)
+
+Adopts omnist-spec **v0.36.0-beta** (the suite grows from 731 to 793 vectors; no failures, no source change needed for
+the vectors). The rules the tag codifies (D-28 and D-29 extended to every format, C-18 and C-19 XML pretyping, E-33 NaN
+equality) were already how this port behaves. One writer fix, for ledger entry DIV-48:
+
+- **The YAML writer writes a long integer as a plain scalar.** An integer of more than about a thousand digits was
+  written as `n: !!int '99...9'`, and a string of that many digits was written unquoted, so it read back as an integer.
+  The writer now uses the reader's resolver: `n: 99...9` for the integer and a quoted string for the digit string.
+  Migration: a document holding such an integer or digit string writes different text, which reads back to the same
+  Document; nothing else changes.
+
 ## Changes in 0.7.1-alpha
 
 A patch release: two bugs from omnist-j#133 and a regression test for hostile XML. No spec change (still v0.35.0-beta).
@@ -144,19 +156,25 @@ Breaking changes for library users (the version is an alpha minor bump for this 
 ## Conformance
 
 Both tracks of the conformance harness run against `vendor/omnist-spec`
-**v0.35.0-beta**'s pinned suite (commit `237ef00`), comparing diagnostics as **(path, code) sets**
+**v0.36.0-beta**'s pinned suite (commit `7575727`), comparing diagnostics as **(path, code) sets**
 (omnist-spec §8.5.2 rules 1-3: code-aware, not code-agnostic; no path or code
 loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
 | 1: OML/OSD CLI fixtures | 19\* | 0 | 0 |
-| 2: JSON vectors | 703 | 0 | 28 |
+| 2: JSON vectors | 765 | 0 | 28 |
 
 \* The 10 `_referee-self-test/*` fixtures test the harness itself, not this port. They are reported on a
 separate line (10 pass) and are not in the Track 1 count, as in the other ports
-([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)). The headline is 722 / 0 / 28 (19 + 703 pass). The dated entries below
+([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)). The headline is 784 / 0 / 28 (19 + 765 pass). The dated entries below
 are historical and still show Track 1 as 29, with the headline 10 higher.
+
+**v0.35.0-beta to v0.36.0-beta (2026-10-18).** The suite grows from 731 to 793 vectors. With the new pin and no source
+change the run was already 765 pass / 0 fail / 28 skip (headline 784 / 0 / 28): the spec rulings of this tag (the digit
+limit for D-28 and D-29, XML pretyping C-18 and C-19, NaN equality E-33) codify behaviour this port already had, and the
+migration table for Java reads "None". The only skips are the 28 OSD-OML vectors. One writer difference the ledger
+records (DIV-48) was real and is fixed; see "Changes since 0.7.1-alpha".
 
 **v0.34.0-beta to v0.35.0-beta (2026-10-13).** The suite grows from 522 to 731 vectors. With the new pin and no source
 change Track 2 was 660 pass / 43 fail / 28 skip (headline 689 / 43 / 28) and Track 1 29 / 0 / 0; after the fixes it is

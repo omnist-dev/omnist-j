@@ -604,7 +604,11 @@ public final class YamlCodec {
         dumperOptions.setAllowUnicode(true);
 
         CustomRepresenter representer = new CustomRepresenter(dumperOptions);
-        Yaml yaml = new Yaml(new SafeConstructor(new LoaderOptions()), representer, dumperOptions);
+        // The reader's resolver, so the writer agrees with it on a long number (DIV-48): SnakeYAML's own
+        // leaves a plain scalar of more than about a thousand characters a string, which wrote a
+        // long integer as !!int with quotes and a long digit string unquoted.
+        Yaml yaml = new Yaml(new SafeConstructor(new LoaderOptions()), representer, dumperOptions,
+                new LoaderOptions(), new LongNumberResolver());
         return yaml.dump(grouped);
     }
 
