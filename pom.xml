@@ -343,13 +343,14 @@
                         <configuration>
                             <publishingServerId>central</publishingServerId>
                             <!--
-                                Manual review before publish: the bundle uploads to the Portal
-                                but requires an explicit click there to actually release. Flip to
-                                true only once confident enough in the release process to skip
-                                that manual check; Central releases are immutable, there is no
-                                undo after publish.
+                                Central publishes the bundle automatically once it passes
+                                validation. The human checkpoint is the approval of the
+                                `publish` job in the `central-publish` GitHub Environment
+                                (required reviewers, see release.yml), which happens BEFORE this
+                                plugin uploads anything. Central releases are immutable: there
+                                is no undo after publish, so never remove that approval.
                             -->
-                            <autoPublish>false</autoPublish>
+                            <autoPublish>true</autoPublish>
                         </configuration>
                     </plugin>
                 </plugins>
