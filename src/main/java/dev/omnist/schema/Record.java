@@ -13,6 +13,8 @@ import java.util.Objects;
  */
 public record Record(String name, List<Field> fields) {
     /**
+     * Creates an instance, validating its components.
+     *
      * @throws NullPointerException if {@code name} is {@code null}
      * @throws SchemaException      {@code schema.invalid-name} at {@code $} if {@code name} does not match
      *                              {@code [A-Za-z_][A-Za-z0-9_]*} (S-8); {@code schema.invalid-label} at the

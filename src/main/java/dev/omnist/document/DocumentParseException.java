@@ -12,7 +12,9 @@ package dev.omnist.document;
  * </ul>
  */
 public class DocumentParseException extends RuntimeException {
+    /** The location where the violation was detected. */
     private final String path;
+    /** The machine-readable error code. */
     private final String code;
 
     /**

@@ -58,6 +58,10 @@ public record Limits(int maxDepth, int maxNodeCount, int maxIntegerDigits, int m
     }
 
     /**
+
+     * Creates an instance, validating its components.
+
+     *
      * @throws IllegalArgumentException if any limit is not positive, or {@code maxInputBytes} is above
      *                                  {@link #MAX_INPUT_BYTES_CEILING}
      */

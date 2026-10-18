@@ -11,7 +11,11 @@ import java.util.Objects;
  * @param offset   the UTC zone offset, or null if un-offset
  */
 public record DateTimeValue(LocalDateTime dateTime, ZoneOffset offset) {
-    /** @throws NullPointerException if {@code dateTime} is {@code null} */
+    /**
+     * Creates an instance, validating its components.
+     *
+     * @throws NullPointerException if {@code dateTime} is {@code null}
+     */
     public DateTimeValue {
         Objects.requireNonNull(dateTime, "dateTime must not be null");
     }

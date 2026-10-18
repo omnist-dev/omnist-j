@@ -11,7 +11,9 @@ package dev.omnist.algebra;
  * </ul>
  */
 public class AlgebraException extends IllegalArgumentException {
+    /** The location where the violation was detected. */
     private final String path;
+    /** The machine-readable error code. */
     private final String code;
 
     /**

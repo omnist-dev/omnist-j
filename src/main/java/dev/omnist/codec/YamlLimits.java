@@ -44,6 +44,10 @@ public record YamlLimits(int maxAliasExpansion, long maxExpandedSlots) {
             new YamlLimits(DEFAULT_MAX_ALIAS_EXPANSION, DEFAULT_MAX_EXPANDED_SLOTS);
 
     /**
+
+     * Creates an instance, validating its components.
+
+     *
      * @throws IllegalArgumentException if a limit is not positive or is above its ceiling
      */
     public YamlLimits {
