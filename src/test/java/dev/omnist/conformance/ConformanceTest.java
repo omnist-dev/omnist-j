@@ -20,7 +20,9 @@ class ConformanceTest {
         int[] results = Track1Runner.runTrack1(fixturesPath, repoDir);
         assertNotNull(results);
         assertEquals(3, results.length);
-        assertEquals(29, results[0], "Track 1 should pass all 29 real fixtures");
+        assertEquals(19, results[0], "Track 1 should pass all 19 real fixtures");
+        assertEquals(10, Track1Runner.refereeSelfTestCount(), "the _referee-self-test fixtures are counted apart");
+        assertEquals(10, Track1Runner.refereeSelfTestPassCount(), "and all of them pass");
         assertEquals(0, results[1], "Track 1 should have 0 failures");
         assertEquals(0, results[2], "Track 1 should have 0 skips");
     }
@@ -79,6 +81,7 @@ class ConformanceTest {
 
         int[] results = Track1Runner.runTrack1(fixturesDir, tempDir);
         assertNotNull(results);
-        assertEquals(1, results[0]);
+        assertEquals(0, results[0], "a referee self-test is not in the Track 1 pass count");
+        assertEquals(1, Track1Runner.refereeSelfTestPassCount());
     }
 }

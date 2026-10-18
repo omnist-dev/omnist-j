@@ -46,8 +46,10 @@ class TrackRunnerCoverageTest {
 
         int[] results = Track1Runner.runTrack1(fixturesDir, tempDir);
         assertNotNull(results);
-        assertEquals(3, results[0] + results[1] + results[2]);
-        assertEquals(2, results[0], "2 tests pass");
+        assertEquals(1, results[0] + results[1] + results[2]);
+        assertEquals(3, Track1Runner.refereeSelfTestCount());
+        assertEquals(0, results[0], "referee self-tests are not in the pass count");
+        assertEquals(2, Track1Runner.refereeSelfTestPassCount(), "2 tests pass");
         assertEquals(1, results[1], "1 test fails");
     }
 

@@ -150,11 +150,13 @@ loosening anywhere in the runner). **0 failures.**
 
 | Track | Pass | Fail | Skip |
 |---|---|---|---|
-| 1: OML/OSD CLI fixtures | 29 (19 comparable\*) | 0 | 0 |
+| 1: OML/OSD CLI fixtures | 19\* | 0 | 0 |
 | 2: JSON vectors | 703 | 0 | 28 |
 
-\* The Java harness folds the 10 `_referee-self-test/*` fixtures into its Track 1
-headline ([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)); the other ports report 19.
+\* The 10 `_referee-self-test/*` fixtures test the harness itself, not this port. They are reported on a
+separate line (10 pass) and are not in the Track 1 count, as in the other ports
+([omnist-j#110](https://github.com/omnist-dev/omnist-j/issues/110)). The headline is 722 / 0 / 28 (19 + 703 pass). The dated entries below
+are historical and still show Track 1 as 29, with the headline 10 higher.
 
 **v0.34.0-beta to v0.35.0-beta (2026-10-13).** The suite grows from 522 to 731 vectors. With the new pin and no source
 change Track 2 was 660 pass / 43 fail / 28 skip (headline 689 / 43 / 28) and Track 1 29 / 0 / 0; after the fixes it is

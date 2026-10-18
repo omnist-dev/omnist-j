@@ -79,8 +79,8 @@ public final class Harness {
             System.out.println("Comparison mode: (path, code) sets, E-17 rules 1-3 (code-aware, not code-agnostic)");
             int referee = Track1Runner.refereeSelfTestCount();
             System.out.println("Track 1: pass " + track1[0] + " fail " + track1[1] + " skip " + track1[2]
-                + " (headline; includes " + referee + " _referee-self-test fixtures, omnist-j#110; "
-                + "per-port-comparable: " + (track1[0] - referee) + " pass)");
+                + " (the " + referee + " _referee-self-test fixtures are reported separately, omnist-j#110)");
+            System.out.println("Referee self-test: pass " + Track1Runner.refereeSelfTestPassCount() + " of " + referee);
             System.out.println("Track 2: pass " + track2[0] + " fail " + track2[1] + " skip " + track2[2]);
             System.out.println("Skips by reason:");
             Track2Runner.skipReasons().forEach((reason, n) -> System.out.println("  " + n + " x " + reason));

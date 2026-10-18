@@ -37,6 +37,7 @@ public final class Track1Runner {
     private static int failCount = 0;
     private static int skipCount = 0;
     private static int refereeCount = 0;
+    private static int refereePassCount = 0;
 
     private Track1Runner() {}
 
@@ -49,6 +50,17 @@ public final class Track1Runner {
      */
     public static int refereeSelfTestCount() {
         return refereeCount;
+    }
+
+    /**
+     * How many {@code _referee-self-test/*} fixtures passed in the last {@link #runTrack1}. They are
+     * reported on their own line and are not part of the Track 1 pass count (omnist-j#110); a failing
+     * one still counts in the fail tally.
+     *
+     * @return the number of referee self-test fixtures that passed
+     */
+    public static int refereeSelfTestPassCount() {
+        return refereePassCount;
     }
 
     /**
@@ -65,6 +77,7 @@ public final class Track1Runner {
         failCount = 0;
         skipCount = 0;
         refereeCount = 0;
+        refereePassCount = 0;
         doRunTrack1(fixturesDir, repoDir);
         return new int[]{passCount, failCount, skipCount};
     }
@@ -121,7 +134,7 @@ public final class Track1Runner {
 
             if (actualEqual == expectedEqual) {
                 System.out.println("  [PASS] " + relPath);
-                passCount++;
+                refereePassCount++;
             } else {
                 System.err.println("  [FAIL] " + relPath + " (Expected " + expect + " but got " + (actualEqual ? "equal" : "not_equal") + ")");
                 failCount++;
